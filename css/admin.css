@@ -23,6 +23,10 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
 .adm-gate-logo span{background:linear-gradient(135deg,#00B4D8,#0077B6);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .adm-gate-sub{color:#64748B;font-size:14px;margin:8px 0 22px}
 .adm-gate-err{color:#DC2626;font-size:13px;font-weight:600;margin:10px 0 0}
+.adm-pass-wrap{position:relative}
+.adm-pass-wrap .adm-input{padding-right:46px}
+.adm-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:none;color:#94A3B8;cursor:pointer;border-radius:8px;transition:color .2s,background .2s}
+.adm-eye:hover{color:#0077B6;background:#F1F5F9}
 .adm-gate-modeline{font-size:12px;color:#64748B;margin:16px 0 0;line-height:1.5}
 .adm-gate-back{display:inline-block;margin-top:14px;color:#0077B6;font-weight:600;font-size:13px;text-decoration:none}
 .adm-gate-back:hover{text-decoration:underline}
@@ -93,4 +97,22 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
   .adm-kpis{grid-template-columns:repeat(2,1fr)}
   .adm-det{grid-template-columns:1fr;gap:16px}
   .adm-wrap{padding:16px}
+}
+@media(max-width:600px){
+  .adm-top{padding:12px 16px;gap:10px}
+  .adm-brand{font-size:18px}
+  .adm-top-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .adm-top-actions .adm-btn{width:100%;justify-content:center;padding:10px 8px;font-size:13px}
+  .adm-kpi{padding:14px}
+  .adm-kpi-val{font-size:20px}
+  .adm-statusbar{gap:6px}
+  .adm-chip{font-size:11.5px;padding:5px 10px}
+  .adm-tab{padding:10px 12px;font-size:13px}
+  .adm-table{font-size:12.5px}
+  .adm-table th,.adm-table td{padding:10px}
+  .adm-tablewrap{-webkit-overflow-scrolling:touch}
+  .adm-gate-card{padding:28px 22px}
+}
+@media(max-width:420px){
+  .adm-kpis{grid-template-columns:1fr}
 }

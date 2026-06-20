@@ -512,6 +512,7 @@
           <div class="field"><label>Business Name *</label><input type="text" name="businessName" required placeholder="Your shop / firm" /></div>
           <div class="field"><label>Mobile Number *</label><input type="tel" name="mobile" required pattern="[6-9][0-9]{9}" inputmode="numeric" minlength="10" maxlength="10" title="Enter a valid 10-digit mobile number starting with 6, 7, 8 or 9" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" placeholder="10-digit mobile" /></div>
           <div class="field"><label>Email Address *</label><input type="email" name="email" required placeholder="you@email.com" /></div>
+          <div class="field"><label>Pincode *</label><input type="tel" name="pincode" required inputmode="numeric" maxlength="6" pattern="[0-9]{6}" title="Enter a valid 6-digit pincode" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,6)" placeholder="6-digit pincode" /><small class="pin-note" data-pin-note style="display:block;font-size:12px;font-weight:600;margin-top:6px;min-height:14px;color:#64748B"></small></div>
           <div class="field"><label>City *</label><input type="text" name="city" required placeholder="City" /></div>
           <div class="field">
             <label>State *</label>

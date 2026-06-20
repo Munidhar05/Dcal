@@ -42,7 +42,7 @@ There are 3 parts to switch it on:
 ## PART 2 — Put your code on GitHub
 
 1. Create a free account at **https://github.com**.
-2. Click **New repository** → name it `dcal-store` → **Create**.
+2. Click **New repository** → name it `dcal` → **Create**.
 3. Upload your project folder. Easiest way on Windows:
    - Install **GitHub Desktop** (https://desktop.github.com), OR
    - Ask me and I'll give you the exact `git` commands to run.
@@ -102,6 +102,37 @@ There are 3 parts to switch it on:
 
 ---
 
+## PART 4 — Turn on real payments (Razorpay)
+
+Until you do this, online payment runs in **demo mode** (no money is taken) and
+"Cash on Delivery" works normally. To accept real money:
+
+1. Sign up at **https://razorpay.com** and finish their KYC/business verification.
+2. In the Razorpay Dashboard → **Settings → API Keys → Generate Key**.
+   - You'll get a **Key Id** (`rzp_test_...` or `rzp_live_...`) and a **Key Secret**.
+   - Use the **Test** keys first to practice; switch to **Live** keys when ready.
+3. Add these two to your **Render → Environment** (same place as before):
+
+   | Key | Value |
+   |-----|-------|
+   | `RAZORPAY_KEY_ID` | your Key Id |
+   | `RAZORPAY_KEY_SECRET` | your Key Secret |
+
+4. Save — Render restarts automatically. Done! 🎉
+
+### How payment works now
+- At checkout, **UPI / Card / Net Banking** → opens the secure Razorpay popup.
+  The customer pays, and the server **verifies** the payment before confirming the order.
+- **Cash on Delivery** → no online payment; the order is just placed.
+- In the **Admin page**, paid orders show a green **Paid** badge, and the order's
+  details show the Razorpay transaction id.
+
+### Test card (Razorpay test mode)
+Card: `4111 1111 1111 1111` · any future expiry · any CVV · any name.
+For UPI test, use `success@razorpay`.
+
+---
+
 ## Notes & limits
 
 - **Free Render** services "go to sleep" after 15 minutes of no visitors, so the
@@ -110,6 +141,9 @@ There are 3 parts to switch it on:
 - **Free MongoDB Atlas** gives 512 MB storage — plenty for thousands of orders.
 - Login is by **phone number only** (no password), as you chose. This is fine to
   start; tell me later if you want to add real OTP-by-SMS or password login.
-- Payments are still a **demo** (no real money is taken). When you're ready to
-  charge customers, we can connect **Razorpay** (popular in India).
+- **Razorpay is integrated** (see Part 4). It stays in demo mode until you add the
+  two `RAZORPAY_` keys; then it takes real payments.
 - **Change your `ADMIN_PASSWORD`** to something strong before going live.
+- ⚠️ Order amounts are currently sent from the customer's browser. This is fine for
+  launch, but for maximum safety we can later make the server calculate prices from
+  a product list so amounts can never be tampered with. Ask me when you want that.

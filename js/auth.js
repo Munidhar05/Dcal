@@ -99,7 +99,9 @@
       orderId: order.id, mobile: mobile,
       customerName: (users()[mobile] || {}).name || (order.address || {}).name || '',
       title: order.title, total: order.total, image: order.image, items: order.items,
-      address: order.address, payment: order.payment, status: order.status, date: order.date
+      address: order.address, payment: order.payment, paid: order.paid, paymentId: order.paymentId,
+      coupon: order.coupon, discount: order.discount,
+      status: order.status, date: order.date
     }).catch(function () {});
   }
   // pull this user's orders from the server so they appear on any device
@@ -109,7 +111,9 @@
         saveOrders(res.orders.map(function (o) {
           return { id: o.orderId, title: o.title, total: o.total, image: o.image,
             items: o.items || [], address: o.address || {}, payment: o.payment,
-            date: o.date, status: o.status };
+            paid: o.paid, paymentId: o.paymentId, date: o.date, status: o.status,
+            coupon: o.coupon, discount: o.discount,
+            cancelReason: o.cancelReason, refundStatus: o.refundStatus, cancelledAt: o.cancelledAt };
         }));
       }
     }).catch(function () {});
@@ -141,6 +145,7 @@
 
   var pendingAction = null; // function to run after a successful login
   var genOtp = null;        // current demo OTP
+  var lastOtpMode = 'login'; // 'login' | 'signup' — for re-showing the code popup
   var pendingMobile = null; // mobile awaiting verification
 
   /* ---------- toast ---------- */
@@ -180,7 +185,7 @@
           /* STEP 1 — phone */
           '<div class="dcal-step active" data-step="phone">' +
             '<h3 class="dcal-h">Enter your mobile number</h3>' +
-            '<p class="dcal-sub">We’ll send you a one-time password (OTP) to verify it’s you.</p>' +
+            '<p class="dcal-sub">Use the OTP displayed below to verify your identity</p>' +
             '<label class="dcal-label">Mobile number</label>' +
             '<div class="dcal-phone"><span class="dcal-phone__cc">+91</span>' +
               '<input type="tel" id="dcal-phone-input" inputmode="numeric" maxlength="10" placeholder="98765 43210" autocomplete="tel"></div>' +
@@ -192,15 +197,14 @@
           /* STEP 2 — otp */
           '<div class="dcal-step" data-step="otp">' +
             '<h3 class="dcal-h">Verify your number</h3>' +
-            '<p class="dcal-sub">Enter the OTP sent to <b data-otp-target>+91</b>. <button type="button" class="dcal-link" data-act="change-number">Change</button></p>' +
-            '<div class="dcal-demo">Demo mode — no real SMS is sent.<br>Your OTP is <b data-otp-code>000000</b></div>' +
+            '<p class="dcal-sub">Enter the 6-digit code shown in the popup for <b data-otp-target>+91</b>. <button type="button" class="dcal-link" data-act="change-number">Change</button></p>' +
             '<div class="dcal-otp" data-otp-boxes>' +
               '<input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">' +
               '<input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">' +
             '</div>' +
             '<div class="dcal-err" data-err="otp"></div>' +
             '<button class="dcal-btn" data-act="verify-otp">Verify &amp; continue</button>' +
-            '<p class="dcal-resend">Didn’t get it? <button data-act="resend" disabled>Resend in <span data-resend-timer>30</span>s</button></p>' +
+            '<p class="dcal-resend">Didn’t get it? <button data-act="resend" disabled>Resend in <span data-resend-timer>15</span>s</button></p>' +
           '</div>' +
 
           /* STEP 3 — profile (new users) */
@@ -377,6 +381,7 @@
     overlay.classList.remove('open');
     document.documentElement.classList.remove('dcal-lock');
     if (resendTimer) { clearInterval(resendTimer); resendTimer = null; }
+    removeOtpPopup();
     pendingAction = null;
   }
 
@@ -389,17 +394,100 @@
     }
     genOtp = String(Math.floor(100000 + Math.random() * 900000));
     modal.querySelector('[data-otp-target]').textContent = '+91 ' + pendingMobile;
-    modal.querySelector('[data-otp-code]').textContent = genOtp;
     modal.querySelectorAll('[data-otp-boxes] input').forEach(function (b) { b.value = ''; });
     gotoStep('otp');
     startResendTimer();
-    if (isResend) toast('OTP resent');
+    try { playDing(); } catch (e) {}   // fire inside the click gesture so the browser allows the sound
+    // show the code notification IMMEDIATELY (never wait on the network)
+    var syncMode = users()[pendingMobile] ? 'login' : 'signup';
+    lastOtpMode = syncMode;
+    try { showOtpPopup(genOtp, syncMode); } catch (e) {}
+    // then refine the login/sign-up wording from the server if it's reachable
+    detectMode(pendingMobile).then(function (mode) {
+      var msg = document.querySelector('#dcal-otp-pop .dcal-otp-pop__msg');
+      if (msg) msg.textContent = 'Code to ' + (mode === 'signup' ? 'sign up' : 'log in') + ' · Don’t share your OTP with anyone';
+    });
+    if (isResend) toast('New code sent');
+  }
+
+  // returning user -> 'login', brand-new phone -> 'signup' (cosmetic; real decision is after OTP)
+  function detectMode(mobile) {
+    if (users()[mobile]) return Promise.resolve('login');
+    return api('GET', '/api/users/' + encodeURIComponent(mobile))
+      .then(function () { return 'login'; })
+      .catch(function () { return 'signup'; });
+  }
+
+  var otpPopTimer = null;   // auto-dismiss timer for the code notification
+  function removeOtpPopup() {
+    if (otpPopTimer) { clearTimeout(otpPopTimer); otpPopTimer = null; }
+    var p = document.getElementById('dcal-otp-pop'); if (p) p.remove();
+  }
+
+  // short two-note "ding" chime (generated in code; no audio file needed)
+  function playDing() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      var ctx = new AC();
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      [[880, 0], [1320, 0.12]].forEach(function (n) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        o.connect(g); g.connect(ctx.destination);
+        var t = ctx.currentTime + n[1];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+        o.start(t); o.stop(t + 0.3);
+      });
+      setTimeout(function () { ctx.close(); }, 800);
+    } catch (e) {}
+  }
+
+  // Truecaller-style notification (top-right) showing the one-time code (demo — no SMS sent)
+  function showOtpPopup(code, mode) {
+    removeOtpPopup();
+    var action = mode === 'signup' ? 'sign up' : 'log in';
+    var pop = el(
+      '<div id="dcal-otp-pop" class="dcal-otp-pop" role="dialog" aria-label="Your verification code">' +
+        '<button type="button" class="dcal-otp-pop__x" data-otp-pop-x aria-label="Dismiss">&times;</button>' +
+        '<div class="dcal-otp-pop__head">' +
+          '<span class="dcal-otp-pop__logo"><img src="' + rel('img/dcal-logo.png') + '" alt=""></span>' +
+          '<span class="dcal-otp-pop__brand">D’Cal</span>' +
+        '</div>' +
+        '<div class="dcal-otp-pop__body">' +
+          '<div class="dcal-otp-pop__code">' + esc(code) + '</div>' +
+          '<p class="dcal-otp-pop__msg">Code to ' + action + ' · Don’t share your OTP with anyone</p>' +
+        '</div>' +
+        '<button type="button" class="dcal-otp-pop__copy" data-otp-pop-copy>Copy OTP</button>' +
+      '</div>'
+    );
+    document.body.appendChild(pop);
+    requestAnimationFrame(function () { pop.classList.add('show'); });
+
+    pop.querySelector('[data-otp-pop-x]').addEventListener('click', removeOtpPopup);
+    pop.querySelector('[data-otp-pop-copy]').addEventListener('click', function () {
+      var btn = this;
+      var done = function () {
+        btn.textContent = 'Copied ✓'; btn.classList.add('done');
+        var boxes = modal.querySelectorAll('[data-otp-boxes] input');
+        code.split('').forEach(function (d, i) { if (boxes[i]) boxes[i].value = d; });
+        removeOtpPopup();
+        setTimeout(verifyOtp, 200);   // auto-submit after filling
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(done, done);
+      } else { done(); }
+    });
+    // auto-dismiss after 60s (tracked, so a resend's new popup isn't killed by an old timer)
+    otpPopTimer = setTimeout(removeOtpPopup, 60000);
   }
 
   function startResendTimer() {
     var btn = modal.querySelector('[data-act="resend"]');
     var span = modal.querySelector('[data-resend-timer]');
-    var left = 30; btn.disabled = true; span.textContent = left;
+    if (!btn || !span) return;   // never let a missing element break the OTP flow
+    var left = 15; btn.disabled = true; span.textContent = left;
     btn.innerHTML = 'Resend in <span data-resend-timer>' + left + '</span>s';
     if (resendTimer) clearInterval(resendTimer);
     resendTimer = setInterval(function () {
@@ -626,6 +714,7 @@
         '<button class="dcal-btn dcal-addr-save">Save address</button>' +
         '<button type="button" class="dcal-link-btn dcal-addr-cancel" style="white-space:nowrap">Cancel</button>' +
       '</div>';
+    wireAddressForm('drawer');
     box.querySelector('.dcal-addr-cancel').addEventListener('click', function () { renderAddresses(box); });
     box.querySelector('.dcal-addr-save').addEventListener('click', function () {
       var addr = readAddressForm('drawer');
@@ -645,18 +734,18 @@
       return;
     }
     box.innerHTML = list.map(function (o, idx) {
-      var hasDetail = (o.items && o.items.length) || o.address || o.payment;
+      var st = o.status || 'Confirmed';
       return '<div class="dcal-order">' +
-        '<button type="button" class="dcal-order__head" data-ord="' + idx + '"' + (hasDetail ? '' : ' style="cursor:default"') + '>' +
+        '<button type="button" class="dcal-order__head" data-ord="' + idx + '">' +
           (o.image ? '<img src="' + esc(o.image) + '" alt="">' : '') +
           '<div class="dcal-order__main">' +
             '<p class="dcal-card__t">' + esc(o.title || ('Order #' + o.id)) + '</p>' +
             '<p class="dcal-card__s">Order #' + esc(o.id) + ' · ' + new Date(o.date).toLocaleDateString() + '</p>' +
-            '<p class="dcal-card__s">' + esc(o.total || '') + ' · <span class="dcal-order__badge">' + esc(o.status || 'Confirmed') + '</span></p>' +
+            '<p class="dcal-card__s">' + esc(o.total || '') + ' · <span class="dcal-order__badge dcal-order__badge--' + st.toLowerCase() + '">' + esc(st) + '</span></p>' +
           '</div>' +
-          (hasDetail ? '<span class="dcal-order__chev">' + IC.chev + '</span>' : '') +
+          '<span class="dcal-order__chev">' + IC.chev + '</span>' +
         '</button>' +
-        (hasDetail ? '<div class="dcal-order__detail" data-ord-detail="' + idx + '" hidden>' + orderDetailHTML(o) + '</div>' : '') +
+        '<div class="dcal-order__detail" data-ord-detail="' + idx + '" hidden>' + orderDetailHTML(o) + '</div>' +
       '</div>';
     }).join('');
 
@@ -670,6 +759,60 @@
         else { detail.removeAttribute('hidden'); btn.classList.add('open'); }
       });
     });
+
+    // ---- cancel-order wiring ----
+    box.querySelectorAll('[data-cancel-open]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-cancel-open');
+        var panel = box.querySelector('[data-cancel-panel="' + id + '"]');
+        if (panel) { panel.removeAttribute('hidden'); b.setAttribute('hidden', ''); }
+      });
+    });
+    box.querySelectorAll('[data-cancel-close]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-cancel-close');
+        var panel = box.querySelector('[data-cancel-panel="' + id + '"]');
+        var opener = box.querySelector('[data-cancel-open="' + id + '"]');
+        if (panel) panel.setAttribute('hidden', '');
+        if (opener) opener.removeAttribute('hidden');
+      });
+    });
+    box.querySelectorAll('[data-cancel-confirm]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-cancel-confirm');
+        var sel = box.querySelector('[data-cancel-reason="' + id + '"]');
+        var reason = sel ? sel.value : '';
+        if (!window.confirm('Are you sure you want to cancel this order? This cannot be undone.')) return;
+        doCancelOrder(id, reason, box);
+      });
+    });
+  }
+
+  var CANCEL_REASONS = [
+    'Ordered by mistake', 'Found a better price elsewhere', 'Delivery is taking too long',
+    'Want to change address or payment', 'Item no longer needed', 'Other'
+  ];
+  function orderCancellable(o) { var s = o.status || 'Confirmed'; return s === 'Confirmed' || s === 'Processing'; }
+
+  function cancelLocalOrder(orderId, reason) {
+    var list = orders();
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(orderId)) {
+        list[i].status = 'Cancelled';
+        list[i].cancelReason = reason;
+        list[i].cancelledAt = Date.now();
+        list[i].refundStatus = list[i].paid ? 'Refund initiated' : 'No payment taken';
+        break;
+      }
+    }
+    saveOrders(list);
+  }
+  function doCancelOrder(orderId, reason, box) {
+    cancelLocalOrder(orderId, reason);              // update this device immediately
+    toast('Order cancelled');
+    api('PUT', '/api/orders/' + encodeURIComponent(orderId) + '/cancel',
+      { mobile: sessionMobile(), reason: reason }).catch(function () {});   // sync to the central DB
+    renderOrders(box);
   }
 
   function orderDetailHTML(o) {
@@ -681,16 +824,40 @@
             '<b>' + money(priceNum(it.price) * (it.qty || 1)) + '</b></div>';
         }).join('') + '</div>';
     }
-    if (o.address) {
+    if (o.address && o.address.line) {
       var a = o.address;
       html += '<div class="dcal-order__sec"><h4 class="dcal-order__h4">Delivery address</h4>' +
         '<p class="dcal-order__addr"><b>' + esc(a.name || '') + '</b>' + (a.phone ? ' · ' + esc(a.phone) : '') + '<br>' +
         [a.line, [a.city, a.state].filter(Boolean).join(', '), a.pincode, a.landmark ? 'Landmark: ' + a.landmark : '']
           .filter(Boolean).map(esc).join('<br>') + '</p></div>';
     }
+    if (o.discount > 0) {
+      html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Discount</h4>' +
+        '<span class="dcal-order__pay" style="color:#0B6E4F">−' + money(o.discount) + (o.coupon ? ' (' + esc(o.coupon) + ')' : '') + '</span></div>';
+    }
     if (o.payment) {
       html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Payment</h4>' +
-        '<span class="dcal-order__pay">' + esc(o.payment) + '</span></div>';
+        '<span class="dcal-order__pay">' + esc(o.payment) + (o.paid ? ' · Paid ✓' : '') + '</span></div>';
+    }
+    if ((o.status || '') === 'Cancelled') {
+      html += '<div class="dcal-order__sec dcal-cancel-info"><h4 class="dcal-order__h4">Cancellation</h4>' +
+        '<p class="dcal-order__addr">Status: <b style="color:#DC2626">Cancelled</b>' +
+        (o.cancelReason ? '<br>Reason: ' + esc(o.cancelReason) : '') +
+        (o.refundStatus ? '<br>Refund: <b>' + esc(o.refundStatus) + '</b>' : '') + '</p></div>';
+    } else if (orderCancellable(o)) {
+      html += '<div class="dcal-order__sec">' +
+        '<button type="button" class="dcal-link-btn dcal-link-btn--danger" data-cancel-open="' + esc(o.id) + '">Cancel this order</button>' +
+        '<div class="dcal-cancel-panel" data-cancel-panel="' + esc(o.id) + '" hidden>' +
+          '<label class="dcal-label" style="margin:10px 0 6px">Why are you cancelling?</label>' +
+          '<select class="dcal-input" style="margin-bottom:12px" data-cancel-reason="' + esc(o.id) + '">' +
+            CANCEL_REASONS.map(function (r) { return '<option>' + esc(r) + '</option>'; }).join('') +
+          '</select>' +
+          '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+            '<button type="button" class="dcal-btn dcal-btn--danger" data-cancel-confirm="' + esc(o.id) + '" style="width:auto;padding-left:22px;padding-right:22px">Confirm cancellation</button>' +
+            '<button type="button" class="dcal-link-btn" data-cancel-close="' + esc(o.id) + '">Keep order</button>' +
+          '</div>' +
+          '<p class="dcal-cancel-note">' + (o.paid ? 'Your payment will be refunded in 5–7 business days.' : 'No payment was taken (Cash on Delivery).') + '</p>' +
+        '</div></div>';
     }
     return html;
   }
@@ -851,17 +1018,10 @@
     setTimeout(function () { location.href = cartUrl; }, 500);
   }
 
+  // "Buy now" -> add the product to the cart and go to the cart,
+  // where the customer continues through Address -> Summary -> Payment.
   function doBuyNow() {
-    var p = pageProduct();
-    var list = orders();
-    list.unshift({
-      id: String(cartCount() + Date.now()).slice(-8),
-      title: p.title, total: p.price, image: p.image,
-      items: [p], date: Date.now(), status: 'Confirmed'
-    });
-    saveOrders(list);
-    pushOrder(list[0], sessionMobile());
-    toast('Order placed! 🎉  See it in My Orders');
+    doAddToCart();
   }
 
   function updateCartBubbles() {
@@ -907,9 +1067,7 @@
         '<div class="dcal-cart-items">' + cart.map(cartItemHTML).join('') + '</div>' +
         '<aside class="dcal-cart-summary">' +
           '<h3>Order Summary</h3>' +
-          '<div class="dcal-sum-row"><span>Subtotal (' + cartCount() + ' item' + (cartCount() > 1 ? 's' : '') + ')</span><b>' + money(subtotal) + '</b></div>' +
-          '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
-          '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(subtotal) + '</b></div>' +
+          summaryBodyHTML(subtotal) +
           '<button class="dcal-btn dcal-cart-checkout">Proceed to Checkout</button>' +
           '<a class="dcal-cart-continue" href="collection.html">Continue shopping</a>' +
         '</aside>' +
@@ -919,6 +1077,7 @@
     root.querySelectorAll('[data-qm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = +b.getAttribute('data-qm'); c[k].qty = (c[k].qty || 1) - 1; if (c[k].qty < 1) c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); }; });
     root.querySelectorAll('[data-rm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); c.splice(+b.getAttribute('data-rm'), 1); cartSave(c); updateCartBubbles(); renderCartPage(); toast('Removed from cart'); }; });
     root.querySelector('.dcal-cart-checkout').addEventListener('click', function () { window.DcalAuth.require(startCheckout); });
+    wireCoupon(root, renderCartPage);
   }
 
   /* ====================================================
@@ -932,6 +1091,58 @@
     { id: 'netbanking', label: 'Net Banking',   note: 'All major Indian banks' },
     { id: 'cod',     label: 'Cash on Delivery', note: 'Pay when your order arrives' }
   ];
+
+  /* ---------- COUPONS ---------- */
+  var COUPONS = {
+    DCAL10:  { type: 'percent', value: 10, desc: '10% off' },
+    DCAL200: { type: 'flat',    value: 200, min: 2000, desc: '₹200 off orders over ₹2,000' }
+  };
+  function getCouponCode() { try { return (localStorage.getItem('dcal_coupon') || '').toUpperCase(); } catch (e) { return ''; } }
+  function setCouponCode(c) { try { if (c) localStorage.setItem('dcal_coupon', c.toUpperCase()); else localStorage.removeItem('dcal_coupon'); } catch (e) {} }
+  function computeTotals(subtotal) {
+    var code = getCouponCode(), c = COUPONS[code], discount = 0;
+    if (c && (!c.min || subtotal >= c.min)) {
+      discount = c.type === 'percent' ? Math.round(subtotal * c.value / 100) : c.value;
+      if (discount > subtotal) discount = subtotal;
+    } else { code = ''; }
+    return { subtotal: subtotal, code: code, discount: discount, total: subtotal - discount };
+  }
+  function cartTotal() { return computeTotals(cartSubtotal()).total; }
+
+  function couponBoxHTML(t) {
+    if (t.code && t.discount > 0) {
+      return '<div class="dcal-coupon"><div class="dcal-coupon-ok"><span>✓ <b>' + esc(t.code) + '</b> applied</span>' +
+        '<button type="button" data-coupon-remove>Remove</button></div></div>';
+    }
+    return '<div class="dcal-coupon">' +
+      '<div class="dcal-coupon-row"><input class="dcal-input" data-coupon-input placeholder="Coupon code (e.g. DCAL10)" maxlength="20" style="margin-bottom:0"><button type="button" class="dcal-coupon-apply" data-coupon-apply>Apply</button></div>' +
+      '<div class="dcal-coupon-msg" data-coupon-msg></div></div>';
+  }
+  function summaryBodyHTML(subtotal) {
+    var t = computeTotals(subtotal), n = cartCount();
+    return '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
+      '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
+      couponBoxHTML(t) +
+      (t.discount > 0 ? '<div class="dcal-sum-row"><span>Discount (' + esc(t.code) + ')</span><b style="color:#0B6E4F">−' + money(t.discount) + '</b></div>' : '') +
+      '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(t.total) + '</b></div>';
+  }
+  function wireCoupon(root, rerender) {
+    var apply = root.querySelector('[data-coupon-apply]');
+    if (apply) apply.addEventListener('click', function () {
+      var inp = root.querySelector('[data-coupon-input]');
+      var code = (inp ? inp.value : '').trim().toUpperCase();
+      var msg = root.querySelector('[data-coupon-msg]');
+      if (!code) { if (msg) { msg.textContent = 'Please enter a coupon code.'; msg.className = 'dcal-coupon-msg err'; } return; }
+      var c = COUPONS[code];
+      if (!c) { if (msg) { msg.textContent = 'Invalid or expired coupon code.'; msg.className = 'dcal-coupon-msg err'; } return; }
+      if (c.min && cartSubtotal() < c.min) { if (msg) { msg.textContent = 'Add items worth ' + money(c.min) + ' to use this code.'; msg.className = 'dcal-coupon-msg err'; } return; }
+      setCouponCode(code); toast('Coupon ' + code + ' applied 🎉'); rerender();
+    });
+    var rm = root.querySelector('[data-coupon-remove]');
+    if (rm) rm.addEventListener('click', function () { setCouponCode(''); toast('Coupon removed'); rerender(); });
+    var inp = root.querySelector('[data-coupon-input]');
+    if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (apply) apply.click(); } });
+  }
 
   /* ---------- ADDRESS BOOK (multiple addresses per user) ---------- */
   function newAddrId() { return 'addr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -992,22 +1203,68 @@
     var m = sessionMobile(); return !!m && (users()[m] || {}).defaultAddressId === id;
   }
 
+  // all 28 states + 8 union territories
+  var INDIAN_STATES = [
+    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana',
+    'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+    'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+    'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+    'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
+    'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+  ];
+
+  function coSelect(label, key, val, options, required) {
+    var opts = options.slice();
+    if (val && opts.indexOf(val) === -1) opts.unshift(val);   // keep any legacy/free-text value
+    return '<div class="dcal-co-field"><label class="dcal-label">' + esc(label) + (required ? ' <span class="dcal-req">*</span>' : '') + '</label>' +
+      '<select class="dcal-input" style="margin-bottom:0" data-co="' + key + '">' +
+        '<option value="">Select state…</option>' +
+        opts.map(function (o) { return '<option value="' + esc(o) + '"' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+      '</select></div>';
+  }
+  function cityOptionsHTML(list, current) {
+    var html = '<option value="">' + (list.length ? 'Select your city / area…' : 'Enter pincode to load areas…') + '</option>';
+    var seen = {};
+    list.forEach(function (n) {
+      if (!n) return; var k = n.toLowerCase(); if (seen[k]) return; seen[k] = 1;
+      html += '<option value="' + esc(n) + '"' + (n === current ? ' selected' : '') + '>' + esc(n) + '</option>';
+    });
+    html += '<option value="__other__">✏️ Other — type manually</option>';
+    return html;
+  }
+  function cityField(val) {
+    return '<div class="dcal-co-field"><label class="dcal-label">City / Area <span class="dcal-req">*</span></label>' +
+      '<select class="dcal-input" style="margin-bottom:0" data-co="city">' + cityOptionsHTML(val ? [val] : [], val) + '</select></div>';
+  }
+  // swap the city <select> for a free-text box (for "Other", or when offline)
+  function cityToText(box, val) {
+    var sel = box.querySelector('[data-co="city"]'); if (!sel) return;
+    var inp = document.createElement('input');
+    inp.className = 'dcal-input'; inp.type = 'text'; inp.style.marginBottom = '0';
+    inp.setAttribute('data-co', 'city'); inp.setAttribute('autocomplete', 'off');
+    inp.value = (val && val !== '__other__') ? val : '';
+    inp.placeholder = 'Enter your city / area';
+    sel.parentNode.replaceChild(inp, sel);
+    inp.focus();
+  }
+
   // shared address form fields + read/validate (used in checkout AND profile drawer)
   function addressFormHTML(a, scope) {
     a = a || {};
     return '<div data-addr-form="' + scope + '">' +
       '<div class="dcal-co-grid2">' +
-        coField('Full name', 'name', a.name || '', 'text') +
-        coField('Mobile number', 'phone', a.phone || '', 'tel') +
+        coField('Full name', 'name', a.name || '', 'text', true) +
+        coField('Mobile number', 'phone', a.phone || '', 'tel', true) +
       '</div>' +
-      coField('Address (House no., street, area)', 'line', a.line || '', 'text') +
+      coField('Address (House no., street, area)', 'line', a.line || '', 'text', true) +
       '<div class="dcal-co-grid2">' +
-        coField('City', 'city', a.city || '', 'text') +
-        coField('State', 'state', a.state || '', 'text') +
+        coField('Pincode', 'pincode', a.pincode || '', 'tel', true) +
+        coSelect('State', 'state', a.state || '', INDIAN_STATES, true) +
       '</div>' +
+      '<div class="dcal-pin-note" data-pin-note></div>' +
       '<div class="dcal-co-grid2">' +
-        coField('Pincode', 'pincode', a.pincode || '', 'tel') +
-        coField('Landmark (optional)', 'landmark', a.landmark || '', 'text') +
+        cityField(a.city || '') +
+        coField('Landmark (optional)', 'landmark', a.landmark || '', 'text', false) +
       '</div>' +
       (a.id ? '<input type="hidden" data-co="id" value="' + esc(a.id) + '">' : '') +
       '<div class="dcal-err" data-addr-err style="margin-top:4px"></div></div>';
@@ -1017,17 +1274,73 @@
     var get = function (k) { var f = box.querySelector('[data-co="' + k + '"]'); return f ? f.value.trim() : ''; };
     var addr = { name: get('name'), phone: get('phone'), line: get('line'),
       city: get('city'), state: get('state'), pincode: get('pincode'), landmark: get('landmark') };
+    if (addr.city === '__other__') addr.city = '';
     var id = get('id'); if (id) addr.id = id;
     return addr;
   }
   function validateAddress(addr) {
     if (addr.name.length < 2) return 'Please enter your full name.';
-    if (!/^\d{10}$/.test(addr.phone.replace(/\D/g, ''))) return 'Please enter a valid 10-digit mobile number.';
+    if (!/^\d{10}$/.test(addr.phone)) return 'Mobile number must be exactly 10 digits.';
     if (addr.line.length < 5) return 'Please enter your full address.';
-    if (!addr.city) return 'Please enter your city.';
-    if (!addr.state) return 'Please enter your state.';
-    if (!/^\d{6}$/.test(addr.pincode)) return 'Please enter a valid 6-digit pincode.';
+    if (!/^\d{6}$/.test(addr.pincode)) return 'Pincode must be exactly 6 digits.';
+    if (!addr.state) return 'Please select your state.';
+    if (!addr.city) return 'Please enter your city / district.';
     return '';
+  }
+
+  // restrict an input to digits only, with a max length
+  function digitsOnly(input, max) {
+    if (!input) return;
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('maxlength', String(max));
+    input.addEventListener('input', function () {
+      var v = input.value.replace(/\D/g, '').slice(0, max);
+      if (v !== input.value) input.value = v;
+    });
+  }
+  // wire phone/pincode rules + pincode -> city/state auto-detect (India Post API)
+  function wireAddressForm(scope) {
+    var box = document.querySelector('[data-addr-form="' + scope + '"]'); if (!box) return;
+    digitsOnly(box.querySelector('[data-co="phone"]'), 10);
+    var pin = box.querySelector('[data-co="pincode"]');
+    digitsOnly(pin, 6);
+    if (pin) pin.addEventListener('input', function () { if (pin.value.length === 6) lookupPincode(scope, pin.value); });
+    var citySel = box.querySelector('select[data-co="city"]');
+    if (citySel) citySel.addEventListener('change', function () { if (citySel.value === '__other__') cityToText(box, ''); });
+  }
+  function setSelectValue(sel, val) {
+    if (!sel || !val) return false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value.toLowerCase() === String(val).toLowerCase()) { sel.selectedIndex = i; return true; }
+    }
+    return false;
+  }
+  function lookupPincode(scope, pin) {
+    var box = document.querySelector('[data-addr-form="' + scope + '"]'); if (!box) return;
+    var note = box.querySelector('[data-pin-note]');
+    if (note) { note.className = 'dcal-pin-note'; note.textContent = 'Detecting location…'; }
+    fetch('https://api.postalpincode.in/pincode/' + pin)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var rec = data && data[0];
+        if (!rec || rec.Status !== 'Success' || !rec.PostOffice || !rec.PostOffice.length) {
+          if (note) { note.className = 'dcal-pin-note dcal-pin-note--warn'; note.textContent = 'Pincode not found — please fill city & state manually.'; }
+          return;
+        }
+        var pos = rec.PostOffice;
+        var state = pos[0].State, district = pos[0].District;
+        setSelectValue(box.querySelector('[data-co="state"]'), state);
+        var citySel = box.querySelector('select[data-co="city"]');
+        if (citySel) {
+          var current = (citySel.value && citySel.value !== '__other__') ? citySel.value : '';
+          citySel.innerHTML = cityOptionsHTML([district].concat(pos.map(function (p) { return p.Name; })), current);
+          if (!citySel.value) setSelectValue(citySel, district);
+        }
+        if (note) { note.className = 'dcal-pin-note dcal-pin-note--ok'; note.textContent = '✓ ' + district + ', ' + state + ' — now pick your area from the City dropdown.'; }
+      })
+      .catch(function () {
+        if (note) { note.className = 'dcal-pin-note dcal-pin-note--warn'; note.textContent = 'Could not auto-detect — please fill city & state manually.'; }
+      });
   }
 
   function cartSubtotal() {
@@ -1053,8 +1366,8 @@
     return root;
   }
 
-  function coField(label, key, val, type) {
-    return '<div class="dcal-co-field"><label class="dcal-label">' + esc(label) + '</label>' +
+  function coField(label, key, val, type, required) {
+    return '<div class="dcal-co-field"><label class="dcal-label">' + esc(label) + (required ? ' <span class="dcal-req">*</span>' : '') + '</label>' +
       '<input class="dcal-input" style="margin-bottom:0" type="' + type + '" data-co="' + key + '" value="' + esc(val) + '"></div>';
   }
 
@@ -1135,6 +1448,7 @@
         '</div>' +
       '</div>');
     if (!root) return;
+    wireAddressForm('checkout');
     var cancel = root.querySelector('.dcal-co-cancel');
     if (hasList) cancel.addEventListener('click', coAddress);
     else cancel.addEventListener('click', function () { location.href = 'cart.html'; });
@@ -1176,9 +1490,7 @@
         '</div>' +
         '<aside class="dcal-cart-summary">' +
           '<h3>Order Summary</h3>' +
-          '<div class="dcal-sum-row"><span>Subtotal (' + cartCount() + ' item' + (cartCount() > 1 ? 's' : '') + ')</span><b>' + money(subtotal) + '</b></div>' +
-          '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
-          '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(subtotal) + '</b></div>' +
+          summaryBodyHTML(subtotal) +
           '<button class="dcal-btn dcal-co-next">Continue to Payment →</button>' +
           '<button type="button" class="dcal-cart-continue dcal-co-back" style="background:none;border:none;cursor:pointer;width:100%">← Back to address</button>' +
         '</aside>' +
@@ -1187,6 +1499,7 @@
     root.querySelector('.dcal-co-next').addEventListener('click', coPayment);
     root.querySelector('.dcal-co-back').addEventListener('click', coAddress);
     root.querySelector('[data-co-edit]').addEventListener('click', coAddress);
+    wireCoupon(root, coSummary);
   }
 
   /* ---------- STEP 3 — Payment ---------- */
@@ -1204,33 +1517,189 @@
               '<span class="dcal-pay-text"><b>' + esc(p.label) + '</b><span>' + esc(p.note) + '</span></span>' +
             '</label>';
           }).join('') + '</div>' +
+          '<div class="dcal-pay-fields" data-pay-fields></div>' +
           '<p class="dcal-co-secure"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> 100% Secure · Razorpay Protected</p>' +
         '</div>' +
         '<aside class="dcal-cart-summary">' +
           '<h3>Order Summary</h3>' +
-          '<div class="dcal-sum-row"><span>Subtotal (' + cartCount() + ' item' + (cartCount() > 1 ? 's' : '') + ')</span><b>' + money(subtotal) + '</b></div>' +
-          '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
-          '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(subtotal) + '</b></div>' +
-          '<button class="dcal-btn dcal-co-place">Place Order · ' + money(subtotal) + '</button>' +
+          summaryBodyHTML(subtotal) +
+          '<button class="dcal-btn dcal-co-place">Place Order · ' + money(computeTotals(subtotal).total) + '</button>' +
           '<button type="button" class="dcal-cart-continue dcal-co-back" style="background:none;border:none;cursor:pointer;width:100%">← Back to summary</button>' +
         '</aside>' +
       '</div>');
     if (!root) return;
+    function syncPlaceLabel() {
+      var b = root.querySelector('.dcal-co-place');
+      if (b) b.textContent = (checkout.payment === 'cod' ? 'Place Order · ' : 'Pay Securely · ') + money(cartTotal());
+    }
     root.querySelectorAll('input[name="dcal-pay"]').forEach(function (r) {
       r.addEventListener('change', function () {
         checkout.payment = r.value;
         root.querySelectorAll('.dcal-pay-opt').forEach(function (o) { o.classList.remove('sel'); });
         r.closest('.dcal-pay-opt').classList.add('sel');
+        syncPlaceLabel();
+        refreshPayFields();
       });
     });
+    syncPlaceLabel();
     root.querySelector('.dcal-co-back').addEventListener('click', coSummary);
-    root.querySelector('.dcal-co-place').addEventListener('click', placeCartOrder);
+    root.querySelector('.dcal-co-place').addEventListener('click', handlePlaceOrder);
+    wireCoupon(root, coPayment);
+    // load whether real Razorpay is on; if not, show the demo card/UPI/bank fields
+    loadPaymentConfig().then(refreshPayFields);
+  }
+
+  /* ---------- payment-detail fields (demo until Razorpay is configured) ---------- */
+  var razorpayConfig = null;   // { enabled, keyId }
+  function loadPaymentConfig() {
+    if (razorpayConfig) return Promise.resolve(razorpayConfig);
+    return api('GET', '/api/payment/config')
+      .then(function (c) { razorpayConfig = c || { enabled: false }; return razorpayConfig; })
+      .catch(function () { razorpayConfig = { enabled: false }; return razorpayConfig; });
+  }
+  function razorpayOn() { return !!(razorpayConfig && razorpayConfig.enabled); }
+
+  var NETBANKS = ['HDFC Bank', 'State Bank of India', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank',
+    'Punjab National Bank', 'Bank of Baroda', 'Yes Bank', 'IDFC FIRST Bank', 'Other'];
+
+  function payFieldsHTML(method) {
+    if (method === 'card') {
+      return '<div class="dcal-pay-form">' +
+        '<label class="dcal-label">Card number <span class="dcal-req">*</span></label>' +
+        '<input class="dcal-input" data-pf="number" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456">' +
+        '<label class="dcal-label">Name on card <span class="dcal-req">*</span></label>' +
+        '<input class="dcal-input" data-pf="name" autocomplete="cc-name" placeholder="As printed on the card">' +
+        '<div class="dcal-co-grid2">' +
+          '<div class="dcal-co-field"><label class="dcal-label">Expiry (MM/YY) <span class="dcal-req">*</span></label><input class="dcal-input" style="margin-bottom:0" data-pf="exp" inputmode="numeric" placeholder="MM/YY"></div>' +
+          '<div class="dcal-co-field"><label class="dcal-label">CVV <span class="dcal-req">*</span></label><input class="dcal-input" style="margin-bottom:0" data-pf="cvv" inputmode="numeric" type="password" placeholder="•••"></div>' +
+        '</div>' +
+        '<div class="dcal-err" data-pf-err style="margin-top:8px"></div></div>';
+    }
+    if (method === 'upi') {
+      return '<div class="dcal-pay-form">' +
+        '<label class="dcal-label">Your UPI ID <span class="dcal-req">*</span></label>' +
+        '<input class="dcal-input" style="margin-bottom:0" data-pf="upi" placeholder="yourname@bank">' +
+        '<div class="dcal-err" data-pf-err style="margin-top:8px"></div></div>';
+    }
+    if (method === 'netbanking') {
+      return '<div class="dcal-pay-form">' +
+        '<label class="dcal-label">Select your bank <span class="dcal-req">*</span></label>' +
+        '<select class="dcal-input" style="margin-bottom:0" data-pf="bank"><option value="">Choose your bank…</option>' +
+          NETBANKS.map(function (b) { return '<option>' + esc(b) + '</option>'; }).join('') + '</select>' +
+        '<div class="dcal-err" data-pf-err style="margin-top:8px"></div></div>';
+    }
+    return '';   // COD: nothing to collect
+  }
+
+  function refreshPayFields() {
+    var box = document.querySelector('[data-pay-fields]'); if (!box) return;
+    // Razorpay handles card entry itself, so only show our fields in demo mode
+    if (razorpayOn() || checkout.payment === 'cod') { box.innerHTML = ''; return; }
+    box.innerHTML = payFieldsHTML(checkout.payment);
+    wirePayFields();
+  }
+
+  function wirePayFields() {
+    var box = document.querySelector('[data-pay-fields]'); if (!box) return;
+    var num = box.querySelector('[data-pf="number"]');
+    if (num) num.addEventListener('input', function () {
+      var v = num.value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+      num.value = v;
+    });
+    var exp = box.querySelector('[data-pf="exp"]');
+    if (exp) exp.addEventListener('input', function () {
+      var d = exp.value.replace(/\D/g, '').slice(0, 4);
+      exp.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+    });
+    var cvv = box.querySelector('[data-pf="cvv"]');
+    if (cvv) cvv.addEventListener('input', function () { cvv.value = cvv.value.replace(/\D/g, '').slice(0, 4); });
+  }
+
+  function validatePayFields(method) {
+    var box = document.querySelector('[data-pay-fields]'); if (!box) return '';
+    function v(k) { var f = box.querySelector('[data-pf="' + k + '"]'); return f ? f.value.trim() : ''; }
+    if (method === 'card') {
+      if (v('number').replace(/\s/g, '').length < 12) return 'Enter a valid card number.';
+      if (v('name').length < 2) return 'Enter the name on the card.';
+      if (!/^\d{2}\/\d{2}$/.test(v('exp'))) return 'Enter expiry as MM/YY.';
+      if (!/^\d{3,4}$/.test(v('cvv'))) return 'Enter a valid CVV.';
+    } else if (method === 'upi') {
+      if (!/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(v('upi'))) return 'Enter a valid UPI ID (e.g. name@bank).';
+    } else if (method === 'netbanking') {
+      if (!v('bank')) return 'Please select your bank.';
+    }
+    return '';
+  }
+
+  /* ---------- Razorpay payment ---------- */
+  function loadRazorpay() {
+    return new Promise(function (resolve) {
+      if (window.Razorpay) return resolve(true);
+      var s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.onload = function () { resolve(true); };
+      s.onerror = function () { resolve(false); };
+      document.head.appendChild(s);
+    });
+  }
+  function resetPlaceBtn() {
+    var b = document.querySelector('.dcal-co-place');
+    if (b) { b.disabled = false; b.textContent = 'Place Order · ' + money(cartTotal()); }
+  }
+
+  // decide between Cash on Delivery, real Razorpay, or the demo card/UPI/bank flow
+  function handlePlaceOrder() {
+    if (checkout.payment === 'cod') { placeCartOrder({ paid: false }); return; }
+    if (razorpayOn()) { payWithRazorpay(cartTotal()); return; }
+    // demo mode: validate the entered card/UPI/bank details, then place the order
+    var err = validatePayFields(checkout.payment);
+    var errBox = document.querySelector('[data-pf-err]');
+    if (err) { if (errBox) { errBox.textContent = err; errBox.classList.add('show'); } return; }
+    placeCartOrder({ paid: true, demo: true });   // simulated successful payment
+  }
+
+  function payWithRazorpay(subtotal) {
+    var btn = document.querySelector('.dcal-co-place');
+    if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
+    api('POST', '/api/payment/create-order', { amount: subtotal, receipt: 'dcal_' + Date.now() })
+      .then(function (order) {
+        return loadRazorpay().then(function (ok) {
+          if (!ok) throw new Error('Razorpay script failed to load');
+          var u = currentUser() || {};
+          var addr = checkout.address || {};
+          var rzp = new window.Razorpay({
+            key: order.keyId,
+            amount: order.amount,
+            currency: order.currency,
+            name: "D'Cal",
+            description: 'Order payment',
+            order_id: order.orderId,
+            prefill: { name: addr.name || u.name || '', email: u.email || '', contact: addr.phone || u.mobile || '' },
+            theme: { color: '#0077B6' },
+            handler: function (resp) {
+              api('POST', '/api/payment/verify', resp).then(function (v) {
+                if (v && v.valid) placeCartOrder({ paid: true, paymentId: resp.razorpay_payment_id });
+                else { toast('Payment could not be verified. Please contact support.'); resetPlaceBtn(); }
+              }).catch(function () { toast('Payment verification failed.'); resetPlaceBtn(); });
+            },
+            modal: { ondismiss: resetPlaceBtn }
+          });
+          rzp.on('payment.failed', function () { toast('Payment failed. Please try again.'); resetPlaceBtn(); });
+          rzp.open();
+        });
+      })
+      .catch(function () {
+        // Razorpay not set up yet (or server offline) -> complete as a demo order
+        toast('Online payment not set up yet — placing as demo order.');
+        placeCartOrder({ paid: false, demo: true });
+      });
   }
 
   /* ---------- Place the order ---------- */
-  function placeCartOrder() {
+  function placeCartOrder(payInfo) {
+    payInfo = payInfo || {};
     var cart = cartGet(); if (!cart.length) return;
-    var subtotal = cartSubtotal();
+    var t = computeTotals(cartSubtotal());
     var addr = checkout.address || getDefaultAddress() || {};
     var payLabel = (PAY_METHODS.filter(function (p) { return p.id === checkout.payment; })[0] || {}).label || 'UPI';
     var orderId = String(Date.now()).slice(-8);
@@ -1238,14 +1707,21 @@
     list.unshift({
       id: orderId,
       title: cart[0].title + (cart.length > 1 ? ' + ' + (cart.length - 1) + ' more' : ''),
-      total: money(subtotal), image: cart[0].image, items: cart.slice(),
+      total: money(t.total), image: cart[0].image, items: cart.slice(),
       address: addr, payment: payLabel,
+      coupon: t.code, discount: t.discount,
+      paid: !!payInfo.paid, paymentId: payInfo.paymentId || '',
       date: Date.now(), status: 'Confirmed'
     });
     saveOrders(list);
     pushOrder(list[0], sessionMobile());   // save the order to the central database
-    cartSave([]); updateCartBubbles();
+    cartSave([]); setCouponCode(''); updateCartBubbles();
     checkout = { address: null, addressId: null, payment: 'upi' };
+    var payNote = payInfo.paid
+      ? 'Paid online via <b>' + esc(payLabel) + '</b> ✓'
+      : (checkout.payment === 'cod' || payLabel === 'Cash on Delivery'
+          ? 'Payment: <b>Cash on Delivery</b>'
+          : 'Payment: <b>' + esc(payLabel) + '</b>');
     var root = document.getElementById('dcal-cart-root');
     if (root) root.innerHTML =
       '<div class="glass" style="max-width:560px;margin:0 auto;padding:48px;text-align:center;background:#fff">' +
@@ -1253,7 +1729,8 @@
         '<h2 style="font-size:24px;font-weight:700;margin:14px 0 8px">Order placed! 🎉</h2>' +
         '<p class="lead" style="margin:0 auto 8px">Thank you, ' + esc((addr.name || '').split(' ')[0] || 'friend') + '! Your order is confirmed.</p>' +
         '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
-        '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">Paid via <b>' + esc(payLabel) + '</b> · Track it in <b>My Orders</b>.</p>' +
+        (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
+        '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Track it in <b>My Orders</b>.</p>' +
         '<a href="collection.html" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Continue shopping →</a></div>';
     toast('Order placed! 🎉');
   }

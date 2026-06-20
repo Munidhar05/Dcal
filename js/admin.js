@@ -21,6 +21,9 @@
   var K_ADMIN_PW = 'dcal_admin_pw';
   var STATUSES = ['Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
+  var EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+
   var API_BASE = (typeof window !== 'undefined' && window.DCAL_API_BASE) || '';
   var SERVER = false;          // true once we confirm a live backend with a database
   var serverOrders = [];        // cache of orders fetched from the server
@@ -66,7 +69,9 @@
       return serverOrders.map(function (o) {
         return {
           o: { id: o.orderId, title: o.title, total: o.total, image: o.image, items: o.items || [],
-               address: o.address || {}, payment: o.payment, status: o.status, date: o.date },
+               address: o.address || {}, payment: o.payment, paid: o.paid, paymentId: o.paymentId,
+               coupon: o.coupon, discount: o.discount,
+               status: o.status, date: o.date, cancelReason: o.cancelReason, refundStatus: o.refundStatus },
           mobile: o.mobile, idx: -1,
           user: { name: o.customerName || '—' }
         };
@@ -140,7 +145,10 @@
         '<div class="adm-gate-card">' +
           '<div class="adm-gate-logo">D’Cal <span>Admin</span></div>' +
           '<p class="adm-gate-sub">Enter the admin passcode to continue.</p>' +
-          '<input type="password" id="adm-pass" class="adm-input" placeholder="Passcode" autocomplete="off">' +
+          '<div class="adm-pass-wrap">' +
+            '<input type="password" id="adm-pass" class="adm-input" placeholder="Passcode" autocomplete="off">' +
+            '<button type="button" class="adm-eye" id="adm-eye" aria-label="Show password">' + EYE + '</button>' +
+          '</div>' +
           (msg ? '<p class="adm-gate-err">' + esc(msg) + '</p>' : '') +
           '<button class="adm-btn adm-btn--full" id="adm-enter">Enter dashboard</button>' +
           '<p class="adm-gate-modeline">' + (SERVER
@@ -164,6 +172,14 @@
     }
     document.getElementById('adm-enter').addEventListener('click', attempt);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') attempt(); });
+    var eye = document.getElementById('adm-eye');
+    eye.addEventListener('click', function () {
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      eye.innerHTML = show ? EYE_OFF : EYE;
+      eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      input.focus();
+    });
     input.focus();
   }
 
@@ -262,7 +278,7 @@
           '<td>' + esc(r.user.name || '—') + '<br><span class="adm-muted">+91 ' + esc(r.mobile) + '</span></td>' +
           '<td>' + itemCount + '</td>' +
           '<td><b>' + esc(o.total || '') + '</b></td>' +
-          '<td>' + esc(o.payment || '—') + '</td>' +
+          '<td>' + esc(o.payment || '—') + (o.paid ? ' <span class="adm-chip adm-chip--delivered" style="padding:1px 7px">Paid</span>' : '') + '</td>' +
           '<td>' + statusSelect(o.status || 'Confirmed', r.mobile, r.idx, o.id) + '</td>' +
           '<td><button class="adm-link" data-toggle="' + i + '">Details</button></td>' +
         '</tr>' +
@@ -287,7 +303,12 @@
     return '<div class="adm-det">' +
       '<div class="adm-det-col"><h4>Items</h4>' + items + '</div>' +
       '<div class="adm-det-col"><h4>Delivery address</h4><p>' + addr + '</p></div>' +
-      '<div class="adm-det-col"><h4>Meta</h4><p class="adm-muted">Placed: ' + fmtDate(o.date) + '<br>Payment: ' + esc(o.payment || '—') + '</p></div>' +
+      '<div class="adm-det-col"><h4>Meta</h4><p class="adm-muted">Placed: ' + fmtDate(o.date) +
+        '<br>Payment: ' + esc(o.payment || '—') + ' (' + (o.paid ? 'Paid' : 'Unpaid') + ')' +
+        (o.discount > 0 ? '<br>Coupon: ' + esc(o.coupon || '—') + ' (−' + money(o.discount) + ')' : '') +
+        (o.paymentId ? '<br>Txn: ' + esc(o.paymentId) : '') +
+        ((o.status === 'Cancelled') ? '<br>Cancel reason: ' + esc(o.cancelReason || '—') + '<br>Refund: ' + esc(o.refundStatus || '—') : '') +
+        '</p></div>' +
       '</div>';
   }
 

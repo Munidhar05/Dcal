@@ -187,39 +187,81 @@
   }
 
   /* ---------- Lead form ---------- */
+  var WA_NUMBER = "918622909192"; // business WhatsApp (country code + number, no +)
   var form = document.getElementById("dealerForm");
   var note = document.getElementById("formNote");
   if (form) {
+    // Pincode -> auto-fill City & State (India Post API)
+    var pin = form.querySelector('[name="pincode"]');
+    if (pin) {
+      pin.addEventListener("input", function () {
+        if (pin.value.length === 6) lookupDealerPincode(pin.value);
+      });
+    }
+    function lookupDealerPincode(code) {
+      var noteEl = form.querySelector("[data-pin-note]");
+      if (noteEl) { noteEl.textContent = "Detecting location…"; noteEl.style.color = "#64748B"; }
+      fetch("https://api.postalpincode.in/pincode/" + code)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var rec = d && d[0];
+          if (!rec || rec.Status !== "Success" || !rec.PostOffice || !rec.PostOffice.length) {
+            if (noteEl) { noteEl.textContent = "Pincode not found — fill city & state manually."; noteEl.style.color = "#B45309"; }
+            return;
+          }
+          var po = rec.PostOffice[0];
+          var cityInput = form.querySelector('[name="city"]');
+          var stateSel = form.querySelector('[name="state"]');
+          if (cityInput && !cityInput.value) cityInput.value = po.District;
+          if (stateSel) {
+            var set = false, i;
+            for (i = 0; i < stateSel.options.length; i++) {
+              if (stateSel.options[i].text.toLowerCase() === po.State.toLowerCase()) { stateSel.selectedIndex = i; set = true; break; }
+            }
+            if (!set) for (i = 0; i < stateSel.options.length; i++) { if (stateSel.options[i].text === "Other") { stateSel.selectedIndex = i; break; } }
+          }
+          if (noteEl) { noteEl.textContent = "✓ " + po.District + ", " + po.State; noteEl.style.color = "#0B6E4F"; }
+        })
+        .catch(function () {
+          if (noteEl) { noteEl.textContent = "Could not auto-detect — fill manually."; noteEl.style.color = "#B45309"; }
+        });
+    }
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
       }
-      // Collect data (ready to POST to a backend / CRM)
       var data = {};
-      new FormData(form).forEach(function (v, k) {
-        data[k] = v;
-      });
-      // TODO: send `data` to your endpoint here
-      console.log("Dealer application:", data);
+      new FormData(form).forEach(function (v, k) { data[k] = (v || "").toString().trim(); });
 
-      var btn = form.querySelector('button[type="submit"]');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = "Submitting…";
+      // Build the WhatsApp message with all the details
+      var lines = [
+        "🤝 New D'Cal Dealership Application",
+        "",
+        "Name: " + (data.fullName || "-"),
+        "Business: " + (data.businessName || "-"),
+        "Mobile: " + (data.mobile || "-"),
+        "Email: " + (data.email || "-"),
+        "Pincode: " + (data.pincode || "-"),
+        "City: " + (data.city || "-"),
+        "State: " + (data.state || "-"),
+        "Business Type: " + (data.businessType || "-"),
+        "Products Sold: " + (data.currentProducts || "-"),
+        "Experience: " + (data.experience || "-"),
+        "",
+        "Message: " + (data.message || "-")
+      ];
+      window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
+
+      form.reset();
+      var pinNote = form.querySelector("[data-pin-note]");
+      if (pinNote) pinNote.textContent = "";
+      if (note) {
+        note.hidden = false;
+        note.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      setTimeout(function () {
-        form.reset();
-        if (note) {
-          note.hidden = false;
-          note.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = 'Apply Now <span class="arrow">→</span>';
-        }
-      }, 700);
     });
   }
 })();

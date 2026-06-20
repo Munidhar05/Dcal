@@ -11,7 +11,14 @@ const OrderSchema = new mongoose.Schema({
   items: { type: Array, default: [] },
   address: { type: Object, default: {} },
   payment: { type: String, default: '' },
+  coupon: { type: String, default: '' },           // coupon code applied (e.g. DCAL10)
+  discount: { type: Number, default: 0 },          // discount amount in rupees
+  paid: { type: Boolean, default: false },         // true once Razorpay payment is verified
+  paymentId: { type: String, default: '' },        // Razorpay payment id (e.g. pay_XXXX)
   status: { type: String, default: 'Confirmed' },
+  cancelReason: { type: String, default: '' },
+  cancelledAt: { type: Number, default: null },
+  refundStatus: { type: String, default: '' },
   date: { type: Number, default: () => Date.now() }
 });
 

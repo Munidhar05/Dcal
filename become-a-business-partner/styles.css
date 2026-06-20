@@ -482,3 +482,6 @@ h3{font-size:1.18rem;font-family:var(--sans);font-weight:700}
   *{animation:none!important;transition:none!important}
   .reveal,.reveal-left,.reveal-right{opacity:1;transform:none}
 }
+
+/* pincode auto-detect note: take no space until it has text */
+.pin-note:empty{display:none!important}
