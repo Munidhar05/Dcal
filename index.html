@@ -471,7 +471,7 @@
         </h1>
         <p class="lead" data-reveal data-reveal-delay="2">Protect your skin, hair, geyser, washing machine and pipes with a zero-electricity, zero-maintenance water softener engineered for Indian homes. Lab-certified. Used by 15+ lakh customers.</p>
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:32px" data-reveal data-reveal-delay="3">
-          <a href="#demo-form" class="btn btn-primary magnetic">Get Free Demo Kit →</a>
+          <a href="#demo-form" class="btn btn-primary magnetic pp-free-cta"><span class="pp-free-tag">FREE</span>Get Your Demo Kit →</a>
           <a href="#science" class="btn btn-ghost magnetic">See the science</a>
         </div>
         <div style="display:flex;gap:40px;margin-top:48px;flex-wrap:wrap" data-reveal data-reveal-delay="4">
@@ -1952,21 +1952,70 @@
 </script>
 
 <script>
-  /* Send each demo-kit submission to the lead webhook (n8n -> creates a tagged Shopify customer).
-     Fire-and-forget via sendBeacon so it survives the form's page navigation; the email notification still fires. */
+  /* Demo-kit form: validate -> auto-detect city/state from pincode -> fire lead webhook -> open WhatsApp -> show success */
   (function(){
+    var WA_NUMBER = "918622909192";   // business WhatsApp (country code + number, no +)
+    var WEBHOOK = "https://n8n.srv1048087.hstgr.cloud/webhook/dcal-demo-kit";
     var form = document.querySelector('#demo-form [data-multi-form]') || document.querySelector('#demo-form form');
     if(!form) return;
-    var WEBHOOK = "https://n8n.srv1048087.hstgr.cloud/webhook/dcal-demo-kit";
-    form.addEventListener('submit', function(){
+    var get = function(n){ var el = form.querySelector('[name="contact['+n+']"]'); return el ? (el.value || '').trim() : ''; };
+
+    /* Pincode -> auto-fill City & State (India Post API) */
+    var pin = form.querySelector('[name="contact[pincode]"]');
+    if(pin) pin.addEventListener('input', function(){ if(pin.value.length === 6) lookupPin(pin.value); });
+    function lookupPin(code){
+      fetch('https://api.postalpincode.in/pincode/'+code).then(function(r){return r.json();}).then(function(d){
+        var rec = d && d[0];
+        if(!rec || rec.Status !== 'Success' || !rec.PostOffice || !rec.PostOffice.length) return;
+        var po = rec.PostOffice[0];
+        var cityEl = form.querySelector('[name="contact[city]"]');
+        if(cityEl && !cityEl.value) cityEl.value = po.District;
+        var stEl = form.querySelector('[name="contact[state]"]');
+        if(stEl){ for(var i=0;i<stEl.options.length;i++){ if(stEl.options[i].text.toLowerCase() === po.State.toLowerCase()){ stEl.selectedIndex = i; stEl.style.color = '#0B1220'; break; } } }
+      }).catch(function(){});
+    }
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      if(form.reportValidity && !form.reportValidity()) return;     // block until all required fields are valid
+      var hp = form.querySelector('[data-honeypot]'); if(hp && hp.value) return;  // bot trap
+
+      /* 1) fire the lead webhook (fire-and-forget; harmless if offline) */
       try{
-        if(!WEBHOOK || !navigator.sendBeacon) return;
-        if(form.checkValidity && !form.checkValidity()) return;
-        var get = function(n){ var el = form.querySelector('[name="contact['+n+']"]'); return el ? (el.value || '') : ''; };
-        var data = new URLSearchParams();
-        ['name','phone','email','age','address','city','state','pincode','source','home_type'].forEach(function(k){ data.append(k, get(k)); });
-        navigator.sendBeacon(WEBHOOK, new Blob([data.toString()], { type: 'application/x-www-form-urlencoded' }));
-      }catch(e){}
+        if(WEBHOOK && navigator.sendBeacon){
+          var p = new URLSearchParams();
+          ['name','phone','email','age','address','city','state','pincode','source','home_type'].forEach(function(k){ p.append(k, get(k)); });
+          navigator.sendBeacon(WEBHOOK, new Blob([p.toString()], { type: 'application/x-www-form-urlencoded' }));
+        }
+      }catch(err){}
+
+      /* 2) send the full request to WhatsApp */
+      var lines = [
+        "🎁 Free Demo Kit Request",
+        "",
+        "Name: " + (get('name') || '-'),
+        "Phone: " + (get('phone') || '-'),
+        "Email: " + (get('email') || '-'),
+        "Age: " + (get('age') || '-'),
+        "Address: " + (get('address') || '-'),
+        "City: " + (get('city') || '-'),
+        "State: " + (get('state') || '-'),
+        "Pincode: " + (get('pincode') || '-'),
+        "Home type: " + (get('home_type') || '-'),
+        "Heard via: " + (get('source') || '-')
+      ];
+      window.open('https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(lines.join("\n")), '_blank');
+
+      /* 3) show a clear success confirmation */
+      var card = form.closest('.pp-demo-formcard') || form.parentNode;
+      if(card){
+        card.innerHTML =
+          '<div style="text-align:center;padding:36px 12px">' +
+            '<div style="width:66px;height:66px;border-radius:50%;background:linear-gradient(135deg,#00B4D8,#0077B6);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fff"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+            '<h2 class="h-section" style="font-size:28px;margin:0 0 8px">Request received! 🎉</h2>' +
+            '<p class="lead" style="margin:0 auto">Thank you! Your <b>free demo kit</b> request is in. Our team will confirm the details with you on WhatsApp shortly.</p>' +
+          '</div>';
+      }
     });
   })();
 </script>
@@ -2134,5 +2183,24 @@
 
 </div>
   <button type="button" id="pp-back-to-top" class="pp-back-to-top" aria-label="Back to top">↑</button>
+
+  <!-- Floating FREE demo-kit highlight -->
+  <div class="pp-free-float" id="pp-free-float">
+    <a href="#demo-form" class="pp-free-float__link">
+      <span class="pp-free-float__icon">🎁</span>
+      <span class="pp-free-float__text"><b>Get a FREE Demo Kit</b><span>Zero cost · 7-day home trial</span></span>
+    </a>
+    <button type="button" class="pp-free-float__x" id="pp-free-float-x" aria-label="Dismiss">&times;</button>
+  </div>
+  <script>
+  (function(){
+    var f=document.getElementById('pp-free-float'); if(!f) return;
+    try{ if(sessionStorage.getItem('dcal_free_float')==='1'){ f.remove(); return; } }catch(e){}
+    var x=document.getElementById('pp-free-float-x');
+    if(x) x.addEventListener('click',function(){ f.remove(); try{ sessionStorage.setItem('dcal_free_float','1'); }catch(e){} });
+    var link=f.querySelector('.pp-free-float__link');
+    if(link) link.addEventListener('click',function(){ f.classList.add('pp-free-float--min'); });
+  })();
+  </script>
 </body>
 </html>
