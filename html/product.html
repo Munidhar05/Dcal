@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>D'Cal Hard Water Softener</title>
+  <title>D'Cal Independent House Water Softener</title>
   <link rel="icon" type="image/png" href="../img/dcal-logo.png">
   <link rel="apple-touch-icon" href="../img/dcal-logo.png">
   <meta name="description" content="India's #1 hard water defense system">
@@ -466,7 +466,7 @@
       <span style="margin:0 8px;color:#CBD5E1">/</span>
       <a href="collection.html" style="color:#64748B;text-decoration:none">Products</a>
       <span style="margin:0 8px;color:#CBD5E1">/</span>
-      <span style="color:#0B1220;font-weight:500">D'Cal Hard Water Softener</span>
+      <span style="color:#0B1220;font-weight:500">D'Cal Independent House Water Softener</span>
     </nav>
     <div class="pp-top">
 
@@ -477,7 +477,7 @@
             
               <img data-pp-main src="../images/water-softener-card.jpg"
                    width="1200" height="1200" loading="eager"
-                   alt="D&#39;Cal Hard Water Softener"
+                   alt="D&#39;Cal Independent House Water Softener"
                    style="width:100%;height:100%;object-fit:contain;display:block;transition:transform .6s cubic-bezier(.2,.7,.2,1),opacity .3s ease">
             
             
@@ -536,7 +536,7 @@
       <!-- ============ RIGHT: Product info ============ -->
       <div class="pp-col-info">
         <span class="eyebrow" style="margin:0">Water Softener</span>
-        <h1 class="h-section" style="margin:14px 0 14px 0">D'Cal Hard Water Softener</h1>
+        <h1 class="h-section" style="margin:14px 0 14px 0">D'Cal Independent House Water Softener</h1>
 
         <!-- Rating row -->
         <div style="display:flex;gap:14px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
@@ -703,7 +703,7 @@
         <h2 class="h-section" style="margin:14px 0 8px">What our <span class="grad-text">customers say</span></h2>
         <p class="lead" style="margin:0 auto">Real reviews from real D'Cal users across India.</p>
       </div>
-      <div class="jdgm-widget jdgm-review-widget" data-id="1" data-product-title="D&#39;Cal Hard Water Softener"></div>
+      <div class="jdgm-widget jdgm-review-widget" data-id="1" data-product-title="D&#39;Cal Independent House Water Softener"></div>
     </div>
 
   </div>
@@ -1319,9 +1319,9 @@
       <!-- CENTER: the form -->
       <div class="glass pp-demo-formcard">
       <div style="text-align:center;margin-bottom:26px">
-        <span class="eyebrow">FREE FOR FIRST 500 HOMES</span>
+        <span class="eyebrow">FREE FOR A LIMITED TIME</span>
         <h2 class="h-section pp-demo-h" style="margin:14px 0 8px">Claim your <span class="grad-text">free demo kit</span></h2>
-        <p class="lead" style="margin:0 auto">Test D'Cal in your home for 7 days. Zero cost, zero commitment.</p>
+        <p class="lead" style="margin:0 auto">Test D'Cal in your home. Zero cost, zero commitment.</p>
       </div>
 
       <form method="post" action="#" data-local-form data-multi-form novalidate><div aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
@@ -1404,7 +1404,6 @@
             <option>Google Search</option>
             <option>Friend / Family</option>
             <option>WhatsApp Group</option>
-            <option>Newspaper / Magazine</option>
             <option>Other</option>
           </select>
 
@@ -1496,21 +1495,56 @@
 </script>
 
 <script>
-  /* Send each demo-kit submission to the lead webhook (n8n -> creates a tagged Shopify customer).
-     Fire-and-forget via sendBeacon so it survives the form's page navigation; the email notification still fires. */
+  /* Demo-kit form (product page): public — no login. Saves the lead to our server,
+     which dedupes by phone number. A repeat number shows "already requested". */
   (function(){
     var form = document.querySelector('#demo-form [data-multi-form]') || document.querySelector('#demo-form form');
     if(!form) return;
     var WEBHOOK = "https://n8n.srv1048087.hstgr.cloud/webhook/dcal-demo-kit";
-    form.addEventListener('submit', function(){
+    var get = function(n){ var el = form.querySelector('[name="contact['+n+']"]'); return el ? (el.value || '').trim() : ''; };
+    function collectInfo(){ var o={}; ['name','phone','email','age','address','city','state','pincode','source','home_type'].forEach(function(k){ o[k]=get(k); }); return o; }
+    function fireWebhook(){
       try{
-        if(!WEBHOOK || !navigator.sendBeacon) return;
-        if(form.checkValidity && !form.checkValidity()) return;
-        var get = function(n){ var el = form.querySelector('[name="contact['+n+']"]'); return el ? (el.value || '') : ''; };
-        var data = new URLSearchParams();
-        ['name','phone','email','age','address','city','state','pincode','source','home_type'].forEach(function(k){ data.append(k, get(k)); });
-        navigator.sendBeacon(WEBHOOK, new Blob([data.toString()], { type: 'application/x-www-form-urlencoded' }));
+        if(WEBHOOK && navigator.sendBeacon){
+          var data = new URLSearchParams();
+          ['name','phone','email','age','address','city','state','pincode','source','home_type'].forEach(function(k){ data.append(k, get(k)); });
+          navigator.sendBeacon(WEBHOOK, new Blob([data.toString()], { type: 'application/x-www-form-urlencoded' }));
+        }
       }catch(e){}
+    }
+    function card(){ return form.closest('.pp-demo-formcard') || form.parentNode; }
+    function showSuccess(){
+      var c=card(); if(!c) return;
+      c.innerHTML =
+        '<div style="text-align:center;padding:36px 12px">' +
+          '<div style="width:66px;height:66px;border-radius:50%;background:linear-gradient(135deg,#00B4D8,#0077B6);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fff"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+          '<h2 class="h-section" style="font-size:28px;margin:0 0 8px">Request received! 🎉</h2>' +
+          '<p class="lead" style="margin:0 auto">Thank you! Your <b>free demo kit</b> request is in. Our team will confirm the details with you shortly.</p>' +
+        '</div>';
+    }
+    function showAlready(){
+      var c=card(); if(!c) return;
+      c.innerHTML =
+        '<div style="text-align:center;padding:36px 12px">' +
+          '<div style="width:66px;height:66px;border-radius:50%;background:#EAF6FB;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#0077B6"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+          '<h2 class="h-section" style="font-size:26px;margin:0 0 8px">You\'ve already requested 🎁</h2>' +
+          '<p class="lead" style="margin:0 auto">Our records show this <b>phone number</b> has already requested a free demo kit. No need to submit again — our team will reach out to you.</p>' +
+        '</div>';
+    }
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      if(form.checkValidity && !form.checkValidity()){ if(form.reportValidity) form.reportValidity(); return; }
+      var hp = form.querySelector('[data-honeypot]'); if(hp && hp.value) return;
+      fireWebhook();
+      // save to our server; it dedupes by phone, so a repeat number shows "already requested"
+      var done=false;
+      function finish(already){ if(done) return; done=true; if(already) showAlready(); else showSuccess(); }
+      try{
+        fetch('/api/leads', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(collectInfo()) })
+          .then(function(r){ return r.json().catch(function(){ return {}; }); })
+          .then(function(d){ finish(d && d.already); })
+          .catch(function(){ finish(false); });
+      }catch(e2){ finish(false); }
     });
   })();
 </script>
