@@ -54,6 +54,7 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
 .adm-chip--confirmed{border-color:#BAE6FD}
 .adm-chip--processing{border-color:#FDE68A}
 .adm-chip--shipped{border-color:#C4B5FD}
+.adm-chip--out-for-delivery{border-color:#FDBA74}
 .adm-chip--delivered{border-color:#A7F3D0}
 .adm-chip--cancelled{border-color:#FECACA}
 
@@ -78,6 +79,7 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
 .adm-status--confirmed{color:#0369A1;border-color:#BAE6FD;background:#F0F9FF}
 .adm-status--processing{color:#B45309;border-color:#FDE68A;background:#FFFBEB}
 .adm-status--shipped{color:#6D28D9;border-color:#C4B5FD;background:#F5F3FF}
+.adm-status--out-for-delivery{color:#C2410C;border-color:#FDBA74;background:#FFF7ED}
 .adm-status--delivered{color:#047857;border-color:#A7F3D0;background:#ECFDF5}
 .adm-status--cancelled{color:#B91C1C;border-color:#FECACA;background:#FEF2F2}
 

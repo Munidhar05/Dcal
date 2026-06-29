@@ -460,6 +460,7 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 .dcal-order__badge--confirmed{background:#E7F7F0;color:#0B6E4F}
 .dcal-order__badge--processing{background:#FFFBEB;color:#B45309}
 .dcal-order__badge--shipped{background:#F5F3FF;color:#6D28D9}
+.dcal-order__badge--out-for-delivery{background:#FFF7ED;color:#C2410C}
 .dcal-order__badge--delivered{background:#ECFDF5;color:#047857}
 .dcal-order__badge--cancelled{background:#FEF2F2;color:#DC2626}
 /* cancel order panel */

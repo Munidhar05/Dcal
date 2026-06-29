@@ -19,7 +19,9 @@
   var K_USERS = 'dcal_users';
   var K_ADMIN = 'dcal_admin_session';
   var K_ADMIN_PW = 'dcal_admin_pw';
-  var STATUSES = ['Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+  var STATUSES = ['Confirmed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
+  // status -> css-class-safe slug, e.g. "Out for Delivery" -> "out-for-delivery"
+  function statusSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 
   var EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
@@ -29,6 +31,7 @@
   var serverOrders = [];        // cache of orders fetched from the server
   var serverCustomers = [];     // cache of customers fetched from the server
   var serverLeads = [];         // cache of demo-kit leads fetched from the server
+  var serverDealers = [];       // cache of dealership applications fetched from the server
 
   function api(method, p, body) {
     var headers = { 'Content-Type': 'application/json' };
@@ -43,11 +46,12 @@
   }
   // load all data from the server into the caches
   function loadServerData() {
-    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers'), api('GET', '/api/admin/leads')])
+    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers'), api('GET', '/api/admin/leads'), api('GET', '/api/admin/dealers')])
       .then(function (res) {
         serverOrders = (res[0] && res[0].orders) || [];
         serverCustomers = (res[1] && res[1].customers) || [];
         serverLeads = (res[2] && res[2].leads) || [];
+        serverDealers = (res[3] && res[3].dealers) || [];
       });
   }
 
@@ -132,6 +136,22 @@
     return [];   // leads are a server feature; no localStorage fallback
   }
 
+  // every dealership application (public form -> Dealer collection)
+  function dealerRows() {
+    if (SERVER) {
+      return serverDealers.map(function (i) {
+        return {
+          id: i._id, fullName: i.fullName || '—', businessName: i.businessName || '',
+          mobile: i.mobile || '—', email: i.email || '', pincode: i.pincode || '',
+          city: i.city || '', state: i.state || '', businessType: i.businessType || '',
+          currentProducts: i.currentProducts || '', experience: i.experience || '',
+          message: i.message || '', appliedAt: i.createdAt
+        };
+      }).sort(function (a, b) { return (b.appliedAt || 0) - (a.appliedAt || 0); });
+    }
+    return [];   // dealership applications are a server feature; no localStorage fallback
+  }
+
   function stats() {
     var custs = customerRows();
     var ords = allOrders();
@@ -148,7 +168,8 @@
     return {
       customers: custs.length, orders: ords.length, revenue: revenue,
       items: items, logins: logins, activeCarts: activeCarts, byStatus: byStatus,
-      aov: paidCount ? revenue / paidCount : 0, demokits: demokitRows().length
+      aov: paidCount ? revenue / paidCount : 0, demokits: demokitRows().length,
+      dealers: dealerRows().length
     };
   }
 
@@ -240,12 +261,13 @@
           kpiCard('Avg. order value', money(s.aov || 0), '', '#DB2777') +
         '</div>' +
         '<div class="adm-statusbar">' + STATUSES.map(function (st) {
-          return '<span class="adm-chip adm-chip--' + st.toLowerCase() + '">' + st + ': <b>' + (s.byStatus[st] || 0) + '</b></span>';
+          return '<span class="adm-chip adm-chip--' + statusSlug(st) + '">' + st + ': <b>' + (s.byStatus[st] || 0) + '</b></span>';
         }).join('') + '</div>' +
         '<div class="adm-tabs">' +
           '<button class="adm-tab' + (tab === 'orders' ? ' active' : '') + '" data-tab="orders">Orders (' + s.orders + ')</button>' +
           '<button class="adm-tab' + (tab === 'customers' ? ' active' : '') + '" data-tab="customers">Customers (' + s.customers + ')</button>' +
           '<button class="adm-tab' + (tab === 'demokits' ? ' active' : '') + '" data-tab="demokits">Demo Kits (' + s.demokits + ')</button>' +
+          '<button class="adm-tab' + (tab === 'dealers' ? ' active' : '') + '" data-tab="dealers">Dealers (' + s.dealers + ')</button>' +
         '</div>' +
         '<div class="adm-panel" id="adm-panel"></div>' +
       '</div>';
@@ -261,6 +283,7 @@
     });
     if (tab === 'customers') renderCustomers();
     else if (tab === 'demokits') renderDemokits();
+    else if (tab === 'dealers') renderDealers();
     else renderOrders();
   }
 
@@ -308,7 +331,7 @@
   }
 
   function statusSelect(cur, mobile, idx, orderId) {
-    return '<select class="adm-status adm-status--' + cur.toLowerCase() + '" data-status data-mobile="' + esc(mobile) + '" data-idx="' + idx + '" data-oid="' + esc(orderId) + '">' +
+    return '<select class="adm-status adm-status--' + statusSlug(cur) + '" data-status data-mobile="' + esc(mobile) + '" data-idx="' + idx + '" data-oid="' + esc(orderId) + '">' +
       STATUSES.map(function (st) { return '<option' + (st === cur ? ' selected' : '') + '>' + st + '</option>'; }).join('') +
       '</select>';
   }
@@ -348,7 +371,7 @@
       sel.addEventListener('change', function () {
         var mobile = sel.getAttribute('data-mobile'), idx = +sel.getAttribute('data-idx');
         var oid = sel.getAttribute('data-oid');
-        sel.className = 'adm-status adm-status--' + sel.value.toLowerCase();
+        sel.className = 'adm-status adm-status--' + statusSlug(sel.value);
         if (SERVER) {
           api('PUT', '/api/admin/orders/' + encodeURIComponent(oid), { status: sel.value }).then(function () {
             serverOrders.forEach(function (o) { if (o.orderId === oid) o.status = sel.value; });
@@ -443,6 +466,45 @@
       }).join('') + '</tbody></table>';
   }
 
+  /* ---------- dealership applications panel ---------- */
+  function renderDealers() {
+    var panel = document.getElementById('adm-panel');
+    var rows = dealerRows();
+    panel.innerHTML =
+      '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-dlsearch" placeholder="Search by name, business, mobile, city, type…"></div>' +
+      '<div class="adm-tablewrap">' + dealersTable(rows) + '</div>';
+    wireActions();
+    var search = document.getElementById('adm-dlsearch');
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      var filtered = !q ? rows : rows.filter(function (r) {
+        return [r.fullName, r.businessName, r.mobile, r.email, r.city, r.state, r.pincode, r.businessType].join(' ').toLowerCase().indexOf(q) > -1;
+      });
+      panel.querySelector('.adm-tablewrap').innerHTML = dealersTable(filtered);
+      wireActions();
+    });
+  }
+
+  function dealersTable(rows) {
+    if (!rows.length) return '<div class="adm-empty">No dealership applications yet.</div>';
+    return '<table class="adm-table"><thead><tr>' +
+      '<th>Name</th><th>Business</th><th>Mobile</th><th>City</th><th>State</th><th>PIN</th><th>Type</th><th>Experience</th><th>Applied</th><th></th>' +
+      '</tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr>' +
+          '<td><b>' + esc(r.fullName) + '</b>' + (r.email ? '<br><span class="adm-muted">' + esc(r.email) + '</span>' : '') + '</td>' +
+          '<td>' + esc(r.businessName || '—') + (r.currentProducts ? '<br><span class="adm-muted">' + esc(r.currentProducts) + '</span>' : '') + '</td>' +
+          '<td>+91 ' + esc(r.mobile) + '</td>' +
+          '<td>' + esc(r.city || '—') + '</td>' +
+          '<td>' + esc(r.state || '—') + '</td>' +
+          '<td>' + esc(r.pincode || '—') + '</td>' +
+          '<td>' + esc(r.businessType || '—') + '</td>' +
+          '<td>' + esc(r.experience || '—') + '</td>' +
+          '<td>' + fmtDay(r.appliedAt) + '</td>' +
+          actionCell('dealer', r.id) +
+        '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
   /* ---------- edit modal + edit/delete actions ---------- */
   // generic edit dialog: fields = [{key,label,type?,options?}], values = {key:val}
   function editModal(title, fields, values, onSave) {
@@ -513,10 +575,11 @@
   }
   function pathFor(kind, id) {
     return kind === 'lead' ? '/api/admin/leads/' + encodeURIComponent(id)
-      : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
-        : '/api/admin/orders/' + encodeURIComponent(id);
+      : kind === 'dealer' ? '/api/admin/dealers/' + encodeURIComponent(id)
+        : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
+          : '/api/admin/orders/' + encodeURIComponent(id);
   }
-  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'customer' ? 'customers' : 'orders'; }
+  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders'; }
 
   // UNDO an edit: re-apply the captured previous values
   function editUndo(kind, id, before) {
@@ -526,12 +589,13 @@
   // UNDO a delete: re-insert the captured document
   function restoreDeleted(kind, doc) {
     if (!doc) { toast('Nothing to undo'); return; }
-    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
+    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
       .then(function () { reloadAnd(tabFor(kind), 'Restored'); })
       .catch(function (e) { toast('Undo failed: ' + e.message); });
   }
   function snapshotFor(kind, id) {
     if (kind === 'lead') return serverLeads.filter(function (l) { return String(l._id) === String(id); })[0];
+    if (kind === 'dealer') return serverDealers.filter(function (d) { return String(d._id) === String(id); })[0];
     if (kind === 'customer') return serverCustomers.filter(function (u) { return u.mobile === id; })[0];
     return serverOrders.filter(function (o) { return o.orderId === id; })[0];
   }
@@ -550,6 +614,22 @@
       editModal('Edit demo-kit lead', lf, r, function (out, close) {
         api('PUT', pathFor('lead', id), out)
           .then(function () { close(); reloadAndUndo('demokits', 'Lead updated', function () { editUndo('lead', id, before); }); })
+          .catch(function (e) { toast('Update failed: ' + e.message); });
+      });
+    } else if (kind === 'dealer') {
+      var dr = dealerRows().filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!dr) return;
+      var df = [
+        { key: 'fullName', label: 'Full Name' }, { key: 'businessName', label: 'Business Name' },
+        { key: 'mobile', label: 'Mobile' }, { key: 'email', label: 'Email' },
+        { key: 'pincode', label: 'Pincode' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' },
+        { key: 'businessType', label: 'Business Type' }, { key: 'currentProducts', label: 'Current Products' },
+        { key: 'experience', label: 'Experience' }, { key: 'message', label: 'Message' }
+      ];
+      var dbefore = {}; df.forEach(function (f) { dbefore[f.key] = dr[f.key] == null ? '' : dr[f.key]; });
+      editModal('Edit dealership application', df, dr, function (out, close) {
+        api('PUT', pathFor('dealer', id), out)
+          .then(function () { close(); reloadAndUndo('dealers', 'Dealer updated', function () { editUndo('dealer', id, dbefore); }); })
           .catch(function (e) { toast('Update failed: ' + e.message); });
       });
     } else if (kind === 'customer') {
@@ -596,12 +676,16 @@
   }
 
   function onDelete(kind, id) {
-    var label = kind === 'lead' ? 'demo-kit lead' : kind;
+    var label = kind === 'lead' ? 'demo-kit lead' : kind === 'dealer' ? 'dealership application' : kind;
     if (!confirm('Delete this ' + label + '? You can Undo right after.')) return;
     var snap = SERVER ? snapshotFor(kind, id) : null;
     if (kind === 'lead') {
       api('DELETE', pathFor('lead', id))
         .then(function () { serverLeads = serverLeads.filter(function (l) { return String(l._id) !== String(id); }); renderDash('demokits'); undoToast('Lead deleted', function () { restoreDeleted('lead', snap); }); })
+        .catch(function (e) { toast('Delete failed: ' + e.message); });
+    } else if (kind === 'dealer') {
+      api('DELETE', pathFor('dealer', id))
+        .then(function () { serverDealers = serverDealers.filter(function (d) { return String(d._id) !== String(id); }); renderDash('dealers'); undoToast('Dealer deleted', function () { restoreDeleted('dealer', snap); }); })
         .catch(function (e) { toast('Delete failed: ' + e.message); });
     } else if (kind === 'customer') {
       if (SERVER) {
@@ -646,6 +730,11 @@
         return [r.name, r.phone, r.email, r.age, r.address, r.village, r.city, r.state, r.pincode, r.home_type, r.source, fmtDate(r.claimedAt)];
       });
       download('dcal-demo-kits.csv', toCSV(['Name', 'Phone', 'Email', 'Age', 'Address', 'Village/Area', 'City/District', 'State', 'Pincode', 'HomeType', 'Source', 'RequestedAt'], drows));
+    } else if (tab === 'dealers') {
+      var dlrows = dealerRows().map(function (r) {
+        return [r.fullName, r.businessName, r.mobile, r.email, r.pincode, r.city, r.state, r.businessType, r.currentProducts, r.experience, r.message, fmtDate(r.appliedAt)];
+      });
+      download('dcal-dealers.csv', toCSV(['Name', 'Business', 'Mobile', 'Email', 'Pincode', 'City', 'State', 'BusinessType', 'CurrentProducts', 'Experience', 'Message', 'AppliedAt'], dlrows));
     } else {
       var orows = allOrders().map(function (r) {
         var o = r.o, a = o.address || {};

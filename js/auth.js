@@ -105,9 +105,13 @@
       status: order.status, date: order.date
     }).catch(function () {});
   }
-  // pull this user's orders from the server so they appear on any device
+  // pull this user's orders from the server so they appear on any device — and
+  // so admin-side changes (status updates, deletions) show up here. The server is
+  // authoritative: we REPLACE the local list with what it returns, which means a
+  // status change reflects and an order the admin deleted disappears here too.
+  // Returns the promise so callers can re-render once the fresh data lands.
   function pullOrders(mobile) {
-    api('GET', '/api/orders?mobile=' + encodeURIComponent(mobile)).then(function (res) {
+    return api('GET', '/api/orders?mobile=' + encodeURIComponent(mobile)).then(function (res) {
       if (res && res.orders) {
         saveOrders(res.orders.map(function (o) {
           return { id: o.orderId, title: o.title, total: o.total, image: o.image,
@@ -143,6 +147,8 @@
     return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // status -> css-class-safe slug, e.g. "Out for Delivery" -> "out-for-delivery"
+  function statusSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 
   var pendingAction = null; // function to run after a successful login
   var genOtp = null;        // current demo OTP
@@ -623,7 +629,13 @@
     var sbody = view.querySelector('[data-sbody]');
     if (which === 'edit') renderEdit(sbody);
     else if (which === 'addresses') renderAddresses(sbody);
-    else renderOrders(sbody);
+    else {
+      renderOrders(sbody);                 // show the cached list instantly…
+      var om = sessionMobile();            // …then refresh from the server so admin
+      if (om) pullOrders(om).then(function () {   // status changes & deletions show up
+        if (sbody.isConnected) renderOrders(sbody);
+      });
+    }
     view.querySelector('.dcal-sback').addEventListener('click', function () {
       view.classList.remove('open');
       setTimeout(function () { view.remove(); }, 380);
@@ -742,7 +754,7 @@
           '<div class="dcal-order__main">' +
             '<p class="dcal-card__t">' + esc(o.title || ('Order #' + o.id)) + '</p>' +
             '<p class="dcal-card__s">Order #' + esc(o.id) + ' · ' + new Date(o.date).toLocaleDateString() + '</p>' +
-            '<p class="dcal-card__s">' + esc(o.total || '') + ' · <span class="dcal-order__badge dcal-order__badge--' + st.toLowerCase() + '">' + esc(st) + '</span></p>' +
+            '<p class="dcal-card__s">' + esc(o.total || '') + ' · <span class="dcal-order__badge dcal-order__badge--' + statusSlug(st) + '">' + esc(st) + '</span></p>' +
           '</div>' +
           '<span class="dcal-order__chev">' + IC.chev + '</span>' +
         '</button>' +
@@ -1712,6 +1724,7 @@
             currency: order.currency,
             name: "D'Cal",
             description: 'Order payment',
+            image: location.origin + '/img/dcal-logo.png',
             order_id: order.orderId,
             prefill: { name: addr.name || u.name || '', email: u.email || '', contact: addr.phone || u.mobile || '' },
             theme: { color: '#0077B6' },

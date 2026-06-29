@@ -17,6 +17,7 @@ const mongoose = require('mongoose');
 const User = require('./models/User');
 const Order = require('./models/Order');
 const Lead = require('./models/Lead');
+const Dealer = require('./models/Dealer');
 
 const app = express();
 app.use(cors());
@@ -207,6 +208,33 @@ app.post('/api/leads', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ---------- dealership applications (PUBLIC form — no login required) ----------
+   Every "Become a Business Partner" submission is stored here and shows up in the
+   admin "Dealers" tab + its CSV export. Same pattern as demo-kit leads. */
+app.post('/api/dealership', async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const b = req.body || {};
+    const mobile = String(b.mobile || '').replace(/[^0-9]/g, '').slice(0, 15);
+    if (!String(b.fullName || '').trim() || mobile.length < 10) {
+      return res.status(400).json({ error: 'name & valid mobile required' });
+    }
+    // ONE application per mobile number — repeat submissions don't create a
+    // duplicate; tell the client so it can show "already applied".
+    const existing = await Dealer.findOne({ mobile });
+    if (existing) return res.json({ ok: true, already: true, at: existing.createdAt });
+
+    const pick = (k) => String(b[k] == null ? '' : b[k]).trim().slice(0, 500);
+    const dealer = await Dealer.create({
+      fullName: pick('fullName'), businessName: pick('businessName'), mobile: mobile,
+      email: pick('email'), pincode: pick('pincode'), city: pick('city'), state: pick('state'),
+      businessType: pick('businessType'), currentProducts: pick('currentProducts'),
+      experience: pick('experience'), message: pick('message'), createdAt: Date.now()
+    });
+    res.json({ ok: true, already: false, id: dealer._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 /* ---------- profile + addresses ---------- */
 app.get('/api/users/:mobile', async (req, res) => {
   if (!requireDB(res)) return;
@@ -377,7 +405,7 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
     if (!mobile) return res.status(400).json({ error: 'mobile required' });
     const order = await Order.findOne({ orderId: req.params.orderId, mobile });
     if (!order) return res.status(404).json({ error: 'order not found' });
-    if (['Shipped', 'Delivered', 'Cancelled'].indexOf(order.status) > -1)
+    if (['Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'].indexOf(order.status) > -1)
       return res.status(400).json({ error: 'This order can no longer be cancelled.' });
     order.status = 'Cancelled';
     order.cancelReason = reason || '';
@@ -416,6 +444,12 @@ app.get('/api/admin/customers', adminAuth, async (req, res) => {
 app.get('/api/admin/leads', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ leads: await Lead.find({}).sort({ createdAt: -1 }) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/dealers', adminAuth, async (req, res) => {
+  if (!requireDB(res)) return;
+  try { res.json({ dealers: await Dealer.find({}).sort({ createdAt: -1 }) }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -489,6 +523,29 @@ app.delete('/api/admin/leads/:id', adminAuth, async (req, res) => {
   } catch (e) { res.status(400).json({ error: 'invalid id' }); }
 });
 
+/* edit / delete a dealership application */
+app.put('/api/admin/dealers/:id', adminAuth, async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const b = req.body || {};
+    const allow = ['fullName', 'businessName', 'mobile', 'email', 'pincode', 'city', 'state', 'businessType', 'currentProducts', 'experience', 'message'];
+    const set = {};
+    allow.forEach((k) => { if (b[k] !== undefined) set[k] = String(b[k]).slice(0, 500); });
+    const dealer = await Dealer.findByIdAndUpdate(req.params.id, { $set: set }, { new: true });
+    if (!dealer) return res.status(404).json({ error: 'not found' });
+    res.json({ dealer });
+  } catch (e) { res.status(400).json({ error: 'invalid id' }); }
+});
+
+app.delete('/api/admin/dealers/:id', adminAuth, async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const r = await Dealer.findByIdAndDelete(req.params.id);
+    if (!r) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: 'invalid id' }); }
+});
+
 /* ---------- admin UNDO: re-insert a record that was just deleted ----------
    The admin sends back the exact document it had cached (incl. its _id), so the
    restored row keeps the same id/timestamps. */
@@ -510,6 +567,11 @@ app.post('/api/admin/orders/restore', adminAuth, async (req, res) => {
 app.post('/api/admin/customers/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ user: await restoreDoc(User, req.body) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/admin/dealers/restore', adminAuth, async (req, res) => {
+  if (!requireDB(res)) return;
+  try { res.json({ dealer: await restoreDoc(Dealer, req.body) }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
