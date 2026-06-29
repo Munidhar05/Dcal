@@ -187,7 +187,9 @@
   }
 
   /* ---------- Lead form ---------- */
-  var WA_NUMBER = "918622909192"; // business WhatsApp (country code + number, no +)
+  // Where the dealership API lives. Same origin in production (the server serves
+  // this page); override with window.DCAL_API_BASE if hosted separately.
+  var API_BASE = (typeof window !== "undefined" && window.DCAL_API_BASE) || "";
   var form = document.getElementById("dealerForm");
   var note = document.getElementById("formNote");
   if (form) {
@@ -227,6 +229,16 @@
         });
     }
 
+    function showThanks() {
+      form.reset();
+      var pinNote = form.querySelector("[data-pin-note]");
+      if (pinNote) pinNote.textContent = "";
+      if (note) {
+        note.hidden = false;
+        note.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (!form.checkValidity()) {
@@ -236,32 +248,20 @@
       var data = {};
       new FormData(form).forEach(function (v, k) { data[k] = (v || "").toString().trim(); });
 
-      // Build the WhatsApp message with all the details
-      var lines = [
-        "🤝 New D'Cal Dealership Application",
-        "",
-        "Name: " + (data.fullName || "-"),
-        "Business: " + (data.businessName || "-"),
-        "Mobile: " + (data.mobile || "-"),
-        "Email: " + (data.email || "-"),
-        "Pincode: " + (data.pincode || "-"),
-        "City: " + (data.city || "-"),
-        "State: " + (data.state || "-"),
-        "Business Type: " + (data.businessType || "-"),
-        "Products Sold: " + (data.currentProducts || "-"),
-        "Experience: " + (data.experience || "-"),
-        "",
-        "Message: " + (data.message || "-")
-      ];
-      window.open("https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
-
-      form.reset();
-      var pinNote = form.querySelector("[data-pin-note]");
-      if (pinNote) pinNote.textContent = "";
-      if (note) {
-        note.hidden = false;
-        note.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      // Save the application to our server (stored in MongoDB → admin "Dealers"
+      // tab). The server dedupes by mobile. We optimistically show the thank-you
+      // even on a network/DB hiccup so a valid lead is never trapped behind an error.
+      var btn = form.querySelector('[type="submit"]');
+      if (btn) { btn.disabled = true; }
+      fetch(API_BASE + "/api/dealership", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function () { showThanks(); })
+        .catch(function () { showThanks(); })
+        .then(function () { if (btn) btn.disabled = false; });
     });
   }
 })();
