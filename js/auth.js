@@ -1094,9 +1094,20 @@
 
   /* ---------- COUPONS ---------- */
   var COUPONS = {
-    DCAL10:  { type: 'percent', value: 10, desc: '10% off' },
-    DCAL200: { type: 'flat',    value: 200, min: 2000, desc: '₹200 off orders over ₹2,000' }
+    DCAL10:  { type: 'percent', value: 10, oncePerUser: true, desc: '10% off' },
+    DCAL200: { type: 'flat',    value: 200, min: 2000, oncePerUser: true, desc: '₹200 off orders over ₹2,000' }
   };
+  // Ask the server whether this user may use the coupon (validity + once-per-user).
+  // Falls back to local rules if the server is unreachable (no per-user check offline).
+  function validateCouponServer(code, subtotal) {
+    return api('POST', '/api/coupon/validate', { mobile: sessionMobile(), code: code, subtotal: subtotal })
+      .catch(function () {
+        var c = COUPONS[code];
+        if (!c) return { ok: false, reason: 'Invalid or expired coupon code.' };
+        if (c.min && subtotal < c.min) return { ok: false, reason: 'Add items worth ' + money(c.min) + ' to use this code.' };
+        return { ok: true, code: code, discount: c.type === 'percent' ? Math.round(subtotal * c.value / 100) : c.value };
+      });
+  }
   function getCouponCode() { try { return (localStorage.getItem('dcal_coupon') || '').toUpperCase(); } catch (e) { return ''; } }
   function setCouponCode(c) { try { if (c) localStorage.setItem('dcal_coupon', c.toUpperCase()); else localStorage.removeItem('dcal_coupon'); } catch (e) {} }
   function computeTotals(subtotal) {
@@ -1136,7 +1147,13 @@
       var c = COUPONS[code];
       if (!c) { if (msg) { msg.textContent = 'Invalid or expired coupon code.'; msg.className = 'dcal-coupon-msg err'; } return; }
       if (c.min && cartSubtotal() < c.min) { if (msg) { msg.textContent = 'Add items worth ' + money(c.min) + ' to use this code.'; msg.className = 'dcal-coupon-msg err'; } return; }
-      setCouponCode(code); toast('Coupon ' + code + ' applied 🎉'); rerender();
+      if (apply) apply.disabled = true;
+      if (msg) { msg.textContent = 'Checking…'; msg.className = 'dcal-coupon-msg'; }
+      validateCouponServer(code, cartSubtotal()).then(function (r) {
+        if (apply) apply.disabled = false;
+        if (!r || !r.ok) { if (msg) { msg.textContent = (r && r.reason) || 'This coupon can’t be applied.'; msg.className = 'dcal-coupon-msg err'; } return; }
+        setCouponCode(code); toast('Coupon ' + code + ' applied 🎉'); rerender();
+      });
     });
     var rm = root.querySelector('[data-coupon-remove]');
     if (rm) rm.addEventListener('click', function () { setCouponCode(''); toast('Coupon removed'); rerender(); });
@@ -1648,7 +1665,23 @@
   }
 
   // decide between Cash on Delivery, real Razorpay, or the demo card/UPI/bank flow
+  // Gate: re-check any applied coupon for THIS user before we charge. This stops a
+  // single-use coupon being reused (e.g. from stale localStorage) and guarantees the
+  // amount we send to Razorpay reflects a coupon the server still accepts.
   function handlePlaceOrder() {
+    var code = getCouponCode();
+    if (!code) return proceedPlaceOrder();
+    var btn = document.querySelector('.dcal-co-place');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking coupon…'; }
+    validateCouponServer(code, cartSubtotal()).then(function (r) {
+      if (r && r.ok) return proceedPlaceOrder();
+      setCouponCode('');                                  // drop the now-invalid coupon
+      toast((r && r.reason) || 'Coupon removed.');
+      coPayment();                                        // re-render with the corrected total
+    });
+  }
+
+  function proceedPlaceOrder() {
     if (checkout.payment === 'cod') { placeCartOrder({ paid: false }); return; }
     if (razorpayOn()) { payWithRazorpay(cartTotal()); return; }
     // demo mode: validate the entered card/UPI/bank details, then place the order
@@ -1744,7 +1777,23 @@
     isLoggedIn: isLoggedIn,
     user: currentUser,
     logout: logout,
-    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } }
+    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } },
+    // has the logged-in user already taken their one free demo kit?
+    freeKitStatus: function () {
+      var m = sessionMobile();
+      if (!m) return Promise.resolve({ claimed: false, loggedIn: false });
+      return api('GET', '/api/freekit/status/' + encodeURIComponent(m))
+        .then(function (r) { return { claimed: !!(r && r.claimed), loggedIn: true }; })
+        .catch(function () { return { claimed: false, loggedIn: true }; });   // server down -> let them try
+    },
+    // claim the one free demo kit for the logged-in user.
+    // resolves { ok:true } first time, { ok:false, alreadyClaimed:true } after that.
+    claimFreeKit: function (info) {
+      var m = sessionMobile();
+      if (!m) return Promise.resolve({ ok: false, needLogin: true });
+      return api('POST', '/api/freekit/claim', { mobile: m, info: info || {} })
+        .catch(function () { return { ok: true, offline: true }; });          // server down -> don't block the lead
+    }
   };
 
   function init() {

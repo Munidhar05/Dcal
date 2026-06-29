@@ -21,6 +21,9 @@ const UserSchema = new mongoose.Schema({
   defaultAddressId: { type: String, default: null },
   logins: { type: Number, default: 0 },
   lastLogin: { type: Number, default: null },
+  freeKitClaimed: { type: Boolean, default: false },   // one free demo kit per account
+  freeKitAt: { type: Number, default: null },          // when they claimed it
+  freeKitInfo: { type: Object, default: null },        // the details they submitted
   createdAt: { type: Number, default: () => Date.now() }
 });
 

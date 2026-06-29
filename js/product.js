@@ -8,7 +8,7 @@
 
   var CATALOG = {
     'water-softener': {
-      cat: 'Water Softener', title: "D'Cal Hard Water Softener", rating: '4.9',
+      cat: 'Water Softener', title: "D'Cal Independent House Water Softener", rating: '4.9',
       price: '₹3,960.00', was: '₹4,500.00', img: 'water-softener-card.jpg',
       desc: 'Drop-in tank softener for independent homes. Stops scaling, hair fall and skin irritation. Lasts 12 months per cartridge.'
     },

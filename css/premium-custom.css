@@ -187,6 +187,15 @@ h1,h2,h3,.font-display{font-family:'Montserrat','Inter',sans-serif;letter-spacin
   .container{padding:0 12px}
 }
 
+/* ---- mobile hardening: never allow a stray wide element to cause a
+   horizontal scroll / cut content off the right edge on phones ---- */
+img,video{max-width:100%}
+@media(max-width:900px){
+  body{overflow-x:clip}   /* clip (not hidden) so it can't break the sticky header */
+  /* let grid/flex children shrink below their content so media can't blow out the row */
+  .sci-grid>div,.demokit-grid>div,.pp-demo-grid>div,.pp-row>*{min-width:0}
+}
+
 /* GRID */
 .grid{display:grid;gap:24px}
 .grid-3{grid-template-columns:repeat(3,1fr)}

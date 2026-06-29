@@ -28,6 +28,7 @@
   var SERVER = false;          // true once we confirm a live backend with a database
   var serverOrders = [];        // cache of orders fetched from the server
   var serverCustomers = [];     // cache of customers fetched from the server
+  var serverLeads = [];         // cache of demo-kit leads fetched from the server
 
   function api(method, p, body) {
     var headers = { 'Content-Type': 'application/json' };
@@ -42,10 +43,11 @@
   }
   // load all data from the server into the caches
   function loadServerData() {
-    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers')])
+    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers'), api('GET', '/api/admin/leads')])
       .then(function (res) {
         serverOrders = (res[0] && res[0].orders) || [];
         serverCustomers = (res[1] && res[1].customers) || [];
+        serverLeads = (res[2] && res[2].leads) || [];
       });
   }
 
@@ -115,6 +117,21 @@
     }).sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
   }
 
+  // every free-demo-kit form submission (public form -> Lead collection)
+  function demokitRows() {
+    if (SERVER) {
+      return serverLeads.map(function (i) {
+        return {
+          id: i._id, name: i.name || '—', phone: i.phone || '—', email: i.email || '',
+          age: i.age || '', address: i.address || '', village: i.village || '',
+          city: i.city || '', state: i.state || '', pincode: i.pincode || '',
+          source: i.source || '', home_type: i.home_type || '', claimedAt: i.createdAt
+        };
+      }).sort(function (a, b) { return (b.claimedAt || 0) - (a.claimedAt || 0); });
+    }
+    return [];   // leads are a server feature; no localStorage fallback
+  }
+
   function stats() {
     var custs = customerRows();
     var ords = allOrders();
@@ -131,7 +148,7 @@
     return {
       customers: custs.length, orders: ords.length, revenue: revenue,
       items: items, logins: logins, activeCarts: activeCarts, byStatus: byStatus,
-      aov: paidCount ? revenue / paidCount : 0
+      aov: paidCount ? revenue / paidCount : 0, demokits: demokitRows().length
     };
   }
 
@@ -228,6 +245,7 @@
         '<div class="adm-tabs">' +
           '<button class="adm-tab' + (tab === 'orders' ? ' active' : '') + '" data-tab="orders">Orders (' + s.orders + ')</button>' +
           '<button class="adm-tab' + (tab === 'customers' ? ' active' : '') + '" data-tab="customers">Customers (' + s.customers + ')</button>' +
+          '<button class="adm-tab' + (tab === 'demokits' ? ' active' : '') + '" data-tab="demokits">Demo Kits (' + s.demokits + ')</button>' +
         '</div>' +
         '<div class="adm-panel" id="adm-panel"></div>' +
       '</div>';
@@ -242,6 +260,7 @@
       b.addEventListener('click', function () { renderDash(b.getAttribute('data-tab')); });
     });
     if (tab === 'customers') renderCustomers();
+    else if (tab === 'demokits') renderDemokits();
     else renderOrders();
   }
 
@@ -280,7 +299,9 @@
           '<td><b>' + esc(o.total || '') + '</b></td>' +
           '<td>' + esc(o.payment || '—') + (o.paid ? ' <span class="adm-chip adm-chip--delivered" style="padding:1px 7px">Paid</span>' : '') + '</td>' +
           '<td>' + statusSelect(o.status || 'Confirmed', r.mobile, r.idx, o.id) + '</td>' +
-          '<td><button class="adm-link" data-toggle="' + i + '">Details</button></td>' +
+          '<td style="white-space:nowrap"><button class="adm-link" data-edit="order" data-id="' + esc(o.id) + '" title="Edit" aria-label="Edit" style="' + IB + ';margin-right:6px">' + ICON_EDIT + '</button>' +
+            '<button class="adm-link" data-del="order" data-id="' + esc(o.id) + '" title="Delete" aria-label="Delete" style="' + IB + ';color:#DC2626;margin-right:6px">' + ICON_DEL + '</button>' +
+            '<button class="adm-link" data-toggle="' + i + '" title="Details" aria-label="Details" style="' + IB + '">' + ICON_INFO + '</button></td>' +
         '</tr>' +
         '<tr class="adm-detrow" data-det="' + i + '" hidden><td colspan="8">' + orderDetail(o) + '</td></tr>';
       }).join('') + '</tbody></table>';
@@ -314,12 +335,13 @@
 
   function wireOrderRows() {
     var panel = document.getElementById('adm-panel');
+    wireActions();
     panel.querySelectorAll('[data-toggle]').forEach(function (b) {
       b.addEventListener('click', function () {
         var det = panel.querySelector('[data-det="' + b.getAttribute('data-toggle') + '"]');
         if (!det) return;
-        if (det.hasAttribute('hidden')) { det.removeAttribute('hidden'); b.textContent = 'Hide'; }
-        else { det.setAttribute('hidden', ''); b.textContent = 'Details'; }
+        if (det.hasAttribute('hidden')) { det.removeAttribute('hidden'); b.title = 'Hide'; }
+        else { det.setAttribute('hidden', ''); b.title = 'Details'; }
       });
     });
     panel.querySelectorAll('[data-status]').forEach(function (sel) {
@@ -350,6 +372,7 @@
     panel.innerHTML =
       '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-csearch" placeholder="Search by name, phone, email…"></div>' +
       '<div class="adm-tablewrap">' + customersTable(rows) + '</div>';
+    wireActions();
     var search = document.getElementById('adm-csearch');
     search.addEventListener('input', function () {
       var q = search.value.trim().toLowerCase();
@@ -357,13 +380,14 @@
         return [r.name, r.mobile, r.email].join(' ').toLowerCase().indexOf(q) > -1;
       });
       panel.querySelector('.adm-tablewrap').innerHTML = customersTable(filtered);
+      wireActions();
     });
   }
 
   function customersTable(rows) {
     if (!rows.length) return '<div class="adm-empty">No customers yet.</div>';
     return '<table class="adm-table"><thead><tr>' +
-      '<th>Customer</th><th>Contact</th><th>Joined</th><th>Logins</th><th>Last login</th><th>Orders</th><th>Spent</th><th>Addr.</th><th>Cart</th>' +
+      '<th>Customer</th><th>Contact</th><th>Joined</th><th>Logins</th><th>Last login</th><th>Orders</th><th>Spent</th><th>Addr.</th><th>Cart</th><th></th>' +
       '</tr></thead><tbody>' + rows.map(function (r) {
         return '<tr>' +
           '<td><b>' + esc(r.name) + '</b><br><span class="adm-muted">' + esc(r.provider) + '</span></td>' +
@@ -375,8 +399,229 @@
           '<td><b>' + money(r.spent) + '</b></td>' +
           '<td>' + r.addresses + '</td>' +
           '<td>' + (r.cart > 0 ? '<span class="adm-chip adm-chip--processing">' + r.cart + '</span>' : '—') + '</td>' +
+          actionCell('customer', r.mobile) +
         '</tr>';
       }).join('') + '</tbody></table>';
+  }
+
+  /* ---------- demo-kit leads panel ---------- */
+  function renderDemokits() {
+    var panel = document.getElementById('adm-panel');
+    var rows = demokitRows();
+    panel.innerHTML =
+      '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-dsearch" placeholder="Search by name, phone, village, city, PIN…"></div>' +
+      '<div class="adm-tablewrap">' + demokitsTable(rows) + '</div>';
+    wireActions();
+    var search = document.getElementById('adm-dsearch');
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      var filtered = !q ? rows : rows.filter(function (r) {
+        return [r.name, r.phone, r.email, r.village, r.city, r.state, r.pincode].join(' ').toLowerCase().indexOf(q) > -1;
+      });
+      panel.querySelector('.adm-tablewrap').innerHTML = demokitsTable(filtered);
+      wireActions();
+    });
+  }
+
+  function demokitsTable(rows) {
+    if (!rows.length) return '<div class="adm-empty">No demo-kit requests yet.</div>';
+    return '<table class="adm-table"><thead><tr>' +
+      '<th>Name</th><th>Phone</th><th>Village / Area</th><th>City / District</th><th>State</th><th>PIN</th><th>Home</th><th>Source</th><th>Requested</th><th></th>' +
+      '</tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr>' +
+          '<td><b>' + esc(r.name) + '</b>' + (r.email ? '<br><span class="adm-muted">' + esc(r.email) + '</span>' : '') + '</td>' +
+          '<td>+91 ' + esc(r.phone) + '</td>' +
+          '<td>' + esc(r.village || '—') + '</td>' +
+          '<td>' + esc(r.city || '—') + '</td>' +
+          '<td>' + esc(r.state || '—') + '</td>' +
+          '<td>' + esc(r.pincode || '—') + '</td>' +
+          '<td>' + esc(r.home_type || '—') + '</td>' +
+          '<td>' + esc(r.source || '—') + '</td>' +
+          '<td>' + fmtDay(r.claimedAt) + '</td>' +
+          actionCell('lead', r.id) +
+        '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  /* ---------- edit modal + edit/delete actions ---------- */
+  // generic edit dialog: fields = [{key,label,type?,options?}], values = {key:val}
+  function editModal(title, fields, values, onSave) {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,8,23,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:24px;box-shadow:0 30px 80px -20px rgba(2,8,23,.5)';
+    var html = '<h3 style="margin:0 0 18px;font-size:19px;font-weight:800;color:#0B1220">' + esc(title) + '</h3>';
+    fields.forEach(function (f) {
+      var v = values[f.key] == null ? '' : values[f.key];
+      html += '<label style="display:block;margin-bottom:12px"><span style="display:block;font-size:12px;font-weight:600;color:#64748B;margin-bottom:5px">' + esc(f.label) + '</span>';
+      if (f.type === 'select') {
+        html += '<select data-f="' + esc(f.key) + '" style="width:100%;padding:11px 12px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:14px;box-sizing:border-box">' +
+          f.options.map(function (o) { return '<option' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+      } else {
+        html += '<input data-f="' + esc(f.key) + '" value="' + esc(v) + '" style="width:100%;padding:11px 12px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:14px;box-sizing:border-box">';
+      }
+      html += '</label>';
+    });
+    html += '<div style="display:flex;gap:10px;margin-top:20px">' +
+      '<button data-cancel class="adm-btn adm-btn--ghost" style="flex:1;justify-content:center">Cancel</button>' +
+      '<button data-save class="adm-btn" style="flex:1;justify-content:center;background:#0077B6;color:#fff;border-color:#0077B6">Save</button></div>';
+    box.innerHTML = html;
+    ov.appendChild(box); document.body.appendChild(ov);
+    function close() { if (ov.parentNode) document.body.removeChild(ov); }
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    box.querySelector('[data-cancel]').addEventListener('click', close);
+    box.querySelector('[data-save]').addEventListener('click', function () {
+      var out = {};
+      box.querySelectorAll('[data-f]').forEach(function (el) { out[el.getAttribute('data-f')] = el.value.trim(); });
+      onSave(out, close);
+    });
+    var first = box.querySelector('[data-f]'); if (first) first.focus();
+  }
+
+  var ICON_EDIT = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  var ICON_DEL = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></svg>';
+  var ICON_INFO = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+  // shared style for compact icon-only buttons
+  var IB = 'display:inline-flex;align-items:center;justify-content:center;padding:5px;line-height:0;border-radius:8px';
+
+  function actionCell(kind, id) {
+    return '<td style="white-space:nowrap">' +
+      '<button class="adm-link" data-edit="' + kind + '" data-id="' + esc(id) + '" title="Edit" aria-label="Edit" style="' + IB + ';margin-right:6px">' + ICON_EDIT + '</button>' +
+      '<button class="adm-link" data-del="' + kind + '" data-id="' + esc(id) + '" title="Delete" aria-label="Delete" style="' + IB + ';color:#DC2626">' + ICON_DEL + '</button></td>';
+  }
+
+  // wire Edit/Delete buttons inside the current panel
+  function wireActions() {
+    var panel = document.getElementById('adm-panel');
+    if (!panel) return;
+    panel.querySelectorAll('[data-edit]').forEach(function (b) {
+      b.addEventListener('click', function () { onEdit(b.getAttribute('data-edit'), b.getAttribute('data-id')); });
+    });
+    panel.querySelectorAll('[data-del]').forEach(function (b) {
+      b.addEventListener('click', function () { onDelete(b.getAttribute('data-del'), b.getAttribute('data-id')); });
+    });
+  }
+
+  function reloadAnd(tab, msg) {
+    if (SERVER) loadServerData().then(function () { toast(msg); renderDash(tab); }).catch(function (e) { toast(e.message); });
+    else { toast(msg); renderDash(tab); }
+  }
+  // like reloadAnd, but the toast carries an Undo button that runs onUndo
+  function reloadAndUndo(tab, msg, onUndo) {
+    if (SERVER) loadServerData().then(function () { renderDash(tab); undoToast(msg, onUndo); }).catch(function (e) { toast(e.message); });
+    else { renderDash(tab); undoToast(msg, onUndo); }
+  }
+  function pathFor(kind, id) {
+    return kind === 'lead' ? '/api/admin/leads/' + encodeURIComponent(id)
+      : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
+        : '/api/admin/orders/' + encodeURIComponent(id);
+  }
+  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'customer' ? 'customers' : 'orders'; }
+
+  // UNDO an edit: re-apply the captured previous values
+  function editUndo(kind, id, before) {
+    api('PUT', pathFor(kind, id), before).then(function () { reloadAnd(tabFor(kind), 'Reverted'); })
+      .catch(function (e) { toast('Undo failed: ' + e.message); });
+  }
+  // UNDO a delete: re-insert the captured document
+  function restoreDeleted(kind, doc) {
+    if (!doc) { toast('Nothing to undo'); return; }
+    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
+      .then(function () { reloadAnd(tabFor(kind), 'Restored'); })
+      .catch(function (e) { toast('Undo failed: ' + e.message); });
+  }
+  function snapshotFor(kind, id) {
+    if (kind === 'lead') return serverLeads.filter(function (l) { return String(l._id) === String(id); })[0];
+    if (kind === 'customer') return serverCustomers.filter(function (u) { return u.mobile === id; })[0];
+    return serverOrders.filter(function (o) { return o.orderId === id; })[0];
+  }
+
+  function onEdit(kind, id) {
+    if (kind === 'lead') {
+      var r = demokitRows().filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!r) return;
+      var lf = [
+        { key: 'name', label: 'Name' }, { key: 'phone', label: 'Phone' }, { key: 'email', label: 'Email' },
+        { key: 'age', label: 'Age' }, { key: 'address', label: 'Address' }, { key: 'village', label: 'Village / Area' },
+        { key: 'city', label: 'City / District' }, { key: 'state', label: 'State' }, { key: 'pincode', label: 'Pincode' },
+        { key: 'home_type', label: 'Home type' }, { key: 'source', label: 'Source' }
+      ];
+      var before = {}; lf.forEach(function (f) { before[f.key] = r[f.key] == null ? '' : r[f.key]; });
+      editModal('Edit demo-kit lead', lf, r, function (out, close) {
+        api('PUT', pathFor('lead', id), out)
+          .then(function () { close(); reloadAndUndo('demokits', 'Lead updated', function () { editUndo('lead', id, before); }); })
+          .catch(function (e) { toast('Update failed: ' + e.message); });
+      });
+    } else if (kind === 'customer') {
+      var c = customerRows().filter(function (x) { return String(x.mobile) === String(id); })[0];
+      if (!c) return;
+      var cb = { name: c.name === '—' ? '' : c.name, email: c.email === '—' ? '' : c.email };
+      editModal('Edit customer', [{ key: 'name', label: 'Name' }, { key: 'email', label: 'Email' }], cb, function (out, close) {
+        if (SERVER) {
+          api('PUT', pathFor('customer', id), out)
+            .then(function () { close(); reloadAndUndo('customers', 'Customer updated', function () { editUndo('customer', id, cb); }); })
+            .catch(function (e) { toast('Update failed: ' + e.message); });
+        } else {
+          var users = getUsers(); if (users[id]) { users[id].name = out.name; users[id].email = out.email; write(K_USERS, users); }
+          close(); reloadAnd('customers', 'Customer updated');
+        }
+      });
+    } else if (kind === 'order') {
+      var o = allOrders().filter(function (x) { return String(x.o.id) === String(id); })[0];
+      if (!o) return;
+      var a = o.o.address || {};
+      var ob = { customerName: o.user.name === '—' ? '' : o.user.name, status: o.o.status || 'Confirmed', payment: o.o.payment || '', address: a };
+      editModal('Edit order #' + id, [
+        { key: 'customerName', label: 'Customer name' },
+        { key: 'status', label: 'Status', type: 'select', options: STATUSES },
+        { key: 'payment', label: 'Payment' },
+        { key: 'a_name', label: 'Address — name' }, { key: 'a_phone', label: 'Address — phone' },
+        { key: 'a_line', label: 'Address — line' }, { key: 'a_city', label: 'Address — city' },
+        { key: 'a_state', label: 'Address — state' }, { key: 'a_pincode', label: 'Address — pincode' }
+      ], {
+        customerName: ob.customerName, status: ob.status, payment: ob.payment,
+        a_name: a.name || '', a_phone: a.phone || '', a_line: a.line || '', a_city: a.city || '', a_state: a.state || '', a_pincode: a.pincode || ''
+      }, function (out, close) {
+        var address = { name: out.a_name, phone: out.a_phone, line: out.a_line, city: out.a_city, state: out.a_state, pincode: out.a_pincode, landmark: a.landmark || '' };
+        if (SERVER) {
+          api('PUT', pathFor('order', id), { customerName: out.customerName, status: out.status, payment: out.payment, address: address })
+            .then(function () { close(); reloadAndUndo('orders', 'Order updated', function () { editUndo('order', id, ob); }); })
+            .catch(function (e) { toast('Update failed: ' + e.message); });
+        } else {
+          var list = ordersOf(o.mobile); if (list[o.idx]) { list[o.idx].status = out.status; list[o.idx].payment = out.payment; list[o.idx].address = address; saveOrdersOf(o.mobile, list); }
+          close(); reloadAnd('orders', 'Order updated');
+        }
+      });
+    }
+  }
+
+  function onDelete(kind, id) {
+    var label = kind === 'lead' ? 'demo-kit lead' : kind;
+    if (!confirm('Delete this ' + label + '? You can Undo right after.')) return;
+    var snap = SERVER ? snapshotFor(kind, id) : null;
+    if (kind === 'lead') {
+      api('DELETE', pathFor('lead', id))
+        .then(function () { serverLeads = serverLeads.filter(function (l) { return String(l._id) !== String(id); }); renderDash('demokits'); undoToast('Lead deleted', function () { restoreDeleted('lead', snap); }); })
+        .catch(function (e) { toast('Delete failed: ' + e.message); });
+    } else if (kind === 'customer') {
+      if (SERVER) {
+        api('DELETE', pathFor('customer', id))
+          .then(function () { serverCustomers = serverCustomers.filter(function (u) { return u.mobile !== id; }); renderDash('customers'); undoToast('Customer deleted', function () { restoreDeleted('customer', snap); }); })
+          .catch(function (e) { toast('Delete failed: ' + e.message); });
+      } else {
+        var users = getUsers(); delete users[id]; write(K_USERS, users); toast('Customer deleted'); renderDash('customers');
+      }
+    } else if (kind === 'order') {
+      if (SERVER) {
+        api('DELETE', pathFor('order', id))
+          .then(function () { serverOrders = serverOrders.filter(function (o) { return o.orderId !== id; }); renderDash('orders'); undoToast('Order deleted', function () { restoreDeleted('order', snap); }); })
+          .catch(function (e) { toast('Delete failed: ' + e.message); });
+      } else {
+        var users2 = getUsers();
+        Object.keys(users2).forEach(function (m) { var list = ordersOf(m); var ni = list.filter(function (o) { return String(o.id) !== String(id); }); if (ni.length !== list.length) saveOrdersOf(m, ni); });
+        toast('Order deleted'); renderDash('orders');
+      }
+    }
   }
 
   /* ---------- CSV export ---------- */
@@ -396,6 +641,11 @@
         return [r.name, r.mobile, r.email, fmtDay(r.createdAt), r.logins, fmtDate(r.lastLogin), r.orders, r.spent.toFixed(2), r.addresses, r.cart];
       });
       download('dcal-customers.csv', toCSV(['Name', 'Mobile', 'Email', 'Joined', 'Logins', 'LastLogin', 'Orders', 'Spent', 'Addresses', 'CartItems'], rows));
+    } else if (tab === 'demokits') {
+      var drows = demokitRows().map(function (r) {
+        return [r.name, r.phone, r.email, r.age, r.address, r.village, r.city, r.state, r.pincode, r.home_type, r.source, fmtDate(r.claimedAt)];
+      });
+      download('dcal-demo-kits.csv', toCSV(['Name', 'Phone', 'Email', 'Age', 'Address', 'Village/Area', 'City/District', 'State', 'Pincode', 'HomeType', 'Source', 'RequestedAt'], drows));
     } else {
       var orows = allOrders().map(function (r) {
         var o = r.o, a = o.address || {};
@@ -412,8 +662,22 @@
   var toastEl;
   function toast(msg) {
     if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'adm-toast'; document.body.appendChild(toastEl); }
-    toastEl.textContent = msg; toastEl.classList.add('show');
+    toastEl.textContent = msg; toastEl.style.pointerEvents = 'none'; toastEl.classList.add('show');
     clearTimeout(toast._t); toast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+  }
+  // toast with an Undo button; stays ~7s so the admin has time to react
+  function undoToast(msg, onUndo) {
+    if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'adm-toast'; document.body.appendChild(toastEl); }
+    function hide() { toastEl.classList.remove('show'); toastEl.style.pointerEvents = 'none'; }
+    toastEl.innerHTML = '';
+    var span = document.createElement('span'); span.textContent = msg; toastEl.appendChild(span);
+    var btn = document.createElement('button'); btn.textContent = 'Undo';
+    btn.style.cssText = 'margin-left:16px;background:transparent;border:1px solid rgba(255,255,255,.45);color:#7DD3FC;font-weight:700;cursor:pointer;font-size:13px;padding:3px 12px;border-radius:7px;pointer-events:auto';
+    btn.addEventListener('click', function () { clearTimeout(toast._t); hide(); onUndo(); });
+    toastEl.appendChild(btn);
+    toastEl.style.pointerEvents = 'auto';      // CSS sets the toast to pointer-events:none — re-enable so Undo is clickable
+    toastEl.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(hide, 7000);
   }
 
   /* ---------- init ---------- */

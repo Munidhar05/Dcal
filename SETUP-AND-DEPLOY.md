@@ -2,7 +2,7 @@
 
 Your website now has a **central database**. That means all orders and customers
 from **any phone or computer** are saved in one place, and your **Admin page**
-(`html/admin.html`) can see them all.
+(`/admin`) can see them all.
 
 There are 3 parts to switch it on:
 1. **MongoDB Atlas** — the free online database (the "central notebook").
@@ -77,7 +77,7 @@ There are 3 parts to switch it on:
 ## How to use it after deploying
 
 - **Your store:** `https://YOUR-APP.onrender.com`
-- **Admin page:** `https://YOUR-APP.onrender.com/html/admin.html`
+- **Admin page:** `https://YOUR-APP.onrender.com/admin`
   - Log in with the **`ADMIN_PASSWORD`** you set on Render.
   - You'll see a 🟢 "Connected to live database" note — that means it's showing
     real orders from everyone.
@@ -90,15 +90,21 @@ There are 3 parts to switch it on:
 
 ## Local testing on your own computer (optional)
 
-1. Make a file named `.env` (copy `.env.example`) and paste your `MONGODB_URI`
-   and `ADMIN_PASSWORD` into it.
+1. Make a file named `.env` in the project root and add your settings:
+   ```
+   MONGODB_URI=your-mongodb-connection-string
+   ADMIN_PASSWORD=your-private-admin-password
+   RAZORPAY_KEY_ID=your-razorpay-key-id
+   RAZORPAY_KEY_SECRET=your-razorpay-key-secret
+   PORT=3000
+   ```
 2. Open a terminal in the project folder and run:
    ```
    npm install
    npm start
    ```
 3. Open **http://localhost:3000** (store) and
-   **http://localhost:3000/html/admin.html** (admin).
+   **http://localhost:3000/admin** (admin).
 
 ---
 
@@ -143,6 +149,10 @@ For UPI test, use `success@razorpay`.
   start; tell me later if you want to add real OTP-by-SMS or password login.
 - **Razorpay is integrated** (see Part 4). It stays in demo mode until you add the
   two `RAZORPAY_` keys; then it takes real payments.
+- **Clean web addresses:** pages show as `/login`, `/cart`, `/product` etc.
+  (no ugly `.html` or `/html/` in the address bar) — looks more professional and
+  trustworthy. Any old `…/x.html` link automatically redirects to the clean one,
+  so nothing breaks.
 - **Change your `ADMIN_PASSWORD`** to something strong before going live.
 - ⚠️ Order amounts are currently sent from the customer's browser. This is fine for
   launch, but for maximum safety we can later make the server calculate prices from
