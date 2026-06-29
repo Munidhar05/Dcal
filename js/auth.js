@@ -100,6 +100,7 @@
       customerName: (users()[mobile] || {}).name || (order.address || {}).name || '',
       title: order.title, total: order.total, image: order.image, items: order.items,
       address: order.address, payment: order.payment, paid: order.paid, paymentId: order.paymentId,
+      razorpayOrderId: order.razorpayOrderId,
       coupon: order.coupon, discount: order.discount,
       status: order.status, date: order.date
     }).catch(function () {});
@@ -1683,7 +1684,7 @@
 
   function proceedPlaceOrder() {
     if (checkout.payment === 'cod') { placeCartOrder({ paid: false }); return; }
-    if (razorpayOn()) { payWithRazorpay(cartTotal()); return; }
+    if (razorpayOn()) { payWithRazorpay(); return; }
     // demo mode: validate the entered card/UPI/bank details, then place the order
     var err = validatePayFields(checkout.payment);
     var errBox = document.querySelector('[data-pf-err]');
@@ -1691,10 +1692,15 @@
     placeCartOrder({ paid: true, demo: true });   // simulated successful payment
   }
 
-  function payWithRazorpay(subtotal) {
+  function payWithRazorpay() {
     var btn = document.querySelector('.dcal-co-place');
     if (btn) { btn.disabled = true; btn.textContent = 'Starting secure payment…'; }
-    api('POST', '/api/payment/create-order', { amount: subtotal, receipt: 'dcal_' + Date.now() })
+    // The SERVER prices the cart (items + coupon, keyed to this customer) and
+    // returns the Razorpay order. We never send a client-computed amount, so the
+    // charge can't be tampered with.
+    api('POST', '/api/payment/create-order', {
+      items: cartGet(), coupon: getCouponCode(), mobile: sessionMobile()
+    })
       .then(function (order) {
         return loadRazorpay().then(function (ok) {
           if (!ok) throw new Error('Razorpay script failed to load');
@@ -1711,7 +1717,9 @@
             theme: { color: '#0077B6' },
             handler: function (resp) {
               api('POST', '/api/payment/verify', resp).then(function (v) {
-                if (v && v.valid) placeCartOrder({ paid: true, paymentId: resp.razorpay_payment_id });
+                // Pass razorpayOrderId so the order-save step can match the verified
+                // payment on the server and record the order as truly paid.
+                if (v && v.valid) placeCartOrder({ paid: true, paymentId: resp.razorpay_payment_id, razorpayOrderId: order.orderId });
                 else { toast('Payment could not be verified. Please contact support.'); resetPlaceBtn(); }
               }).catch(function () { toast('Payment verification failed.'); resetPlaceBtn(); });
             },
@@ -1721,10 +1729,11 @@
           rzp.open();
         });
       })
-      .catch(function () {
-        // Razorpay not set up yet (or server offline) -> complete as a demo order
-        toast('Online payment not set up yet — placing as demo order.');
-        placeCartOrder({ paid: false, demo: true });
+      .catch(function (e) {
+        // Could not start a real payment (server/network/pricing issue). Do NOT
+        // place a silent unpaid order — surface the error and let the customer retry.
+        toast((e && e.message) ? ('Could not start payment: ' + e.message) : 'Could not start payment. Please try again.');
+        resetPlaceBtn();
       });
   }
 
@@ -1744,6 +1753,7 @@
       address: addr, payment: payLabel,
       coupon: t.code, discount: t.discount,
       paid: !!payInfo.paid, paymentId: payInfo.paymentId || '',
+      razorpayOrderId: payInfo.razorpayOrderId || '',
       date: Date.now(), status: 'Confirmed'
     });
     saveOrders(list);

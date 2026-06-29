@@ -173,7 +173,7 @@
           <nav class="menu-drawer__navigation">
             <ul class="menu-drawer__menu has-submenu list-menu" role="list">
             <li><a href="../index.html" class="menu-drawer__menu-item list-menu__item link link--text focus-inset"><span>Home</span></a></li>
-            <li><a href="collection.html" class="menu-drawer__menu-item list-menu__item link link--text focus-inset"><span>Catalog</span></a></li>
+            <li><a href="collection.html" class="menu-drawer__menu-item list-menu__item link link--text focus-inset"><span>Products</span></a></li>
             <li><a href="contact.html" class="menu-drawer__menu-item list-menu__item link link--text focus-inset"><span>Contact</span></a></li>
             <li><a href="../become-a-business-partner/index.html" class="menu-drawer__menu-item list-menu__item link link--text focus-inset"><span>Become a Business Partner</span></a></li>
           </ul>
@@ -193,7 +193,7 @@
 <nav class="header__inline-menu">
   <ul class="list-menu list-menu--inline" role="list">
     <li><a href="../index.html" class="header__menu-item list-menu__item link link--text focus-inset"><span>Home</span></a></li>
-    <li><a href="collection.html" class="header__menu-item list-menu__item link link--text focus-inset"><span>Catalog</span></a></li>
+    <li><a href="collection.html" class="header__menu-item list-menu__item link link--text focus-inset"><span>Products</span></a></li>
     <li><a href="contact.html" class="header__menu-item list-menu__item link link--text focus-inset"><span>Contact</span></a></li>
   </ul>
 </nav>
@@ -562,22 +562,25 @@
     if(!input || !results || !summary) return;
 
     var PRODUCTS = [
-      {title:"D'Cal Independent House Water Softener", cat:"Water Softener", price:"₹3,960.00", was:"₹4,500.00", url:"product.html", img:"../images/water-softener-card.jpg", kw:"hard water softener tank scale calcium magnesium borewell limescale"},
-      {title:"D'Cal Shower Head Filter", cat:"Shower Filter", price:"₹1,679.00", was:"₹2,700.00", url:"product.html", img:"../images/e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp", kw:"shower head filter skin hair fall chlorine bathroom"},
-      {title:"D'Cal Tap Filter", cat:"Tap Filter", price:"₹1,799.00", was:"₹2,700.00", url:"product.html", img:"../images/tap-filter-card-2.jpg", kw:"tap filter faucet kitchen sink drinking"},
-      {title:"D'Cal Washing Machine Ball", cat:"Laundry Care", price:"₹450.00", was:"₹599.00", url:"product.html", img:"../images/cdfe502b-7b69-4f95-809a-3a9b2b582b89-IntroducingtheDcalWashingBall.webp", kw:"washing machine ball laundry clothes fabric detergent"},
-      {title:"D'Cal Tap & Tile Cleaner", cat:"Cleaning", price:"₹270.00", was:"₹300.00", url:"product.html", img:"../images/tap-tile-cleaner-card.jpg", kw:"tap tile cleaner bathroom kitchen stain limescale descaler"}
+      {id:"water-softener", title:"D'Cal Independent House Water Softener", cat:"Water Softener", price:"₹4,500.00", was:"", img:"../images/water-softener-card.jpg", kw:"hard water softener tank scale calcium magnesium borewell limescale"},
+      {id:"shower-filter", title:"D'Cal Shower Head Filter", cat:"Shower Filter", price:"₹2,700.00", was:"", img:"../images/e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp", kw:"shower head filter skin hair fall chlorine bathroom"},
+      {id:"tap-filter", title:"D'Cal Tap Filter", cat:"Tap Filter", price:"₹2,700.00", was:"", img:"../images/tap-filter-card-2.jpg", kw:"tap filter faucet kitchen sink drinking"},
+      {id:"washing-ball", title:"D'Cal Washing Machine Ball", cat:"Laundry Care", price:"₹500.00", was:"", img:"../images/cdfe502b-7b69-4f95-809a-3a9b2b582b89-IntroducingtheDcalWashingBall.webp", kw:"washing machine ball laundry clothes fabric detergent"},
+      {id:"tap-tile-cleaner", title:"D'Cal Tap & Tile Cleaner", cat:"Cleaning", price:"₹300.00", was:"", img:"../images/tap-tile-cleaner-card.jpg", kw:"tap tile cleaner bathroom kitchen stain limescale descaler"}
     ];
 
     function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
     function card(p){
-      return '<a class="pp-sr-card" href="'+p.url+'">'
+      // link each result to its OWN product via ?id=slug, so clicking a result
+      // opens that product (not the default page)
+      var href = 'product.html?id=' + encodeURIComponent(p.id);
+      return '<a class="pp-sr-card" href="'+href+'">'
         + '<div class="pp-sr-media"><img src="'+p.img+'" width="600" height="600" loading="lazy" alt="'+esc(p.title)+'"></div>'
         + '<div class="pp-sr-body">'
         + '<div class="pp-sr-cat">'+esc(p.cat)+'</div>'
         + '<div class="pp-sr-title">'+esc(p.title)+'</div>'
-        + '<div class="pp-sr-price">'+esc(p.price)+' <span class="pp-sr-was">'+esc(p.was)+'</span></div>'
+        + '<div class="pp-sr-price">'+esc(p.price)+(p.was ? ' <span class="pp-sr-was">'+esc(p.was)+'</span>' : '')+'</div>'
         + '</div></a>';
     }
 
@@ -643,7 +646,7 @@
         <h3 class="pp-ft-col-title">SHOP</h3>
         <ul class="pp-ft-links">
           <li><a href="../index.html">Home</a></li>
-          <li><a href="collection.html">Shop All</a></li>
+          <li><a href="collection.html">Products</a></li>
           <li><a href="cart.html">Cart</a></li>
         </ul>
       </nav>

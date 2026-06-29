@@ -566,6 +566,22 @@ app.use((req, res, next) => {
   res.redirect(301, target + qs);
 });
 
+/* ---------- retired account pages ----------
+   Sign-in, registration and account/address management all happen in the
+   on-page modal (DcalAuth) — the old standalone Shopify template pages
+   (login, register, account, addresses, password reset/activation) were
+   removed. Send any old link, bookmark or no-JS account-icon click to the
+   homepage, where the account modal is available, instead of a 404. */
+const RETIRED_PAGES = new Set([
+  'login', 'register', 'account', 'addresses',
+  'reset-password', 'activate-account', 'password'
+]);
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (RETIRED_PAGES.has(cleanSlug(req.path))) return res.redirect(301, '/');
+  next();
+});
+
 /* ---------- serve the storefront ---------- */
 // Don't let anyone download the server source, dependencies or config files.
 // (express.static already ignores dotfiles like .env / .git by default.)
