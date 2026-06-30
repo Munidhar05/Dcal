@@ -62,6 +62,8 @@ body{
 .sec>*,.pp-ft>*{position:relative;z-index:2}
 /* the hero is the surface — no crest needed directly under the header */
 .pp-hero-sec::before{display:none}
+/* "THE HARD TRUTH" section — no wave crest at its top */
+.premium-problems-sec::before{display:none}
 @keyframes waveDrift{from{background-position-x:0}to{background-position-x:-1200px}}
 
 /* OCEAN POLISH — selection + scrollbar in sea tones */
@@ -104,23 +106,41 @@ h1,h2,h3,.font-display{font-family:'Montserrat','Inter',sans-serif;letter-spacin
   background:transparent;border:0;border-radius:0;box-shadow:none;padding:0;z-index:120;
 }
 .header__search .modal-overlay{display:none!important}
-.header__search .search-modal__content{display:block;width:100%;height:auto;padding:0;position:relative}
+/* one self-contained white dropdown card — no stray glow bleeding over the seam */
+.header__search .search-modal__content{
+  display:block;width:100%;height:auto;position:relative;
+  background:#fff;border:1px solid rgba(2,42,90,.10);border-radius:16px;
+  padding:8px;box-shadow:0 26px 60px -22px rgba(2,42,90,.55)
+}
 .header__search .search-modal__content-bottom{bottom:auto}
 .header__search .search-modal__form{width:100%;max-width:none}
 .header__search .field{position:relative;display:block;margin:0}
 .header__search .search__input{
-  width:100%;padding:15px 52px 15px 18px;border:1px solid rgba(2,42,90,.12);border-radius:14px;
-  font-size:15px;line-height:1.2;background:#fff;color:#0B1220;font-family:var(--font-body-family);
-  box-shadow:0 22px 50px -18px rgba(2,42,90,.45)
+  width:100%;padding:13px 52px 13px 16px;border:1px solid rgba(2,42,90,.14);border-radius:11px;
+  font-size:15px;line-height:1.2;background:#F8FAFC;color:#0B1220;font-family:var(--font-body-family);
+  box-shadow:none
 }
 .header__search .search__input::placeholder{color:#94A3B8}
-.header__search .search__input:focus{outline:none;border-color:var(--brand);box-shadow:0 22px 50px -18px rgba(2,42,90,.45),0 0 0 3px rgba(0,180,216,.15)}
+.header__search .search__input:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(0,180,216,.18)}
 .header__search .field__label{display:none}
 .header__search .field__button{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:#0077B6;padding:0}
-.header__search .search__button{right:7px}
-.header__search .reset__button{right:44px}
+.header__search .search__button{right:9px}
+.header__search .reset__button{right:46px}
 .header__search .field__button .icon{width:18px;height:18px}
 .header__search .search-modal__close-button{display:none}
+/* Dawn draws the input border + bold accent focus ring via .field:before/:after
+   and a .field__input:focus box-shadow. Those are the cyan glow — neutralise them
+   inside the search card so only our own subtle border/ring shows. */
+.header__search .field:before,
+.header__search .field:after{display:none!important}
+.header__search .search__input,
+.header__search .field__input{box-shadow:none!important}
+.header__search .search__input:focus,
+.header__search .search__input:focus-visible,
+.header__search .field__input:focus,
+.header__search .field__input:focus-visible{
+  box-shadow:0 0 0 3px rgba(0,180,216,.18)!important;outline:0!important;border-color:var(--brand)!important
+}
 
 /* GLASS CARD */
 .glass{background:var(--glass);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid var(--stroke);border-radius:var(--r-lg);box-shadow:var(--shadow)}
@@ -206,6 +226,9 @@ img,video{max-width:100%}
 /* SECTION SPACING */
 .sec{position:relative;padding:120px 0;overflow:hidden}
 @media(max-width:900px){.sec{padding:80px 0}}
+/* "THE HARD TRUTH" section sits right under the navbar — tighten its top gap */
+.premium-problems-sec{padding-top:48px}
+@media(max-width:900px){.premium-problems-sec{padding-top:32px}}
 
 /* MAGNETIC BUTTON */
 .magnetic{transition:transform .25s ease}

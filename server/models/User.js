@@ -13,10 +13,11 @@ const AddressSchema = new mongoose.Schema({
 
 const UserSchema = new mongoose.Schema({
   mobile: { type: String, unique: true, index: true, required: true },
+  googleId: { type: String, default: null, index: true },   // Google account id (sub) once linked
   name: { type: String, default: '' },
   email: { type: String, default: '' },
   avatar: { type: String, default: '' },
-  provider: { type: String, default: 'phone' },
+  provider: { type: String, default: 'phone' },              // 'phone' | 'google'
   addresses: { type: [AddressSchema], default: [] },
   defaultAddressId: { type: String, default: null },
   logins: { type: Number, default: 0 },
