@@ -19,6 +19,7 @@
      deployed domain), NOT when opening the file directly (file://).
      ========================================================= */
   var GOOGLE_CLIENT_ID = ''; // e.g. '1234567890-abcd.apps.googleusercontent.com'
+  var EMAIL_LOGIN = false;   // set from /api/config when the server has SMTP configured
 
   /* ---------- storage helpers ---------- */
   var LS = window.localStorage;
@@ -61,6 +62,7 @@
     return fetch(API_BASE + p, {
       method: method,
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',   // send/receive the httpOnly session cookie
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
       return r.json().then(function (data) {
@@ -332,41 +334,208 @@
           gsiReady = true;
         }
         var box = modal.querySelector('[data-gbtn]');
+        box.style.display = '';   // restore the centered-flex layout for the button
+        box.style.margin = '10px 0 6px';
         box.innerHTML = '';
-        google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: 300 });
+        var gw = Math.min(330, Math.max(280, box.clientWidth || 320));
+        google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: gw });
+        // Google's button maxes at size:'large' — scale it up for bigger logo + text
+        var gbtnEl = box.firstElementChild;
+        if (gbtnEl) { gbtnEl.style.transform = 'scale(1.18)'; gbtnEl.style.transformOrigin = 'center'; }
         showGmsg('');
+        // Show the email option INLINE (not behind a click) so both Google and email
+        // are available by default. Falls back to the phone link if email isn't set up.
+        var step = modal.querySelector('[data-step="google"]');
+        if (step && !step.querySelector('[data-alt-login]')) {
+          var wrap = document.createElement('div');
+          wrap.setAttribute('data-alt-login', '');
+          var gmsg = step.querySelector('[data-gmsg]');
+          if (EMAIL_LOGIN) {
+            wrap.innerHTML =
+              '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 14px;color:#94A3B8;font-size:13px"><span style="flex:1;height:1px;background:#E2E8F0"></span>or<span style="flex:1;height:1px;background:#E2E8F0"></span></div>' +
+              '<label class="dcal-label">Email address</label>' +
+              '<input class="dcal-input" type="email" data-ge-email placeholder="you@email.com" autocomplete="email">' +
+              '<div class="dcal-err" data-ge-err></div>' +
+              '<button class="dcal-btn" data-ge-send>Continue with email</button>';
+            if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
+            var gein = wrap.querySelector('[data-ge-email]');
+            var geerr = wrap.querySelector('[data-ge-err]');
+            var gesend = function () {
+              var email = (gein.value || '').trim().toLowerCase();
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { geerr.textContent = 'Please enter a valid email address.'; geerr.classList.add('show'); return; }
+              geerr.textContent = ''; geerr.classList.remove('show');
+              var b = wrap.querySelector('[data-ge-send]'); if (b) { b.disabled = true; b.textContent = 'Sending…'; }
+              api('POST', '/api/auth/email/request', { email: email })
+                .then(function () { ensureEmailStep(); gotoStep('email'); renderEmailVerify(email); })
+                .catch(function (e) { geerr.textContent = (e && e.message) || 'Could not send the code.'; geerr.classList.add('show'); if (b) { b.disabled = false; b.textContent = 'Continue with email'; } });
+            };
+            wrap.querySelector('[data-ge-send]').addEventListener('click', gesend);
+            gein.addEventListener('keydown', function (e) { if (e.key === 'Enter') gesend(); });
+          } else {
+            var link = document.createElement('button');
+            link.type = 'button'; link.className = 'dcal-link';
+            link.style.cssText = 'display:block;margin:14px auto 0;background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px;text-decoration:underline';
+            link.textContent = 'Continue with mobile number instead';
+            link.addEventListener('click', function () { var pi = modal.querySelector('#dcal-phone-input'); if (pi) pi.value = ''; gotoStep('phone'); });
+            wrap.appendChild(link);
+            if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
+          }
+        }
       } catch (e) {
         showGmsg('Google sign-in needs to run on http(s) (localhost or a deployed site), not file://.');
       }
     });
   }
 
-  function decodeJwt(token) {
-    var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    var json = decodeURIComponent(atob(part).split('').map(function (c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(json);
-  }
-
+  // The Google button hands us a signed credential. We NEVER trust it in the
+  // browser — we send it to the server, which verifies it with Google and then
+  // either logs the user in (issuing our session cookie) or, for a first-time
+  // Google user, asks us to collect a phone number to bind to the account.
   function onGoogleCredential(resp) {
-    try { loginWithGoogle(decodeJwt(resp.credential)); }
-    catch (e) { showGmsg('Sign-in failed. Please try again.'); }
+    if (!resp || !resp.credential) { showGmsg('Sign-in failed. Please try again.'); return; }
+    showGmsg('Verifying…');
+    api('POST', '/api/auth/google', { credential: resp.credential })
+      .then(function (r) {
+        if (r && r.user) { cacheServerUser(r.user); loginAs(r.user.mobile); }
+        else if (r && r.needPhone) { showGooglePhoneStep(resp.credential, r.profile || {}); }
+        else { showGmsg('Sign-in failed. Please try again.'); }
+      })
+      .catch(function (e) { showGmsg((e && e.message) || 'Sign-in failed. Please try again.'); });
   }
 
-  function loginWithGoogle(p) {
-    var email = (p.email || '').toLowerCase();
-    if (!email) { showGmsg('Could not read your Google account.'); return; }
-    var all = users();
-    if (!all[email]) {
-      all[email] = { uid: email, name: p.name || email, email: email, avatar: p.picture || '', mobile: '', provider: 'google', createdAt: Date.now() };
-    } else {
-      if (p.name) all[email].name = p.name;
-      if (p.picture) all[email].avatar = p.picture;
-      all[email].provider = 'google';
+  // first-time Google user: collect a mobile (delivery + order key) and bind it
+  function showGooglePhoneStep(credential, profile) {
+    showGmsg('');
+    var box = modal.querySelector('[data-gbtn]');
+    box.style.display = 'block';   // the container is flex (for the Google button) — stack the form instead
+    var first = (profile && profile.name) ? (', ' + esc(profile.name.split(/\s+/)[0])) : '';
+    box.innerHTML =
+      '<p class="dcal-sub" style="margin:0 0 10px">Almost done' + first + '! Add your mobile number for order updates and delivery.</p>' +
+      '<div class="dcal-phone"><span class="dcal-phone__cc">+91</span>' +
+        '<input type="tel" data-gphone inputmode="numeric" maxlength="10" placeholder="98765 43210" autocomplete="tel"></div>' +
+      '<div class="dcal-err" data-gphone-err></div>' +
+      '<button class="dcal-btn" data-gphone-go>Continue</button>';
+    var input = box.querySelector('[data-gphone]');
+    var err = box.querySelector('[data-gphone-err]');
+    setTimeout(function () { input.focus(); }, 40);
+    input.addEventListener('input', function () { input.value = input.value.replace(/[^0-9]/g, '').slice(0, 10); });
+    function go() {
+      var m = input.value.replace(/[^0-9]/g, '');
+      if (m.length !== 10 || !/^[6-9]/.test(m)) { err.textContent = 'Enter a valid 10-digit mobile number.'; err.classList.add('show'); return; }
+      err.textContent = ''; err.classList.remove('show');
+      var btn = box.querySelector('[data-gphone-go]'); if (btn) { btn.disabled = true; btn.textContent = 'Finishing…'; }
+      api('POST', '/api/auth/google/bind', { credential: credential, mobile: m })
+        .then(function (r) {
+          if (r && r.user) { cacheServerUser(r.user); loginAs(r.user.mobile); }
+          else { err.textContent = 'Could not complete sign-in.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Continue'; } }
+        })
+        .catch(function (e) { err.textContent = (e && e.message) || 'Could not complete sign-in.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Continue'; } });
     }
-    saveUsers(all);
-    loginAs(email);
+    box.querySelector('[data-gphone-go]').addEventListener('click', go);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+  }
+
+  /* ---------- Email OTP (secure fallback, server-verified) ---------- */
+  // create the email step lazily so we don't have to edit the modal markup
+  function ensureEmailStep() {
+    if (modal.querySelector('[data-step="email"]')) return;
+    var body = modal.querySelector('.dcal-body');
+    var step = document.createElement('div');
+    step.className = 'dcal-step'; step.setAttribute('data-step', 'email');
+    step.innerHTML = '<h3 class="dcal-h">Sign in with email</h3><div data-email-body></div>';
+    body.appendChild(step);
+  }
+  function emailBody() { return modal.querySelector('[data-email-body]'); }
+  function openEmailLogin() {
+    if (!overlay) buildModal();
+    ensureEmailStep();
+    gotoStep('email');
+    renderEmailRequest('');
+  }
+  function renderEmailRequest(prefill) {
+    var box = emailBody();
+    box.innerHTML =
+      '<p class="dcal-sub">We\'ll email you a 6-digit code to sign in — no password needed.</p>' +
+      '<label class="dcal-label">Email address</label>' +
+      '<input class="dcal-input" type="email" data-em-email placeholder="you@email.com" autocomplete="email" value="' + esc(prefill || '') + '">' +
+      '<div class="dcal-err" data-em-err></div>' +
+      '<button class="dcal-btn" data-em-send>Send code</button>' +
+      (GOOGLE_CLIENT_ID ? '<button type="button" class="dcal-link" data-em-back style="display:block;margin:12px auto 0;background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px">← Back to all options</button>' : '');
+    var input = box.querySelector('[data-em-email]');
+    var err = box.querySelector('[data-em-err]');
+    setTimeout(function () { input.focus(); }, 40);
+    function send() {
+      var email = (input.value || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { err.textContent = 'Please enter a valid email address.'; err.classList.add('show'); return; }
+      err.textContent = ''; err.classList.remove('show');
+      var btn = box.querySelector('[data-em-send]'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      api('POST', '/api/auth/email/request', { email: email })
+        .then(function () { renderEmailVerify(email); })
+        .catch(function (e) { err.textContent = (e && e.message) || 'Could not send the code.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Send code'; } });
+    }
+    box.querySelector('[data-em-send]').addEventListener('click', send);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+    var back = box.querySelector('[data-em-back]'); if (back) back.addEventListener('click', function () { gotoStep('google'); });
+  }
+  function renderEmailVerify(email) {
+    var box = emailBody();
+    box.innerHTML =
+      '<p class="dcal-sub">Enter the 6-digit code we sent to <b>' + esc(email) + '</b>.</p>' +
+      '<input class="dcal-input" inputmode="numeric" maxlength="6" data-em-code placeholder="6-digit code" style="letter-spacing:4px;text-align:center;font-size:18px">' +
+      '<div class="dcal-err" data-em-err></div>' +
+      '<button class="dcal-btn" data-em-verify>Verify &amp; continue</button>' +
+      '<button type="button" class="dcal-link" data-em-resend style="display:block;margin:12px auto 0;background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px">Resend code</button>';
+    var input = box.querySelector('[data-em-code]');
+    var err = box.querySelector('[data-em-err]');
+    setTimeout(function () { input.focus(); }, 40);
+    input.addEventListener('input', function () { input.value = input.value.replace(/[^0-9]/g, '').slice(0, 6); });
+    function verify() {
+      var code = (input.value || '').replace(/[^0-9]/g, '');
+      if (code.length !== 6) { err.textContent = 'Enter the 6-digit code.'; err.classList.add('show'); return; }
+      err.textContent = ''; err.classList.remove('show');
+      var btn = box.querySelector('[data-em-verify]'); if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+      api('POST', '/api/auth/email/verify', { email: email, code: code })
+        .then(function (r) {
+          if (r && r.user) { cacheServerUser(r.user); loginAs(r.user.mobile); }
+          else if (r && r.needPhone) { renderEmailPhone(r.ticket, email); }
+          else { err.textContent = 'Sign-in failed.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Verify & continue'; } }
+        })
+        .catch(function (e) { err.textContent = (e && e.message) || 'Incorrect code.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Verify & continue'; } });
+    }
+    box.querySelector('[data-em-verify]').addEventListener('click', verify);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') verify(); });
+    box.querySelector('[data-em-resend]').addEventListener('click', function () {
+      api('POST', '/api/auth/email/request', { email: email })
+        .then(function () { err.textContent = 'A new code has been sent.'; err.style.color = '#0B6E4F'; err.classList.add('show'); })
+        .catch(function (e) { err.textContent = (e && e.message) || 'Could not resend.'; err.style.color = ''; err.classList.add('show'); });
+    });
+  }
+  function renderEmailPhone(ticket, email) {
+    var box = emailBody();
+    box.innerHTML =
+      '<p class="dcal-sub">Almost done! Add your mobile number for order updates and delivery.</p>' +
+      '<div class="dcal-phone"><span class="dcal-phone__cc">+91</span>' +
+        '<input type="tel" data-em-phone inputmode="numeric" maxlength="10" placeholder="98765 43210" autocomplete="tel"></div>' +
+      '<div class="dcal-err" data-em-err></div>' +
+      '<button class="dcal-btn" data-em-bind>Continue</button>';
+    var input = box.querySelector('[data-em-phone]');
+    var err = box.querySelector('[data-em-err]');
+    setTimeout(function () { input.focus(); }, 40);
+    input.addEventListener('input', function () { input.value = input.value.replace(/[^0-9]/g, '').slice(0, 10); });
+    function bind() {
+      var m = (input.value || '').replace(/[^0-9]/g, '');
+      if (m.length !== 10 || !/^[6-9]/.test(m)) { err.textContent = 'Enter a valid 10-digit mobile number.'; err.classList.add('show'); return; }
+      err.textContent = ''; err.classList.remove('show');
+      var btn = box.querySelector('[data-em-bind]'); if (btn) { btn.disabled = true; btn.textContent = 'Finishing…'; }
+      api('POST', '/api/auth/email/bind', { ticket: ticket, mobile: m })
+        .then(function (r) {
+          if (r && r.user) { cacheServerUser(r.user); loginAs(r.user.mobile); }
+          else { err.textContent = 'Could not complete sign-in.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Continue'; } }
+        })
+        .catch(function (e) { err.textContent = (e && e.message) || 'Could not complete sign-in.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Continue'; } });
+    }
+    box.querySelector('[data-em-bind]').addEventListener('click', bind);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') bind(); });
   }
 
   function openAuth() {
@@ -375,6 +544,8 @@
     if (GOOGLE_CLIENT_ID) {
       gotoStep('google');
       initGoogle();
+    } else if (EMAIL_LOGIN) {
+      openEmailLogin();
     } else {
       var pi = modal.querySelector('#dcal-phone-input'); if (pi) pi.value = '';
       gotoStep('phone');
@@ -546,6 +717,7 @@
   }
 
   function logout() {
+    api('POST', '/api/logout').catch(function () {});   // clear the server session cookie
     LS.removeItem(K_SESSION);
     updateHeader();
     updateCartBubbles();   // guest -> empty cart -> bubble hidden
@@ -1107,8 +1279,7 @@
 
   /* ---------- COUPONS ---------- */
   var COUPONS = {
-    DCAL10:  { type: 'percent', value: 10, oncePerUser: true, desc: '10% off' },
-    DCAL200: { type: 'flat',    value: 200, min: 2000, oncePerUser: true, desc: '₹200 off orders over ₹2,000' }
+    DCAL200: { type: 'flat', value: 200, min: 2000, oncePerUser: true, desc: '₹200 off orders over ₹2,000' }
   };
   // Ask the server whether this user may use the coupon (validity + once-per-user).
   // Falls back to local rules if the server is unreachable (no per-user check offline).
@@ -1139,7 +1310,7 @@
         '<button type="button" data-coupon-remove>Remove</button></div></div>';
     }
     return '<div class="dcal-coupon">' +
-      '<div class="dcal-coupon-row"><input class="dcal-input" data-coupon-input placeholder="Coupon code (e.g. DCAL10)" maxlength="20" style="margin-bottom:0"><button type="button" class="dcal-coupon-apply" data-coupon-apply>Apply</button></div>' +
+      '<div class="dcal-coupon-row"><input class="dcal-input" data-coupon-input placeholder="Coupon code (e.g. DCAL200)" maxlength="20" style="margin-bottom:0"><button type="button" class="dcal-coupon-apply" data-coupon-apply>Apply</button></div>' +
       '<div class="dcal-coupon-msg" data-coupon-msg></div></div>';
   }
   function summaryBodyHTML(subtotal) {
@@ -1823,6 +1994,29 @@
     updateHeader();
     updateCartBubbles();
     renderCartPage();
+    // Learn which login methods the server offers, then reconcile our local session.
+    api('GET', '/api/config').then(function (c) {
+      if (c && c.googleClientId) GOOGLE_CLIENT_ID = c.googleClientId;
+      EMAIL_LOGIN = !!(c && c.emailLogin);
+      var secure = !!GOOGLE_CLIENT_ID || EMAIL_LOGIN;
+      var m = sessionMobile();
+      if (!m) return;
+      if (secure) {
+        // A real verification method is configured. The session cookie is the source
+        // of truth: if the server no longer recognizes us, quietly require re-login
+        // (the cookie can't be minted from a bare phone number anymore).
+        api('GET', '/api/session/me').then(function (s) {
+          if (!s || !s.loggedIn) { LS.removeItem(K_SESSION); updateHeader(); updateCartBubbles(); }
+        }).catch(function () {});
+      } else {
+        // No secure method yet — keep the interim behavior: refresh the cookie from
+        // the locally-remembered number so the store keeps working.
+        api('POST', '/api/login', { mobile: m, resume: true }).catch(function () {});
+      }
+    }).catch(function () {
+      var m = sessionMobile();
+      if (m) api('POST', '/api/login', { mobile: m, resume: true }).catch(function () {});
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
