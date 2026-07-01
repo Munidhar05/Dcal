@@ -264,7 +264,9 @@ async function notifyStatusChange(order, base) {
 async function notifyOrderCancelled(order, base) {
   const logo = logoFor(base);
   const inner = '<p style="margin:0 0 8px">Your order <b>#' + escHtml(order.orderId) + '</b> has been cancelled.</p>'
-    + (order.refundStatus ? '<p style="margin:0 0 4px;color:#475569;font-size:14px">Refund: ' + escHtml(order.refundStatus) + '</p>' : '')
+    + productImgHtml(base, order)
+    + orderItemsHtml(order)
+    + (order.refundStatus ? '<p style="margin:8px 0 4px;color:#475569;font-size:14px">Refund: ' + escHtml(order.refundStatus) + '</p>' : '')
     + (order.cancelReason ? '<p style="margin:0;color:#475569;font-size:14px">Reason: ' + escHtml(order.cancelReason) + '</p>' : '');
   const email = await emailForMobile(order.mobile);
   if (email) sendMail({ to: email, subject: "D'Cal order #" + order.orderId + ' cancelled', html: mailLayout('Order cancelled', inner, logo), text: 'Order #' + order.orderId + ' cancelled.' }).catch(() => {});
