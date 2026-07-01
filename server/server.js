@@ -214,7 +214,7 @@ function preferRasterImage(rel) {
 function productImgHtml(base, order) {
   const raw = order && order.image;
   const src = (raw && /^https?:\/\//i.test(raw)) ? raw : absUrl(base, preferRasterImage(raw));
-  return src ? '<img src="' + src + '" alt="" width="150" style="border-radius:10px;margin:8px 0;max-width:150px;height:auto;border:1px solid #F1F5F9">' : '';
+  return src ? '<img src="' + src + '" alt="" width="260" style="border-radius:12px;margin:10px 0;width:260px;max-width:100%;height:auto;border:1px solid #F1F5F9">' : '';
 }
 function orderItemsHtml(order) {
   const items = order.items || [];
