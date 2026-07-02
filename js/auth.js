@@ -19,6 +19,7 @@
      deployed domain), NOT when opening the file directly (file://).
      ========================================================= */
   var GOOGLE_CLIENT_ID = ''; // e.g. '1234567890-abcd.apps.googleusercontent.com'
+  var GOOGLE_REDIRECT = false; // server has the client secret -> use the cross-browser OAuth redirect flow
   var EMAIL_LOGIN = false;   // set from /api/config when the server has SMTP configured
 
   /* ---------- storage helpers ---------- */
@@ -325,6 +326,11 @@
 
   function initGoogle() {
     if (!GOOGLE_CLIENT_ID) return;
+    // Preferred: full-page OAuth redirect — works in EVERY browser (Safari, Firefox,
+    // Brave, Edge, in-app browsers), because it needs no third-party cookies / FedCM.
+    // Enabled when the server has the client secret (reported via /api/config).
+    if (GOOGLE_REDIRECT) { renderGoogleRedirectButton(); injectAltLogin(); return; }
+    // Fallback: Google Identity Services button (reliable only in Chrome/Edge).
     showGmsg('Loading…');
     loadGsi(function () {
       if (!window.google || !google.accounts || !google.accounts.id) { showGmsg('Google sign-in is unavailable here. Run the site on http://localhost or your domain.'); return; }
@@ -343,48 +349,65 @@
         var gbtnEl = box.firstElementChild;
         if (gbtnEl) { gbtnEl.style.transform = 'scale(1.18)'; gbtnEl.style.transformOrigin = 'center'; }
         showGmsg('');
-        // Show the email option INLINE (not behind a click) so both Google and email
-        // are available by default. Falls back to the phone link if email isn't set up.
-        var step = modal.querySelector('[data-step="google"]');
-        if (step && !step.querySelector('[data-alt-login]')) {
-          var wrap = document.createElement('div');
-          wrap.setAttribute('data-alt-login', '');
-          var gmsg = step.querySelector('[data-gmsg]');
-          if (EMAIL_LOGIN) {
-            wrap.innerHTML =
-              '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 14px;color:#94A3B8;font-size:13px"><span style="flex:1;height:1px;background:#E2E8F0"></span>or<span style="flex:1;height:1px;background:#E2E8F0"></span></div>' +
-              '<label class="dcal-label">Email address</label>' +
-              '<input class="dcal-input" type="email" data-ge-email placeholder="you@email.com" autocomplete="email">' +
-              '<div class="dcal-err" data-ge-err></div>' +
-              '<button class="dcal-btn" data-ge-send>Continue with email</button>';
-            if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
-            var gein = wrap.querySelector('[data-ge-email]');
-            var geerr = wrap.querySelector('[data-ge-err]');
-            var gesend = function () {
-              var email = (gein.value || '').trim().toLowerCase();
-              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { geerr.textContent = 'Please enter a valid email address.'; geerr.classList.add('show'); return; }
-              geerr.textContent = ''; geerr.classList.remove('show');
-              var b = wrap.querySelector('[data-ge-send]'); if (b) { b.disabled = true; b.textContent = 'Sending…'; }
-              api('POST', '/api/auth/email/request', { email: email })
-                .then(function () { ensureEmailStep(); gotoStep('email'); renderEmailVerify(email); })
-                .catch(function (e) { geerr.textContent = (e && e.message) || 'Could not send the code.'; geerr.classList.add('show'); if (b) { b.disabled = false; b.textContent = 'Continue with email'; } });
-            };
-            wrap.querySelector('[data-ge-send]').addEventListener('click', gesend);
-            gein.addEventListener('keydown', function (e) { if (e.key === 'Enter') gesend(); });
-          } else {
-            var link = document.createElement('button');
-            link.type = 'button'; link.className = 'dcal-link';
-            link.style.cssText = 'display:block;margin:14px auto 0;background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px;text-decoration:underline';
-            link.textContent = 'Continue with mobile number instead';
-            link.addEventListener('click', function () { var pi = modal.querySelector('#dcal-phone-input'); if (pi) pi.value = ''; gotoStep('phone'); });
-            wrap.appendChild(link);
-            if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
-          }
-        }
+        injectAltLogin();
       } catch (e) {
         showGmsg('Google sign-in needs to run on http(s) (localhost or a deployed site), not file://.');
       }
     });
+  }
+
+  // A plain "Continue with Google" button that navigates to the server, which then
+  // redirects to Google. No GIS script, no third-party cookies -> all browsers work.
+  function renderGoogleRedirectButton() {
+    showGmsg('');
+    var box = modal.querySelector('[data-gbtn]');
+    if (!box) return;
+    box.style.display = '';
+    box.style.margin = '10px 0 6px';
+    box.innerHTML =
+      '<a href="/api/auth/google/start" role="button" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:330px;margin:0 auto;padding:12px 18px;border:1px solid #DADCE0;border-radius:999px;background:#fff;color:#3C4043;font-size:15px;font-weight:600;text-decoration:none;box-shadow:0 1px 2px rgba(60,64,67,.08)">' +
+        '<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+        '<span>Continue with Google</span>' +
+      '</a>';
+  }
+
+  // Shared "or continue with email / mobile" options shown beneath either Google button.
+  function injectAltLogin() {
+    var step = modal.querySelector('[data-step="google"]');
+    if (!step || step.querySelector('[data-alt-login]')) return;
+    var wrap = document.createElement('div');
+    wrap.setAttribute('data-alt-login', '');
+    var gmsg = step.querySelector('[data-gmsg]');
+    if (EMAIL_LOGIN) {
+      wrap.innerHTML =
+        '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 14px;color:#94A3B8;font-size:13px"><span style="flex:1;height:1px;background:#E2E8F0"></span>or<span style="flex:1;height:1px;background:#E2E8F0"></span></div>' +
+        '<label class="dcal-label">Email address</label>' +
+        '<input class="dcal-input" type="email" data-ge-email placeholder="you@email.com" autocomplete="email">' +
+        '<div class="dcal-err" data-ge-err></div>' +
+        '<button class="dcal-btn" data-ge-send>Continue with email</button>';
+      if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
+      var gein = wrap.querySelector('[data-ge-email]');
+      var geerr = wrap.querySelector('[data-ge-err]');
+      var gesend = function () {
+        var email = (gein.value || '').trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { geerr.textContent = 'Please enter a valid email address.'; geerr.classList.add('show'); return; }
+        geerr.textContent = ''; geerr.classList.remove('show');
+        var b = wrap.querySelector('[data-ge-send]'); if (b) { b.disabled = true; b.textContent = 'Sending…'; }
+        api('POST', '/api/auth/email/request', { email: email })
+          .then(function () { ensureEmailStep(); gotoStep('email'); renderEmailVerify(email); })
+          .catch(function (e) { geerr.textContent = (e && e.message) || 'Could not send the code.'; geerr.classList.add('show'); if (b) { b.disabled = false; b.textContent = 'Continue with email'; } });
+      };
+      wrap.querySelector('[data-ge-send]').addEventListener('click', gesend);
+      gein.addEventListener('keydown', function (e) { if (e.key === 'Enter') gesend(); });
+    } else {
+      var link = document.createElement('button');
+      link.type = 'button'; link.className = 'dcal-link';
+      link.style.cssText = 'display:block;margin:14px auto 0;background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px;text-decoration:underline';
+      link.textContent = 'Continue with mobile number instead';
+      link.addEventListener('click', function () { var pi = modal.querySelector('#dcal-phone-input'); if (pi) pi.value = ''; gotoStep('phone'); });
+      wrap.appendChild(link);
+      if (gmsg && gmsg.after) gmsg.after(wrap); else step.appendChild(wrap);
+    }
   }
 
   // The Google button hands us a signed credential. We NEVER trust it in the
@@ -424,7 +447,10 @@
       if (m.length !== 10 || !/^[6-9]/.test(m)) { err.textContent = 'Enter a valid 10-digit mobile number.'; err.classList.add('show'); return; }
       err.textContent = ''; err.classList.remove('show');
       var btn = box.querySelector('[data-gphone-go]'); if (btn) { btn.disabled = true; btn.textContent = 'Finishing…'; }
-      api('POST', '/api/auth/google/bind', { credential: credential, mobile: m })
+      // With a credential -> button/GIS flow; without -> redirect flow (server holds
+      // the verified profile in a short-lived ticket cookie set during the callback).
+      api('POST', credential ? '/api/auth/google/bind' : '/api/auth/google/bind-session',
+          credential ? { credential: credential, mobile: m } : { mobile: m })
         .then(function (r) {
           if (r && r.user) { cacheServerUser(r.user); loginAs(r.user.mobile); }
           else { err.textContent = 'Could not complete sign-in.'; err.classList.add('show'); if (btn) { btn.disabled = false; btn.textContent = 'Continue'; } }
@@ -553,6 +579,42 @@
     }
     overlay.classList.add('open');
     document.documentElement.classList.add('dcal-lock');
+  }
+  // open straight to the phone-binding step for a first-time Google (redirect) user
+  function openAuthGooglePhone() {
+    if (!overlay) buildModal();
+    tmpAvatar = null;
+    gotoStep('google');
+    overlay.classList.add('open');
+    document.documentElement.classList.add('dcal-lock');
+    showGooglePhoneStep(null, {});   // null credential -> uses /bind-session (ticket cookie)
+  }
+  // Handle the ?login=… the server appends when it redirects back from Google.
+  function handleLoginRedirect() {
+    var q; try { q = new URLSearchParams(window.location.search); } catch (e) { return; }
+    var login = q.get('login'); if (!login) return;
+    var reason = q.get('reason') || '';
+    // strip the params so a refresh doesn't repeat the action
+    try {
+      q.delete('login'); q.delete('reason');
+      var qs = q.toString();
+      history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+    } catch (e) {}
+    if (login === 'success') {
+      // session cookie is already set by the server — restore the client's view
+      api('GET', '/api/session/me').then(function (s) {
+        if (s && s.loggedIn && s.mobile) { if (s.user) cacheServerUser(s.user); loginAs(s.mobile); }
+      }).catch(function () {});
+    } else if (login === 'google_phone') {
+      openAuthGooglePhone();
+    } else if (login === 'google_error') {
+      openAuth();
+      setTimeout(function () {
+        showGmsg(reason === 'bad_state'
+          ? 'Your sign-in session expired. Please tap Continue with Google again.'
+          : 'Google sign-in could not be completed. Please try again.');
+      }, 80);
+    }
   }
   function closeAuth() {
     if (!overlay) return;
@@ -1997,7 +2059,9 @@
     // Learn which login methods the server offers, then reconcile our local session.
     api('GET', '/api/config').then(function (c) {
       if (c && c.googleClientId) GOOGLE_CLIENT_ID = c.googleClientId;
+      GOOGLE_REDIRECT = !!(c && c.googleRedirect);
       EMAIL_LOGIN = !!(c && c.emailLogin);
+      handleLoginRedirect();   // process ?login=… now that we know which methods exist
       var secure = !!GOOGLE_CLIENT_ID || EMAIL_LOGIN;
       var m = sessionMobile();
       if (!m) return;
@@ -2014,6 +2078,7 @@
         api('POST', '/api/login', { mobile: m, resume: true }).catch(function () {});
       }
     }).catch(function () {
+      handleLoginRedirect();   // still finish a Google redirect even if /api/config failed
       var m = sessionMobile();
       if (m) api('POST', '/api/login', { mobile: m, resume: true }).catch(function () {});
     });
