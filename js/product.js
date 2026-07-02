@@ -48,6 +48,7 @@
     if (!a || !slug) return;
     var href = (a.getAttribute('href') || '').split('?')[0];
     if (!/product(-classic)?\.html$/.test(href)) return;
+    href = href.replace(/product-classic\.html$/, 'product.html');   // classic template isn't catalog-wired — always use the real one
     a.setAttribute('href', href + '?id=' + slug);
   }
 

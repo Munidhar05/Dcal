@@ -803,7 +803,7 @@
   };
 
   function avatarMarkup(user, cls) {
-    if (user && user.avatar) return '<span class="' + cls + '"><img src="' + user.avatar + '" alt=""></span>';
+    if (user && user.avatar) return '<span class="' + cls + '"><img src="' + esc(user.avatar) + '" alt=""></span>';
     return '<span class="' + cls + '">' + esc(initials(user && user.name)) + '</span>';
   }
 
@@ -820,13 +820,13 @@
     drawer.innerHTML =
       '<div class="dcal-dhead">' +
         '<button class="dcal-x" data-dcal-dclose aria-label="Close" style="top:18px;right:18px">' + ICON_X + '</button>' +
-        '<div class="dcal-dhead__av">' + (u.avatar ? '<img src="' + u.avatar + '" alt="">' : esc(initials(u.name))) + '</div>' +
+        '<div class="dcal-dhead__av">' + (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : esc(initials(u.name))) + '</div>' +
         '<p class="dcal-dhead__name">' + esc(u.name) + '</p>' +
         '<p class="dcal-dhead__meta">' + (u.mobile ? '+91 ' + esc(u.mobile) : esc(u.email)) + '</p>' +
       '</div>' +
       '<div class="dcal-dbody" data-dbody>' +
         '<button class="dcal-mi" data-go="edit">' + IC.edit + ' Edit Profile ' + IC.chev + '</button>' +
-        '<button class="dcal-mi" data-go="addresses">' + IC.pin + ' My Addresses ' + IC.chev + '</button>' +
+        (magicOn() ? '' : '<button class="dcal-mi" data-go="addresses">' + IC.pin + ' My Addresses ' + IC.chev + '</button>') +
         '<button class="dcal-mi" data-go="orders">' + IC.bag + ' My Orders ' + IC.chev + '</button>' +
         '<button class="dcal-mi dcal-mi--danger" data-act="logout">' + IC.logout + ' Logout</button>' +
       '</div>';
@@ -881,7 +881,7 @@
     var u = currentUser();
     box.innerHTML =
       '<div class="dcal-avwrap">' +
-        '<div class="dcal-av" data-e-av>' + (u.avatar ? '<img src="' + u.avatar + '" alt="">' : esc(initials(u.name))) + '</div>' +
+        '<div class="dcal-av" data-e-av>' + (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : esc(initials(u.name))) + '</div>' +
         '<label>Change photo<input type="file" accept="image/*" data-e-file></label>' +
       '</div>' +
       '<label class="dcal-label">Full name</label><input class="dcal-input" data-e-name value="' + esc(u.name) + '">' +
@@ -1128,7 +1128,7 @@
       menu.innerHTML =
         '<div class="dcal-acct-menu__greet"><b>' + esc(u.name) + '</b><span>+91 ' + esc(u.mobile) + '</span></div>' +
         '<button class="dcal-acct-item" data-ai="profile">' + IC.user + ' My Profile</button>' +
-        '<button class="dcal-acct-item" data-ai="addresses">' + IC.pin + ' My Addresses</button>' +
+        (magicOn() ? '' : '<button class="dcal-acct-item" data-ai="addresses">' + IC.pin + ' My Addresses</button>') +
         '<button class="dcal-acct-item" data-ai="orders">' + IC.bag + ' My Orders</button>' +
         '<button class="dcal-acct-item dcal-acct-item--danger" data-ai="logout">' + IC.logout + ' Logout</button>';
     } else {
@@ -1188,7 +1188,7 @@
       var vh = a.querySelector('.visually-hidden');
 
       if (u) {
-        if (svgWrap) svgWrap.innerHTML = u.avatar ? '<span class="dcal-avatar-btn"><img src="' + u.avatar + '" alt=""></span>' : '<span class="dcal-avatar-btn">' + esc(initials(u.name)) + '</span>';
+        if (svgWrap) svgWrap.innerHTML = u.avatar ? '<span class="dcal-avatar-btn"><img src="' + esc(u.avatar) + '" alt=""></span>' : '<span class="dcal-avatar-btn">' + esc(initials(u.name)) + '</span>';
         if (label) label.textContent = (u.name || 'Account').split(' ')[0];
         if (vh) vh.textContent = 'Your account';
         a.setAttribute('title', u.name);
@@ -1237,13 +1237,19 @@
      ==================================================== */
   // read product details from the current product page
   function pageProduct() {
-    var t = document.querySelector('#MainContent h1.h-section, #MainContent .product__title, [data-pp-title]')
+    // the catalog slug from ?id= is the STABLE identity — the server prices by it,
+    // so a wrong/struck scraped price can't change what's actually charged.
+    var slug = ''; try { slug = (new URLSearchParams(location.search).get('id') || '').trim(); } catch (e) {}
+    var t = document.querySelector('[data-pp-title], #MainContent h1.h-section, #MainContent .product__title')
          || document.querySelector('#MainContent h1');
-    var p = document.querySelector('[data-pp-price], [data-pp-atc-price], #MainContent .price-item');
+    // prefer the explicit live/sale-price hook; avoid the generic .price-item which
+    // can resolve to a struck-through compare-at price on some layouts.
+    var p = document.querySelector('[data-pp-price], [data-pp-atc-price]');
     var img = document.querySelector('[data-pp-main], #MainContent .product__media img, #MainContent .product-media img, #MainContent img');
     var title = t ? t.textContent.trim() : (document.title.split('—')[0].trim() || 'D’Cal product');
     return {
-      id: title,
+      id: slug || title,
+      slug: slug || undefined,
       title: title.slice(0, 80),
       price: p ? p.textContent.trim().replace(/\s+/g, ' ') : '',
       image: img ? (img.getAttribute('src') || '') : '',
@@ -1265,9 +1271,14 @@
     setTimeout(function () { location.href = cartUrl; }, 500);
   }
 
-  // "Buy now" -> add the product to the cart and go to the cart,
-  // where the customer continues through Address -> Summary -> Payment.
+  // "Buy now" -> with Magic Checkout on, open Razorpay's one-click modal directly for
+  // this product (no cart, no address form). Otherwise fall back to the cart flow.
   function doBuyNow() {
+    if (magicOn()) {
+      var onCart = !!document.getElementById('dcal-cart-root');
+      openBuyOptions(onCart ? cartGet() : [pageProduct()], onCart);
+      return;
+    }
     doAddToCart();
   }
 
@@ -1294,14 +1305,16 @@
   }
 
   function cartItemHTML(item, i) {
+    var id = esc(String(item.id || item.title || ''));   // key by stable id, not array index
     return '<div class="dcal-cart-item">' +
       (item.image ? '<img src="' + esc(item.image) + '" alt="">' : '<div class="dcal-ci-noimg">' + CART_ICON + '</div>') +
       '<div class="dcal-ci-info"><p class="dcal-ci-title">' + esc(item.title) + '</p><p class="dcal-ci-price">' + esc(item.price || '') + ' each</p></div>' +
-      '<div class="dcal-qty"><button data-qm="' + i + '" aria-label="Decrease">−</button><span>' + (item.qty || 1) + '</span><button data-qp="' + i + '" aria-label="Increase">+</button></div>' +
+      '<div class="dcal-qty"><button data-qm="' + id + '" aria-label="Decrease">−</button><span>' + (item.qty || 1) + '</span><button data-qp="' + id + '" aria-label="Increase">+</button></div>' +
       '<div class="dcal-ci-sub">' + money(priceNum(item.price) * (item.qty || 1)) + '</div>' +
-      '<button class="dcal-ci-rm" data-rm="' + i + '" aria-label="Remove">×</button>' +
+      '<button class="dcal-ci-rm" data-rm="' + id + '" aria-label="Remove">×</button>' +
       '</div>';
   }
+  function cartItemById(cart, id) { for (var i = 0; i < cart.length; i++) { if (String(cart[i].id || cart[i].title || '') === id) return i; } return -1; }
 
   function renderCartPage() {
     var root = document.getElementById('dcal-cart-root');
@@ -1320,10 +1333,13 @@
         '</aside>' +
       '</div>';
 
-    root.querySelectorAll('[data-qp]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = +b.getAttribute('data-qp'); c[k].qty = (c[k].qty || 1) + 1; cartSave(c); updateCartBubbles(); renderCartPage(); }; });
-    root.querySelectorAll('[data-qm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = +b.getAttribute('data-qm'); c[k].qty = (c[k].qty || 1) - 1; if (c[k].qty < 1) c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); }; });
-    root.querySelectorAll('[data-rm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); c.splice(+b.getAttribute('data-rm'), 1); cartSave(c); updateCartBubbles(); renderCartPage(); toast('Removed from cart'); }; });
-    root.querySelector('.dcal-cart-checkout').addEventListener('click', function () { window.DcalAuth.require(startCheckout); });
+    root.querySelectorAll('[data-qp]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-qp')); if (k < 0) return; c[k].qty = (c[k].qty || 1) + 1; cartSave(c); updateCartBubbles(); renderCartPage(); }; });
+    root.querySelectorAll('[data-qm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-qm')); if (k < 0) return; c[k].qty = (c[k].qty || 1) - 1; if (c[k].qty < 1) c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); }; });
+    root.querySelectorAll('[data-rm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-rm')); if (k < 0) return; c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); toast('Removed from cart'); }; });
+    root.querySelector('.dcal-cart-checkout').addEventListener('click', function () {
+      // decide the flow AFTER login (config is loaded by then) — not at render time
+      window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
+    });
     wireCoupon(root, renderCartPage);
   }
 
@@ -1821,6 +1837,9 @@
       .catch(function () { razorpayConfig = { enabled: false }; return razorpayConfig; });
   }
   function razorpayOn() { return !!(razorpayConfig && razorpayConfig.enabled); }
+  // Magic Checkout on? -> Buy Now / Checkout open Razorpay's one-click modal directly
+  // (address + coupons + COD all live in Razorpay), bypassing our own checkout steps.
+  function magicOn() { return !!(razorpayConfig && razorpayConfig.magic); }
 
   var NETBANKS = ['HDFC Bank', 'State Bank of India', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank',
     'Punjab National Bank', 'Bank of Baroda', 'Yes Bank', 'IDFC FIRST Bank', 'Other'];
@@ -1924,6 +1943,223 @@
       setCouponCode('');                                  // drop the now-invalid coupon
       toast((r && r.reason) || 'Coupon removed.');
       coPayment();                                        // re-render with the corrected total
+    });
+  }
+
+  /* ---------- Buy-flow chooser: Pay Online (Razorpay) vs Cash on Delivery ----------
+     COD is manual (Razorpay's own COD is off), so it collects the address here and
+     places an unpaid order. Prepaid hands off to Razorpay Magic Checkout. */
+  var buyOverlay;
+  function ensureBuyOverlay() {
+    if (buyOverlay) return;
+    if (!document.getElementById('dcal-buy-style')) {
+      var st = document.createElement('style'); st.id = 'dcal-buy-style';
+      st.textContent =
+        '#dcal-buy-overlay .dcal-modal{position:relative}' +
+        '.dcal-buy-x{position:absolute;top:14px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:none;background:#F1F5F9;border-radius:50%;color:#334155;cursor:pointer;z-index:2}' +
+        '.dcal-buy-x:hover{background:#E2E8F0}' +
+        '.dcal-pay-card{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;padding:14px 16px;margin:0 0 12px;border:1.5px solid #E2E8F0;border-radius:14px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}' +
+        '.dcal-pay-card:hover{border-color:#90E0EF}' +
+        '.dcal-pay-card.sel{border-color:#0077B6;background:#F0FBFF;box-shadow:0 0 0 3px rgba(0,119,182,.12)}' +
+        '.dcal-pay-radio2{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:2px solid #CBD5E1;margin-top:2px;position:relative}' +
+        '.dcal-pay-card.sel .dcal-pay-radio2{border-color:#0077B6}' +
+        '.dcal-pay-card.sel .dcal-pay-radio2::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#0077B6}' +
+        '.dcal-pay-title{font-weight:700;font-size:15px;color:#0B1220;display:flex;align-items:center;gap:7px}' +
+        '.dcal-pay-sub{font-size:12.5px;color:#64748B;margin-top:2px;display:block}' +
+        '.dcal-pay-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}' +
+        '.dcal-pay-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:1px solid #E2E8F0;border-radius:6px;background:#fff;font-size:11px;font-weight:700;color:#334155;line-height:1}';
+      document.head.appendChild(st);
+    }
+    buyOverlay = el('<div class="dcal-overlay" id="dcal-buy-overlay" role="dialog" aria-modal="true" aria-label="Checkout">' +
+      '<div class="dcal-modal"><button class="dcal-buy-x" data-buy-close aria-label="Close">' + ICON_X + '</button>' +
+      '<div class="dcal-body" data-buy-body></div></div></div>');
+    document.body.appendChild(buyOverlay);
+    buyOverlay.addEventListener('click', function (e) { if (e.target === buyOverlay || e.target.closest('[data-buy-close]')) closeBuyOverlay(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && buyOverlay.classList.contains('open')) closeBuyOverlay(); });
+  }
+  function closeBuyOverlay() { if (buyOverlay) { buyOverlay.classList.remove('open'); document.documentElement.classList.remove('dcal-lock'); } }
+  function buyBody() { return buyOverlay.querySelector('[data-buy-body]'); }
+
+  var ICO_CARD = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>';
+  var ICO_BANK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M3 10h18"/><path d="m12 3 9 4H3z"/><path d="M5 10v11M9 10v11M15 10v11M19 10v11"/></svg>';
+  var ICO_CASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>';
+  // payment brand marks (compact, recognisable) shown under "Pay Online"
+  var BR_PHONEPE = '<svg width="16" height="16" viewBox="0 0 20 20" role="img" aria-label="PhonePe"><rect width="20" height="20" rx="5" fill="#5F259F"/><text x="10" y="15" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="700" fill="#fff">पे</text></svg>';
+  var BR_GPAY = '<svg width="16" height="16" viewBox="0 0 48 48" role="img" aria-label="Google Pay"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  var BR_UPI = '<svg width="30" height="14" viewBox="0 0 40 16" role="img" aria-label="UPI"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800" fill="#111827">UPI</text></svg>';
+  var BR_RUPAY = '<svg width="40" height="14" viewBox="0 0 56 16" role="img" aria-label="RuPay"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800" fill="#111827">RuPay</text></svg>';
+  var BR_VISA = '<svg width="32" height="12" viewBox="0 0 48 16" role="img" aria-label="Visa"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="800" font-style="italic" fill="#1A1F71">VISA</text></svg>';
+  var BR_MC = '<svg width="26" height="16" viewBox="0 0 26 16" role="img" aria-label="Mastercard"><circle cx="10" cy="8" r="7" fill="#EB001B"/><circle cx="16" cy="8" r="7" fill="#F79E1B"/><path d="M13 2.6a7 7 0 0 0 0 10.8 7 7 0 0 0 0-10.8z" fill="#FF5F00"/></svg>';
+  var BR_PAYTM = '<svg width="40" height="14" viewBox="0 0 56 16" role="img" aria-label="Paytm"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800"><tspan fill="#002970">Pay</tspan><tspan fill="#00BAF2">tm</tspan></text></svg>';
+  var BR_AMAZONPAY = '<svg width="52" height="16" viewBox="0 0 68 18" role="img" aria-label="Amazon Pay"><text x="0" y="11" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="700" fill="#232F3E">amazon</text><path d="M1 13.5c7 2.6 18 2.6 25 .3" fill="none" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round"/><text x="40" y="13" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="700" fill="#232F3E">pay</text></svg>';
+
+  function openBuyOptions(items, fromCart) {
+    if (!items || !items.length) { toast('Your cart is empty.'); return; }
+    ensureBuyOverlay();
+    var subtotal = items.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
+    buyBody().innerHTML =
+      '<h3 class="dcal-h">How would you like to pay?</h3>' +
+      '<p class="dcal-sub" style="margin-bottom:16px">Order total: <b>' + money(subtotal) + '</b></p>' +
+      '<div data-pay-opts>' +
+        '<div class="dcal-pay-card sel" data-opt="prepaid" role="button" tabindex="0" aria-pressed="true">' +
+          '<span class="dcal-pay-radio2"></span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span class="dcal-pay-title">' + ICO_CARD + 'Pay Online</span>' +
+            '<span class="dcal-pay-sub">Instant &amp; secure — pay now</span>' +
+            '<span class="dcal-pay-chips">' +
+              '<span class="dcal-pay-chip">' + BR_PHONEPE + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_GPAY + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_PAYTM + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_AMAZONPAY + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_UPI + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_RUPAY + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_VISA + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_MC + '</span>' +
+              '<span class="dcal-pay-chip" style="border-style:dashed;color:#94A3B8">&amp; more</span>' +
+            '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="dcal-pay-card" data-opt="cod" role="button" tabindex="0" aria-pressed="false">' +
+          '<span class="dcal-pay-radio2"></span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span class="dcal-pay-title">' + ICO_CASH + 'Cash on Delivery</span>' +
+            '<span class="dcal-pay-sub">Pay in cash when your order arrives</span>' +
+          '</span>' +
+        '</div>' +
+      '</div>' +
+      '<button class="dcal-btn" data-buy-continue style="margin-top:4px">Continue</button>';
+    var opts = [].slice.call(buyBody().querySelectorAll('[data-opt]'));
+    var selected = 'prepaid';
+    function select(v) {
+      selected = v;
+      opts.forEach(function (o) { var on = o.getAttribute('data-opt') === v; o.classList.toggle('sel', on); o.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    }
+    opts.forEach(function (o) {
+      o.addEventListener('click', function () { select(o.getAttribute('data-opt')); });
+      o.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(o.getAttribute('data-opt')); } });
+    });
+    buyBody().querySelector('[data-buy-continue]').addEventListener('click', function () {
+      if (selected === 'cod') renderCodForm(items, fromCart);
+      else { closeBuyOverlay(); openMagic(items, fromCart); }
+    });
+    buyOverlay.classList.add('open');
+    document.documentElement.classList.add('dcal-lock');
+  }
+
+  // Cash on Delivery: collect the delivery address here, then place an unpaid order.
+  function renderCodForm(items, fromCart) {
+    var u = currentUser() || {};
+    buyBody().innerHTML =
+      '<button type="button" class="dcal-link" data-cod-back style="background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px;margin-bottom:8px">&larr; Back</button>' +
+      '<h3 class="dcal-h">Delivery address</h3>' +
+      '<p class="dcal-sub">Where should we deliver your Cash on Delivery order?</p>' +
+      addressFormHTML({ name: u.name || '', phone: u.mobile || '' }, 'magiccod') +
+      '<button class="dcal-btn" data-cod-place>Place COD Order</button>';
+    wireAddressForm('magiccod');
+    buyBody().querySelector('[data-cod-back]').addEventListener('click', function () { openBuyOptions(items, fromCart); });
+    buyBody().querySelector('[data-cod-place]').addEventListener('click', function () {
+      var addr = readAddressForm('magiccod');
+      var err = addr ? validateAddress(addr) : 'Please fill in the address.';
+      var errBox = buyBody().querySelector('[data-addr-err]');
+      if (err) { if (errBox) { errBox.textContent = err; errBox.classList.add('show'); } return; }
+      var btn = buyBody().querySelector('[data-cod-place]'); if (btn) { btn.disabled = true; btn.textContent = 'Placing order…'; }
+      placeMagicOrder(items, { paid: false }, addr, fromCart)
+        .then(function () { closeBuyOverlay(); })
+        .catch(function (e) {
+          if (errBox) { errBox.textContent = (e && e.message) || 'Could not place the order. Please check your details and try again.'; errBox.classList.add('show'); }
+          if (btn) { btn.disabled = false; btn.textContent = 'Place COD Order'; }
+        });
+    });
+  }
+
+  /* ---------- Razorpay Magic Checkout (one-click, PREPAID) ----------
+     Opens Razorpay's modal, which collects the address + payment itself. The SERVER
+     prices the order from the catalog, so the amount can't be tampered with. After
+     the modal completes we fetch the address Magic collected and save the order
+     through the same pipeline as the normal flow. */
+  function openMagic(items, fromCart) {
+    if (!items || !items.length) { toast('Your cart is empty.'); return; }
+    loadPaymentConfig()
+      .then(function () { return api('POST', '/api/payment/create-order', { items: items, coupon: '', mobile: sessionMobile() }); })
+      .then(function (order) {
+        return loadRazorpay().then(function (ok) {
+          if (!ok) throw new Error('Razorpay failed to load');
+          var u = currentUser() || {};
+          var rzp = new window.Razorpay({
+            key: order.keyId, amount: order.amount, currency: order.currency,
+            name: "D'Cal", description: 'Order payment',
+            image: location.origin + '/img/dcal-logo.png',
+            order_id: order.orderId,
+            one_click_checkout: true,   // <- turns on Magic Checkout (address inside modal)
+            show_coupons: false,        // coupons configured in the Razorpay Dashboard
+            prefill: { name: u.name || '', email: u.email || '', contact: u.mobile || '' },
+            theme: { color: '#0077B6' },
+            handler: function (resp) { finishMagicOrder(items, order.orderId, resp, fromCart); }
+          });
+          rzp.on('payment.failed', function () { toast('Payment failed. Please try again.'); });
+          rzp.open();
+        });
+      })
+      .catch(function (e) {
+        toast((e && e.message) ? ('Could not start checkout: ' + e.message) : 'Could not start checkout. Please try again.');
+      });
+  }
+
+  // PREPAID (Pay Online) completion only. COD is a separate manual flow, so this
+  // handler must NEVER create an unpaid order: no verified payment id => it failed.
+  function finishMagicOrder(items, orderId, resp, fromCart) {
+    if (!resp || !resp.razorpay_payment_id) { toast('Payment was not completed. Please try again.'); return; }
+    var payInfo = { paid: true, paymentId: resp.razorpay_payment_id, razorpayOrderId: orderId };
+    // ALWAYS record the order after a real payment — never lose money to a failed
+    // verify/network hiccup. The SERVER is the source of truth for the paid flag
+    // (it checks the verified pending payment and reconciles from Razorpay, #9).
+    var save = function () {
+      return api('GET', '/api/payment/magic-address/' + encodeURIComponent(orderId))
+        .then(function (r) { return (r && r.address) || {}; }, function () { return {}; })
+        .then(function (addr) { return placeMagicOrder(items, payInfo, addr, fromCart); })
+        .catch(function () { toast('Your payment went through but saving the order failed — please contact support with payment id ' + resp.razorpay_payment_id + '.'); });
+    };
+    // verify (marks the pending payment verified on success), then save either way
+    api('POST', '/api/payment/verify', resp).then(save, save);
+  }
+
+  // Returns a promise. The SERVER re-prices from the catalog and decides the paid
+  // flag — we AWAIT it and only report success if the server actually saved the
+  // order, so a tampered/mispriced/unsaved order can never show a fake confirmation.
+  function placeMagicOrder(items, payInfo, addr, fromCart) {
+    payInfo = payInfo || {}; addr = addr || {};
+    if (!items || !items.length) return Promise.reject(new Error('Your cart is empty.'));
+    var subtotal = items.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
+    var mobile = sessionMobile();
+    if (!addr.phone && mobile) addr.phone = mobile;
+    var order = {
+      id: String(Date.now()).slice(-8),
+      title: items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : ''),
+      total: money(subtotal), image: items[0].image, items: items.slice(),
+      address: addr, payment: payInfo.paid ? 'Prepaid (Razorpay)' : 'Cash on Delivery',
+      coupon: '', discount: 0,
+      paid: !!payInfo.paid, paymentId: payInfo.paymentId || '',
+      razorpayOrderId: payInfo.razorpayOrderId || '',
+      date: Date.now(), status: 'Confirmed'
+    };
+    return api('POST', '/api/orders', {
+      orderId: order.id, mobile: mobile,
+      customerName: (users()[mobile] || {}).name || addr.name || '',
+      title: order.title, image: order.image, items: order.items,
+      address: order.address, payment: order.payment,
+      paid: order.paid, paymentId: order.paymentId, razorpayOrderId: order.razorpayOrderId,
+      coupon: '', status: order.status, date: order.date
+    }).then(function (r) {
+      var saved = (r && r.order) || {};
+      order.total = saved.total || order.total;   // server total is authoritative
+      order.paid = !!saved.paid;
+      var list = orders(); list.unshift(order); saveOrders(list);
+      if (fromCart) { cartSave([]); setCouponCode(''); }
+      updateCartBubbles();
+      toast(order.paid ? 'Payment successful! 🎉' : 'Order placed — pay on delivery.');
+      if (mobile) pullOrders(mobile).then(function () { if (typeof openProfile === 'function') openProfile('orders'); });
+      else if (typeof openProfile === 'function') openProfile('orders');
+      return saved;
     });
   }
 
@@ -2056,6 +2292,7 @@
     updateHeader();
     updateCartBubbles();
     renderCartPage();
+    loadPaymentConfig();   // learn early if Magic Checkout is on (drives Buy Now + hides the address book)
     // Learn which login methods the server offers, then reconcile our local session.
     api('GET', '/api/config').then(function (c) {
       if (c && c.googleClientId) GOOGLE_CLIENT_ID = c.googleClientId;

@@ -15,6 +15,7 @@ const OrderSchema = new mongoose.Schema({
   discount: { type: Number, default: 0 },          // discount amount in rupees
   paid: { type: Boolean, default: false },         // true once Razorpay payment is verified
   paymentId: { type: String, default: '' },        // Razorpay payment id (e.g. pay_XXXX)
+  razorpayOrderId: { type: String, default: '', index: true }, // Razorpay order id (order_XXXX) — for dedup/reconciliation
   status: { type: String, default: 'Confirmed' },
   cancelReason: { type: String, default: '' },
   cancelledAt: { type: Number, default: null },

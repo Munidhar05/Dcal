@@ -21,8 +21,16 @@ const Dealer = require('./models/Dealer');
 
 const app = express();
 app.set('trust proxy', true);   // so req.protocol is https behind Render's proxy
-app.use(cors());
-app.use(express.json({ limit: '3mb' }));
+// CORS: allow same-origin/no-origin (the storefront, curl, server-to-server) and an
+// explicit allowlist of our own domains — not every website on the internet.
+const CORS_ALLOW = [process.env.PUBLIC_BASE_URL, 'http://localhost:' + (process.env.PORT || 3000), 'http://127.0.0.1:' + (process.env.PORT || 3000)]
+  .filter(Boolean).map((s) => s.replace(/\/+$/, ''));
+app.use(cors({
+  origin: function (origin, cb) { if (!origin || CORS_ALLOW.indexOf(origin) > -1) return cb(null, true); return cb(null, false); },
+  credentials: true
+}));
+// keep the raw body so we can verify the Razorpay webhook HMAC signature
+app.use(express.json({ limit: '3mb', verify: function (req, _res, buf) { req.rawBody = buf; } }));
 
 /* ---------- security: block NoSQL injection ----------
    Strip any Mongo operator keys ($gt, $ne, …) and dotted keys from every
@@ -42,6 +50,27 @@ app.use((req, _res, next) => {
   next();
 });
 
+/* ---------- lightweight per-IP rate limiting (no external dependency) ----------
+   In-memory, per-process (resets on restart, not shared across instances) — a
+   meaningful brake on brute-force / OTP-flooding without adding a dependency. */
+function rateLimit(opts) {
+  const windowMs = opts.windowMs, max = opts.max, tag = opts.tag || '', hits = new Map();
+  const timer = setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (now > v.reset) hits.delete(k); }, windowMs);
+  if (timer.unref) timer.unref();
+  return function (req, res, next) {
+    const key = (req.ip || 'x') + '|' + tag;
+    const now = Date.now();
+    let rec = hits.get(key);
+    if (!rec || now > rec.reset) { rec = { count: 0, reset: now + windowMs }; hits.set(key, rec); }
+    if (++rec.count > max) return res.status(429).json({ error: 'Too many attempts. Please wait a moment and try again.' });
+    next();
+  };
+}
+
+// Generic 500: log the real error server-side, return a safe message to the client
+// (never leak internal exception text / DB / driver details to the browser).
+function serverErr(res, e) { try { console.error('server error:', e && e.message); } catch (x) {} return res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+
 const ROOT = path.join(__dirname, '..');                 // project root (where index.html lives)
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dcal-admin-2026';
@@ -54,6 +83,10 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const MAIL_FROM = process.env.MAIL_FROM || SMTP_USER;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';     // e.g. https://yourdomain.com (for email images)
+// Razorpay Magic Checkout (one-click): address, coupons, COD and payment all happen
+// inside Razorpay's modal. Turn ON only AFTER enabling Magic Checkout in the Razorpay
+// Dashboard; until then the site keeps using the existing multi-step checkout.
+const MAGIC_CHECKOUT = /^(1|true|on|yes)$/i.test(String(process.env.MAGIC_CHECKOUT || ''));
 
 /* ---------- customer sessions (signed httpOnly cookie) ----------
    A logged-in customer carries a signed token in an httpOnly cookie. Every
@@ -67,11 +100,19 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';     // e.g. https://y
    the next phases, which is what makes guessing a number stop working. */
 const SESSION_COOKIE = 'dcal_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;            // 30 days
+// "prod" = NODE_ENV=production (Render sets this). NOT based on PUBLIC_BASE_URL,
+// which is the live domain even in the local .env (would break http://localhost).
+const IS_PROD = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET
-  || crypto.randomBytes(32).toString('hex');               // random per-boot fallback
+  || crypto.randomBytes(32).toString('hex');               // random per-boot fallback (dev only)
 if (!process.env.SESSION_SECRET) {
+  if (IS_PROD) { console.error('✗ SESSION_SECRET is required in production. Refusing to start.'); process.exit(1); }
   console.warn('⚠ SESSION_SECRET not set — using a random per-boot secret (logins reset on restart). Set it in .env for production.');
 }
+// Secure cookies: honour COOKIE_SECURE if set, else default ON for an https site.
+const COOKIE_SECURE = process.env.COOKIE_SECURE
+  ? /^(1|true|on|yes)$/i.test(String(process.env.COOKIE_SECURE))
+  : IS_PROD;
 function b64url(buf) { return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 function b64urlDecode(s) { return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(); }
 function signSession(payload) {
@@ -99,7 +140,7 @@ function parseCookies(req) {
 function issueSession(res, mobile) {
   const token = signSession({ mobile: String(mobile), iat: Date.now(), exp: Date.now() + SESSION_TTL_MS });
   res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true, sameSite: 'lax', secure: !!process.env.COOKIE_SECURE,
+    httpOnly: true, sameSite: 'lax', secure: COOKIE_SECURE,
     maxAge: SESSION_TTL_MS, path: '/'
   });
 }
@@ -341,26 +382,55 @@ if (RZP_KEY_ID && RZP_KEY_SECRET) {
 app.get('/api/health', (req, res) => res.json({ ok: true, db: dbReady, payments: !!razorpay }));
 
 /* ---------- payments (Razorpay) ---------- */
-app.get('/api/payment/config', (req, res) => res.json({ enabled: !!razorpay, keyId: RZP_KEY_ID }));
+app.get('/api/payment/config', (req, res) => res.json({ enabled: !!razorpay, keyId: RZP_KEY_ID, magic: !!razorpay && MAGIC_CHECKOUT }));
 
 // 1) create a Razorpay order. The amount is computed by the SERVER from the cart
 //    items + coupon (never taken from the client), so it can't be tampered.
-app.post('/api/payment/create-order', async (req, res) => {
+app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max: 40, tag: 'createorder' }), async (req, res) => {
   if (!razorpay) return res.status(503).json({ error: 'Razorpay not configured' });
   try {
     const { items, coupon, mobile } = req.body || {};
+    // Bind this payment to the VERIFIED session identity (not the client-sent mobile),
+    // so a payment can only ever be claimed by the customer who actually made it.
+    const payerMobile = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || String(mobile || '');
     const q = await quoteOrder(items, coupon, mobile);
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
     if (!q.total || q.total <= 0) return res.status(400).json({ error: 'empty or invalid cart' });
-    const order = await razorpay.orders.create({
+    const orderOpts = {
       amount: Math.round(q.total * 100),    // Razorpay works in paise
       currency: 'INR',
-      receipt: 'dcal_' + Date.now()
-    });
+      receipt: 'dcal_' + Date.now(),
+      // stamp the payer + total onto the Razorpay order itself, so payment can be
+      // reconciled from Razorpay after a server restart (in-memory pending is lost)
+      notes: { mobile: payerMobile, total: String(q.total) }
+    };
+    // Magic Checkout: hand Razorpay the cart contents so its modal can show the
+    // items and collect the address itself. Built from the SERVER-priced lines so
+    // the amounts stay tamper-proof. (Coupons for Magic are configured in the
+    // Razorpay Dashboard, so we price without an app coupon here.)
+    if (MAGIC_CHECKOUT) {
+      const base = baseUrlFrom(req);
+      orderOpts.line_items_total = Math.round(q.total * 100);
+      orderOpts.shipping_fee = 0;
+      orderOpts.line_items = (q.lines || []).map((l) => {
+        const p = CATALOG[l.slug] || {};
+        return {
+          sku: l.slug,
+          name: p.title || l.slug,
+          description: p.desc || '',
+          price: Math.round((p.price != null ? p.price : l.price) * 100),
+          offer_price: Math.round(l.price * 100),
+          quantity: l.qty,
+          image_url: p.img ? absUrl(base, 'images/' + p.img) : '',
+          product_url: base + '/product'
+        };
+      });
+    }
+    const order = await razorpay.orders.create(orderOpts);
     // remember exactly what we charged for, so verify + order-save can trust it
-    pendingPayments.set(order.id, { total: q.total, discount: q.discount, code: q.code, amount: order.amount, mobile: String(mobile || ''), verified: false });
+    pendingPayments.set(order.id, { total: q.total, discount: q.discount, code: q.code, amount: order.amount, mobile: payerMobile, verified: false });
     res.json({ keyId: RZP_KEY_ID, orderId: order.id, amount: order.amount, currency: order.currency });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 // 2) verify the payment signature, then mark this order_id as paid-for so the
@@ -378,9 +448,83 @@ app.post('/api/payment/verify', (req, res) => {
   res.json({ valid: true, total: pending ? pending.total : null });
 });
 
+// 3) Magic Checkout: after payment/COD, fetch the address the customer entered in
+//    Razorpay's modal so we can save it with the order (Magic collects it, not us).
+app.get('/api/payment/magic-address/:orderId', authCustomer, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Razorpay not configured' });
+  try {
+    const oid = String(req.params.orderId);
+    const o = await razorpay.orders.fetch(oid);
+    // OWNERSHIP: this order must belong to the requesting customer (via the pending
+    // record or the mobile we stamped into the order notes) — no fetching strangers'
+    // addresses by enumerating order ids.
+    const pend = pendingPayments.get(oid);
+    const owner = (pend && pend.mobile) || String((o && o.notes && o.notes.mobile) || '');
+    if (!owner || owner !== req.customerMobile) return res.status(403).json({ error: 'This order is not associated with your account.' });
+    const cd = (o && o.customer_details) || {};
+    const sa = cd.shipping_address || cd.billing_address || {};
+    const address = {
+      name: cd.name || sa.name || '',
+      phone: cd.contact || sa.contact || '',
+      line: [sa.line1, sa.line2].filter(Boolean).join(', ') || sa.line || '',
+      city: sa.city || '',
+      state: sa.state || '',
+      pincode: sa.zipcode || sa.zip || sa.pincode || '',
+      landmark: sa.landmark || ''
+    };
+    res.json({ address, cod: cd.cod === true });
+  } catch (e) { serverErr(res, e); }
+});
+
+/* ---------- Razorpay webhook: source of truth for prepaid payments ----------
+   Signature-verified. On order.paid, if the browser never made it back to
+   /api/orders (closed tab / dropped network / server restart), we recover the
+   order here from the Razorpay order itself, so a real payment is never lost.
+   Idempotent: skips if an order for this razorpay id / payment id already exists.
+   Inactive until RAZORPAY_WEBHOOK_SECRET is set (from the Dashboard webhook). */
+app.post('/api/webhooks/razorpay', async (req, res) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+  if (!secret) return res.status(503).end();
+  const sig = String(req.headers['x-razorpay-signature'] || '');
+  const expected = crypto.createHmac('sha256', secret).update(req.rawBody || Buffer.from('')).digest('hex');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(400).end();
+  res.json({ ok: true });   // ack immediately, then process
+  try {
+    if (!dbReady || !razorpay) return;
+    const body = req.body || {};
+    if (body.event !== 'order.paid') return;
+    const roid = ((((body.payload || {}).order || {}).entity) || {}).id;
+    const paymentId = ((((body.payload || {}).payment || {}).entity) || {}).id || '';
+    if (!roid) return;
+    if (await Order.findOne({ razorpayOrderId: roid })) return;         // client already saved it
+    if (paymentId && await Order.findOne({ paymentId })) return;
+    const full = await razorpay.orders.fetch(roid);
+    const mobile = String(((full && full.notes) || {}).mobile || '');
+    if (!mobile) return;
+    const items = ((full && full.line_items) || []).map((li) => ({ slug: li.sku, id: li.sku, title: li.name, qty: li.quantity || 1, price: (li.offer_price || li.price || 0) / 100 }));
+    const q = await quoteOrder(items, '', mobile);                      // re-price from the catalog
+    const total = q.ok ? q.total : (full.amount || 0) / 100;
+    const cd = (full && full.customer_details) || {};
+    const sa = cd.shipping_address || cd.billing_address || {};
+    const address = { name: cd.name || sa.name || '', phone: cd.contact || sa.contact || '',
+      line: [sa.line1, sa.line2].filter(Boolean).join(', ') || sa.line || '',
+      city: sa.city || '', state: sa.state || '', pincode: sa.zipcode || sa.zip || sa.pincode || '' };
+    const order = await Order.create({
+      orderId: String(Date.now()).slice(-8), mobile, customerName: address.name || '',
+      title: items.length ? (items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : '')) : 'Order',
+      total: money(total), totalNum: total, image: '', items, address,
+      payment: 'Prepaid (Razorpay)', coupon: '', discount: 0,
+      paid: true, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now()
+    });
+    notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});
+    console.log('razorpay webhook: recovered order', order.orderId, 'for', roid);
+  } catch (e) { console.error('razorpay webhook error:', e.message); }
+});
+
 /* ---------- auth (phone-only, no password) ---------- */
 // returns { isNew:true } if the phone isn't registered yet, else logs the login and returns the user
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 40, tag: 'login' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     const { mobile, resume } = req.body || {};
@@ -393,11 +537,11 @@ app.post('/api/login', async (req, res) => {
       user.lastLogin = Date.now();
       await user.save();
     }
-    // Phone login is unverified (no SMS). Once Google/email is configured we STOP
-    // minting sessions here, so the only way to get a session is a real verification.
-    if (!secureAuthAvailable()) issueSession(res, mobile);
+    // Phone login is UNVERIFIED (no SMS), so it NEVER mints a session — the only way
+    // to get a session cookie is a real Google / email-OTP verification. The user is
+    // returned for display only; every protected endpoint requires the verified cookie.
     res.json({ isNew: false, user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 // clear the session cookie
@@ -418,7 +562,7 @@ app.get('/api/session/me', async (req, res) => {
 });
 
 /* Email OTP: request a code -> verify it -> (first time) bind a phone number. */
-app.post('/api/auth/email/request', async (req, res) => {
+app.post('/api/auth/email/request', rateLimit({ windowMs: 10 * 60 * 1000, max: 6, tag: 'emailotp' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     sweepOtps();
@@ -431,7 +575,7 @@ app.post('/api/auth/email/request', async (req, res) => {
     try { await sendOtpEmail(email, code); }
     catch (e) { emailOtps.delete(email); return res.status(502).json({ error: 'Could not send the email. Please try again.' }); }
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.post('/api/auth/email/verify', async (req, res) => {
@@ -451,7 +595,7 @@ app.post('/api/auth/email/verify', async (req, res) => {
     if (user) { issueSession(res, user.mobile); return res.json({ user }); }
     const ticket = signSession({ email: email, purpose: 'email', iat: Date.now(), exp: Date.now() + 10 * 60 * 1000 });
     res.json({ needPhone: true, ticket: ticket, profile: { email: email } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.post('/api/auth/email/bind', async (req, res) => {
@@ -470,7 +614,7 @@ app.post('/api/auth/email/bind', async (req, res) => {
     const user = await User.create({ mobile, email, name: '', provider: 'email', logins: 1, lastLogin: Date.now() });
     issueSession(res, mobile);
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* Google Sign-In: verify the credential, then either log the existing user in or,
@@ -494,7 +638,7 @@ app.post('/api/auth/google', async (req, res) => {
     }
     // first time with this Google account — client must bind a phone next
     res.json({ needPhone: true, profile: { name: info.name, email: info.email, picture: info.picture } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 // finish a first-time Google sign-in by binding a phone number (re-verifies the credential)
@@ -534,7 +678,7 @@ app.post('/api/auth/google/bind', async (req, res) => {
     });
     issueSession(res, mobile);
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ===== Google Sign-In: cross-browser OAuth redirect flow =====
@@ -546,7 +690,7 @@ app.post('/api/auth/google/bind', async (req, res) => {
 const OAUTH_STATE_COOKIE = 'dcal_oauth_state';
 const GBIND_COOKIE = 'dcal_gbind';
 function tmpCookie(res, name, val, ms) {
-  res.cookie(name, val, { httpOnly: true, sameSite: 'lax', secure: !!process.env.COOKIE_SECURE, maxAge: ms, path: '/' });
+  res.cookie(name, val, { httpOnly: true, sameSite: 'lax', secure: COOKIE_SECURE, maxAge: ms, path: '/' });
 }
 
 app.get('/api/auth/google/start', (req, res) => {
@@ -659,11 +803,11 @@ app.post('/api/auth/google/bind-session', async (req, res) => {
     res.clearCookie(GBIND_COOKIE, { path: '/' });
     issueSession(res, mobile);
     res.json({ user: created });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 // create a new account (or log in if it already exists)
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 40, tag: 'register' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     const { mobile, name, email, avatar, provider } = req.body || {};
@@ -673,16 +817,16 @@ app.post('/api/register', async (req, res) => {
       user.logins = (user.logins || 0) + 1;
       user.lastLogin = Date.now();
       await user.save();
-      if (!secureAuthAvailable()) issueSession(res, mobile);
+      // no session minted from an unverified phone — see /api/login
       return res.json({ user });
     }
     user = await User.create({
       mobile, name: name || '', email: email || '', avatar: avatar || '',
       provider: provider || 'phone', logins: 1, lastLogin: Date.now()
     });
-    if (!secureAuthAvailable()) issueSession(res, mobile);
+    // no session minted from an unverified phone — see /api/login
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- free demo kit (one per logged-in account) ----------
@@ -704,7 +848,7 @@ app.post('/api/freekit/claim', authCustomer, async (req, res) => {
     const existing = await User.findOne({ mobile });
     if (!existing) return res.status(404).json({ error: 'not found' });
     return res.json({ ok: false, alreadyClaimed: true, claimedAt: existing.freeKitAt });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.get('/api/freekit/status/:mobile', authCustomer, async (req, res) => {
@@ -712,7 +856,7 @@ app.get('/api/freekit/status/:mobile', authCustomer, async (req, res) => {
   try {
     const u = await User.findOne({ mobile: req.customerMobile });
     res.json({ claimed: !!(u && u.freeKitClaimed), claimedAt: (u && u.freeKitAt) || null });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- demo-kit leads (PUBLIC form — no login required) ----------
@@ -740,7 +884,7 @@ app.post('/api/leads', async (req, res) => {
     });
     notifyNewLead(lead, baseUrlFrom(req)).catch(() => {});
     res.json({ ok: true, already: false, id: lead._id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- dealership applications (PUBLIC form — no login required) ----------
@@ -768,7 +912,7 @@ app.post('/api/dealership', async (req, res) => {
     });
     notifyNewDealer(dealer, baseUrlFrom(req)).catch(() => {});
     res.json({ ok: true, already: false, id: dealer._id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- profile + addresses ---------- */
@@ -778,7 +922,7 @@ app.get('/api/users/:mobile', authCustomer, async (req, res) => {
     const user = await User.findOne({ mobile: req.customerMobile });
     if (!user) return res.status(404).json({ error: 'not found' });
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.put('/api/users/:mobile', authCustomer, async (req, res) => {
@@ -786,13 +930,23 @@ app.put('/api/users/:mobile', authCustomer, async (req, res) => {
   try {
     const { name, email, avatar } = req.body || {};
     const set = {};
-    if (name !== undefined) set.name = name;
-    if (email !== undefined) set.email = email;
-    if (avatar !== undefined) set.avatar = avatar;
+    if (name !== undefined) set.name = String(name).slice(0, 100);
+    if (email !== undefined) {
+      const em = String(email).trim().toLowerCase();
+      if (em && (!EMAIL_RE.test(em) || em.length > 160)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+      // an email can belong to only one account (account-linking trusts it)
+      if (em) { const clash = await User.findOne({ email: em, mobile: { $ne: req.customerMobile } }); if (clash) return res.status(409).json({ error: 'That email is already used by another account.' }); }
+      set.email = em;
+    }
+    if (avatar !== undefined) {
+      const av = String(avatar || '');
+      if (av && !/^(https:\/\/|data:image\/)/i.test(av)) return res.status(400).json({ error: 'Invalid avatar image.' });
+      set.avatar = av;
+    }
     const user = await User.findOneAndUpdate({ mobile: req.customerMobile }, { $set: set }, { new: true });
     if (!user) return res.status(404).json({ error: 'not found' });
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.put('/api/users/:mobile/addresses', authCustomer, async (req, res) => {
@@ -806,7 +960,7 @@ app.put('/api/users/:mobile/addresses', authCustomer, async (req, res) => {
     );
     if (!user) return res.status(404).json({ error: 'not found' });
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- coupons (server is the source of truth for eligibility) ----------
@@ -903,9 +1057,35 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     // a client claiming paid:true with no real payment is ignored.
     let paid = false, paymentId = '';
     const pending = o.razorpayOrderId ? pendingPayments.get(String(o.razorpayOrderId)) : null;
-    if (pending && pending.verified && pending.amount === Math.round(q.total * 100)) {
-      paid = true; paymentId = pending.paymentId || '';
+    // Honour "paid" ONLY when a verified Razorpay payment was made BY THIS customer
+    // (pending.mobile === session mobile) for THIS exact amount. This stops one
+    // customer claiming another's payment by reusing their razorpay_order_id.
+    if (pending && pending.verified && pending.mobile && pending.mobile === mobile && pending.amount === Math.round(q.total * 100)) {
+      paymentId = pending.paymentId || '';
+      // a payment id backs exactly one order — on a re-submit, return the existing order
+      if (paymentId) {
+        const dupe = await Order.findOne({ paymentId });
+        if (dupe) { pendingPayments.delete(String(o.razorpayOrderId)); return res.json({ order: dupe }); }
+      }
+      paid = true;
       pendingPayments.delete(String(o.razorpayOrderId));   // consume — can't be reused
+    } else if (!pending && razorpay && o.razorpayOrderId) {
+      // RESTART RESILIENCE: in-memory pending was lost — reconcile straight from
+      // Razorpay. Only trust it when the order is actually paid, was made by THIS
+      // customer (notes.mobile), and the amount matches the server-priced total.
+      try {
+        const ro = await razorpay.orders.fetch(String(o.razorpayOrderId));
+        if (ro && ro.status === 'paid' && String((ro.notes || {}).mobile || '') === mobile && ro.amount === Math.round(q.total * 100)) {
+          const pays = await razorpay.orders.fetchPayments(String(o.razorpayOrderId));
+          const cap = ((pays && pays.items) || []).find((p) => p.status === 'captured');
+          paymentId = cap ? cap.id : '';
+          if (paymentId) {
+            const dupe = await Order.findOne({ paymentId });
+            if (dupe) return res.json({ order: dupe });
+            paid = true;
+          }
+        }
+      } catch (e) { /* reconciliation failed -> stays unpaid, safer than false-paid */ }
     } else if (!razorpay && o.demo === true) {
       paid = !!o.paid;   // demo mode only (no real Razorpay configured): simulated payment
     }
@@ -915,12 +1095,12 @@ app.post('/api/orders', authCustomer, async (req, res) => {
       title: o.title || '', total: money(q.total), totalNum: q.total,
       image: o.image || '', items: o.items || [], address: o.address || {},
       payment: o.payment || '', coupon: q.code, discount: q.discount,
-      paid, paymentId,
+      paid, paymentId, razorpayOrderId: String(o.razorpayOrderId || ''),
       status: 'Confirmed', date: Date.now()
     });
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});   // fire-and-forget order confirmation
     res.json({ order });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.get('/api/orders', authCustomer, async (req, res) => {
@@ -928,7 +1108,7 @@ app.get('/api/orders', authCustomer, async (req, res) => {
   try {
     const orders = await Order.find({ mobile: req.customerMobile }).sort({ date: -1 });
     res.json({ orders });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 // customer cancels their own order (only before it ships)
@@ -947,7 +1127,7 @@ app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
     await order.save();
     notifyOrderCancelled(order, baseUrlFrom(req)).catch(() => {});
     res.json({ order });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* ---------- admin (password protected) ---------- */
@@ -957,7 +1137,7 @@ function adminAuth(req, res, next) {
   next();
 }
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 12, tag: 'adminlogin' }), (req, res) => {
   const { password } = req.body || {};
   if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'wrong password' });
   res.json({ ok: true });
@@ -966,25 +1146,25 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/orders', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ orders: await Order.find({}).sort({ date: -1 }) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 
 app.get('/api/admin/customers', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ customers: await User.find({}).sort({ createdAt: -1 }) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 
 app.get('/api/admin/leads', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ leads: await Lead.find({}).sort({ createdAt: -1 }) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 
 app.get('/api/admin/dealers', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ dealers: await Dealer.find({}).sort({ createdAt: -1 }) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 
 app.put('/api/admin/orders/:orderId', adminAuth, async (req, res) => {
@@ -1002,7 +1182,7 @@ app.put('/api/admin/orders/:orderId', adminAuth, async (req, res) => {
     // email the customer only when the status actually changed (e.g. Shipped -> Out for Delivery)
     if (set.status !== undefined && before && before.status !== order.status) notifyStatusChange(order, baseUrlFrom(req)).catch(() => {});
     res.json({ order });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.delete('/api/admin/orders/:orderId', adminAuth, async (req, res) => {
@@ -1011,7 +1191,7 @@ app.delete('/api/admin/orders/:orderId', adminAuth, async (req, res) => {
     const r = await Order.findOneAndDelete({ orderId: req.params.orderId });
     if (!r) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* edit / delete a customer */
@@ -1025,7 +1205,7 @@ app.put('/api/admin/customers/:mobile', adminAuth, async (req, res) => {
     const user = await User.findOneAndUpdate({ mobile: req.params.mobile }, { $set: set }, { new: true });
     if (!user) return res.status(404).json({ error: 'not found' });
     res.json({ user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 app.delete('/api/admin/customers/:mobile', adminAuth, async (req, res) => {
@@ -1034,7 +1214,7 @@ app.delete('/api/admin/customers/:mobile', adminAuth, async (req, res) => {
     const r = await User.findOneAndDelete({ mobile: req.params.mobile });
     if (!r) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { serverErr(res, e); }
 });
 
 /* edit / delete a demo-kit lead */
@@ -1087,29 +1267,36 @@ app.delete('/api/admin/dealers/:id', adminAuth, async (req, res) => {
    The admin sends back the exact document it had cached (incl. its _id), so the
    restored row keeps the same id/timestamps. */
 function restoreDoc(Model, body) {
-  const d = (body && body.doc) || {};
-  delete d.__v;                 // mongoose version key — let it regenerate
+  const src = (body && body.doc) || {};
+  // Only copy fields that exist in THIS model's schema, and never trust a
+  // client-supplied _id/__v (regenerated) — so a restore can't forge arbitrary
+  // documents (e.g. an Order with paid:true and an attacker-chosen id).
+  const d = {};
+  Object.keys(Model.schema.paths).forEach((k) => {
+    if (k === '_id' || k === '__v') return;
+    if (src[k] !== undefined) d[k] = src[k];
+  });
   return Model.create(d);
 }
 app.post('/api/admin/leads/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ lead: await restoreDoc(Lead, req.body) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 app.post('/api/admin/orders/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ order: await restoreDoc(Order, req.body) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 app.post('/api/admin/customers/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ user: await restoreDoc(User, req.body) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 app.post('/api/admin/dealers/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ dealer: await restoreDoc(Dealer, req.body) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { serverErr(res, e); }
 });
 
 /* ---------- clean URLs (no “.html”, no “/html/” in the address bar) ----------
@@ -1197,6 +1384,16 @@ app.get('*', (req, res) => {
   const fp = resolvePage(cleanSlug(req.path));
   if (fp) return res.sendFile(fp);
   res.status(404).sendFile(path.join(ROOT, 'html', '404.html'));
+});
+
+// global error handler — catch body-parser/other middleware errors so we never
+// leak a stack trace or internal message to the client (return safe JSON instead).
+app.use((err, req, res, _next) => {
+  if (!err) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  try { console.error('unhandled error:', err.message); } catch (x) {}
+  if (err.type === 'entity.parse.failed' || err.status === 400) return res.status(400).json({ error: 'Invalid request.' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request too large.' });
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
 app.listen(PORT, () => console.log('D\'Cal server running on http://localhost:' + PORT));
