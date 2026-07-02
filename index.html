@@ -459,7 +459,7 @@
     }
   </script></div>
   <main id="MainContent" class="content-for-layout focus-none" role="main" tabindex="-1">
-    <div id="shopify-section-premium-problems-jua7r2" class="shopify-section"><section class="sec premium-problems-sec" style="background:#C4E8F0;color:#012A4A">
+    <div id="shopify-section-premium-problems-jua7r2" class="shopify-section"><section class="sec premium-problems-sec" style="background:#EAF5FD;color:#012A4A">
   <div class="container">
     <div style="text-align:center;max-width:820px;margin:0 auto 64px">
       <span class="eyebrow" data-reveal style="background:rgba(2,62,138,.12);color:#023E8A">THE HARD TRUTH</span>
@@ -624,7 +624,7 @@
 
 <style>
   .pp-problems-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
-  .pp-problem-card{position:relative;overflow:hidden;padding:28px 24px;border-radius:20px;background:#C4E8F0;border:1px solid rgba(2,62,138,.10);box-shadow:0 18px 40px -22px rgba(2,42,74,.35);min-height:280px}
+  .pp-problem-card{position:relative;overflow:hidden;padding:28px 24px;border-radius:20px;background:#EAF5FD;border:1px solid rgba(2,62,138,.10);box-shadow:0 18px 40px -22px rgba(2,42,74,.35);min-height:280px}
   .pp-problem-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,rgba(0,180,216,.18),rgba(0,119,182,.12));color:#90E0EF;margin-bottom:18px}
   .pp-problem-title{font-size:19px;font-weight:700;margin:0 0 10px;color:#012A4A;letter-spacing:-.01em}
   .pp-problem-body{color:#475569;font-size:14px;line-height:1.6;margin:0}
@@ -1546,8 +1546,9 @@
             <input type="text" name="contact[pincode]" aria-label="PIN code" placeholder="PIN code *" pattern="[1-9][0-9]{5}" inputmode="numeric" maxlength="6" title="Enter a valid 6-digit PIN code" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,6)" required style="padding:16px 18px;border:1.5px solid #E2E8F0;border-radius:14px;font-size:15px;background:#fff">
           </div>
 
-          <select name="contact[village]" aria-label="Village / Area" required style="width:100%;padding:16px 18px;border:1.5px solid #E2E8F0;border-radius:14px;margin-bottom:14px;font-size:15px;background:#fff;color:#64748B">
-            <option value="">Village / Area * (enter PIN first)</option>
+          <select name="contact[village]" aria-label="Village / Area" style="width:100%;padding:16px 18px;border:1.5px solid #E2E8F0;border-radius:14px;margin-bottom:14px;font-size:15px;background:#fff;color:#64748B">
+            <option value="">Village / Area (enter PIN first)</option>
+            <option value="Other">Other / not listed</option>
           </select>
 
           <select name="contact[source]" aria-label="How did you hear about us?" style="width:100%;padding:16px 18px;border:1.5px solid #E2E8F0;border-radius:14px;margin-bottom:14px;font-size:15px;background:#fff;color:#64748B;appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748B%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>');background-repeat:no-repeat;background-position:right 16px center">
@@ -1713,12 +1714,17 @@
             o.textContent = p.Name + (p.Block && p.Block !== p.Name ? ' · ' + p.Block : '');
             vEl.appendChild(o);
           });
+          var oth = document.createElement('option'); oth.value = 'Other'; oth.textContent = 'Other / not listed'; vEl.appendChild(oth);
           // restore the user's prior pick if it's still valid, else preselect the first area
           if(keep && seen[keep]) vEl.value = keep;
           else if(vEl.options.length > 1) vEl.selectedIndex = 1;
           if(vEl.value) vEl.style.color = '#0B1220';
         }
-      }).catch(function(){});
+      }).catch(function(){
+        // PIN API down -> don't hard-stop the funnel; ensure a selectable fallback
+        var vEl = form.querySelector('[name="contact[village]"]');
+        if(vEl && vEl.options.length <= 1){ var o=document.createElement('option'); o.value='Other'; o.textContent='Other / not listed'; vEl.appendChild(o); }
+      });
     }
 
     /* collect the form fields into one object */
