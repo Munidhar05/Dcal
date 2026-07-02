@@ -47,6 +47,7 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dcal-admin-2026';
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';   // OAuth client id for Google Sign-In
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || ''; // OAuth client secret — enables the cross-browser redirect flow
 const SMTP_HOST = process.env.SMTP_HOST || '';                 // email OTP sender (any SMTP provider)
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = process.env.SMTP_USER || '';
@@ -131,6 +132,17 @@ async function verifyGoogleCredential(credential) {
     return { sub: String(p.sub), email: String(p.email || '').toLowerCase(), name: p.name || '', picture: p.picture || '' };
   } catch (e) { return null; }
 }
+
+/* ---------- Google Sign-In (cross-browser redirect flow) ----------
+   The button/One-Tap flow (google.accounts.id) relies on third-party cookies /
+   FedCM, so it only works reliably in Chrome. This full-page OAuth redirect uses
+   a normal top-level navigation to accounts.google.com and back, so it works in
+   Safari, Firefox, Brave, Edge and mobile in-app browsers too. Requires the
+   client SECRET (to exchange the code) — falls back to the button flow if unset. */
+const GOOGLE_REDIRECT_ENABLED = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+// Build the callback URL from the request's OWN origin so it matches whichever
+// domain the user is on (each must be registered in the Google Console).
+function oauthRedirectUri(req) { return req.protocol + '://' + req.get('host') + '/api/auth/google/callback'; }
 
 /* ---------- email OTP (free fallback for customers without a Google account) ----------
    We generate a 6-digit code, email it, and store only its HMAC hash + expiry in
@@ -392,12 +404,17 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
 
 // public front-end config (the Google client id is public by design)
-app.get('/api/config', (req, res) => { res.json({ googleClientId: GOOGLE_CLIENT_ID, emailLogin: !!mailer }); });
+app.get('/api/config', (req, res) => { res.json({ googleClientId: GOOGLE_CLIENT_ID, googleRedirect: GOOGLE_REDIRECT_ENABLED, emailLogin: !!mailer }); });
 
-// soft session check (no 401) — lets the client reconcile a stale local login
-app.get('/api/session/me', (req, res) => {
+// soft session check (no 401) — lets the client reconcile a stale local login.
+// Also returns the user profile so the client can restore its header/drawer after
+// the Google redirect (where it never saw a login response body).
+app.get('/api/session/me', async (req, res) => {
   const p = verifySession(parseCookies(req)[SESSION_COOKIE]);
-  res.json({ loggedIn: !!(p && p.mobile), mobile: (p && p.mobile) || null });
+  if (!p || !p.mobile) return res.json({ loggedIn: false, mobile: null, user: null });
+  let user = null;
+  if (dbReady) { try { user = await User.findOne({ mobile: p.mobile }); } catch (e) {} }
+  res.json({ loggedIn: true, mobile: p.mobile, user: user || null });
 });
 
 /* Email OTP: request a code -> verify it -> (first time) bind a phone number. */
@@ -517,6 +534,131 @@ app.post('/api/auth/google/bind', async (req, res) => {
     });
     issueSession(res, mobile);
     res.json({ user });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ===== Google Sign-In: cross-browser OAuth redirect flow =====
+   /start    -> redirect the browser to Google's consent screen
+   /callback -> Google sends the user back here with a code; we exchange it for an
+                ID token, verify it, then log in (existing user) or stash a short
+                signed ticket + send the user to the phone-binding step (new user).
+   /bind-session -> finish a first-time sign-in using that ticket (no credential). */
+const OAUTH_STATE_COOKIE = 'dcal_oauth_state';
+const GBIND_COOKIE = 'dcal_gbind';
+function tmpCookie(res, name, val, ms) {
+  res.cookie(name, val, { httpOnly: true, sameSite: 'lax', secure: !!process.env.COOKIE_SECURE, maxAge: ms, path: '/' });
+}
+
+app.get('/api/auth/google/start', (req, res) => {
+  if (!GOOGLE_REDIRECT_ENABLED) return res.status(503).send('Google sign-in is not configured.');
+  // signed, short-lived state (double-submitted via cookie) to stop CSRF on the callback
+  const state = signSession({ purpose: 'oauth_state', n: crypto.randomBytes(8).toString('hex'), iat: Date.now(), exp: Date.now() + 10 * 60 * 1000 });
+  tmpCookie(res, OAUTH_STATE_COOKIE, state, 10 * 60 * 1000);
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: oauthRedirectUri(req),
+    response_type: 'code',
+    scope: 'openid email profile',
+    state: state,
+    access_type: 'online',
+    prompt: 'select_account'
+  });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params.toString());
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  if (!GOOGLE_REDIRECT_ENABLED) return res.status(503).send('Google sign-in is not configured.');
+  const fail = (why) => res.redirect('/?login=google_error&reason=' + encodeURIComponent(why || 'failed'));
+  try {
+    const { code, state, error } = req.query || {};
+    if (error) return fail(String(error));
+    const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+    if (!code || !state || !cookieState || String(state) !== String(cookieState) || !verifySession(String(state))) return fail('bad_state');
+    if (!dbReady) return fail('db');
+
+    // exchange the authorization code for tokens (this is why the SECRET is needed)
+    const form = new URLSearchParams({
+      code: String(code), client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: oauthRedirectUri(req), grant_type: 'authorization_code'
+    });
+    const tr = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString()
+    });
+    if (!tr.ok) return fail('token_exchange');
+    const tok = await tr.json();
+    const info = await verifyGoogleCredential(tok.id_token);   // reuse the same server-side verification
+    if (!info) return fail('verify');
+
+    // returning Google user -> log in
+    const user = await User.findOne({ googleId: info.sub });
+    if (user) {
+      user.logins = (user.logins || 0) + 1;
+      user.lastLogin = Date.now();
+      if (info.name && !user.name) user.name = info.name;
+      if (info.picture) user.avatar = info.picture;
+      if (info.email && !user.email) user.email = info.email;
+      await user.save();
+      issueSession(res, user.mobile);
+      return res.redirect('/?login=success');
+    }
+    // same verified email already on an account (e.g. email-OTP user) -> link + log in
+    if (info.email) {
+      const byEmail = await User.findOne({ email: info.email });
+      if (byEmail) {
+        byEmail.googleId = info.sub;
+        if (!byEmail.name && info.name) byEmail.name = info.name;
+        if (info.picture) byEmail.avatar = info.picture;
+        byEmail.logins = (byEmail.logins || 0) + 1;
+        byEmail.lastLogin = Date.now();
+        await byEmail.save();
+        issueSession(res, byEmail.mobile);
+        return res.redirect('/?login=success');
+      }
+    }
+    // first-time user: sign a short ticket carrying the verified profile, then send
+    // them to the phone-binding step (we key orders + delivery by mobile).
+    const ticket = signSession({ purpose: 'google', sub: info.sub, email: info.email, name: info.name, picture: info.picture, iat: Date.now(), exp: Date.now() + 15 * 60 * 1000 });
+    tmpCookie(res, GBIND_COOKIE, ticket, 15 * 60 * 1000);
+    return res.redirect('/?login=google_phone');
+  } catch (e) { return fail('exception'); }
+});
+
+// finish a first-time redirect sign-in by binding a phone number (uses the ticket
+// cookie set by /callback — no Google credential is re-sent from the browser).
+app.post('/api/auth/google/bind-session', async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const info = verifySession(parseCookies(req)[GBIND_COOKIE]);
+    if (!info || info.purpose !== 'google' || !info.sub) return res.status(401).json({ error: 'Verification expired. Please sign in again.' });
+    const linked = await User.findOne({ googleId: info.sub });
+    if (linked) { res.clearCookie(GBIND_COOKIE, { path: '/' }); issueSession(res, linked.mobile); return res.json({ user: linked }); }
+
+    const mobile = String((req.body || {}).mobile || '').replace(/[^0-9]/g, '').slice(0, 10);
+    if (mobile.length !== 10 || !/^[6-9]/.test(mobile)) return res.status(400).json({ error: 'A valid 10-digit mobile number is required.' });
+    const taken = await User.findOne({ mobile });
+    if (taken) {
+      // same Google-verified email on that number => same person: link + log in
+      if (taken.email && taken.email.toLowerCase() === String(info.email || '').toLowerCase()) {
+        taken.googleId = info.sub;
+        if (!taken.name && info.name) taken.name = info.name;
+        if (info.picture) taken.avatar = info.picture;
+        taken.logins = (taken.logins || 0) + 1;
+        taken.lastLogin = Date.now();
+        await taken.save();
+        res.clearCookie(GBIND_COOKIE, { path: '/' });
+        issueSession(res, taken.mobile);
+        return res.json({ user: taken });
+      }
+      return res.status(409).json({ error: 'This number is registered to a different account. Please use the email or number it was created with.' });
+    }
+    const created = await User.create({
+      mobile, googleId: info.sub, email: info.email, name: info.name,
+      avatar: info.picture, provider: 'google', logins: 1, lastLogin: Date.now()
+    });
+    res.clearCookie(GBIND_COOKIE, { path: '/' });
+    issueSession(res, mobile);
+    res.json({ user: created });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
