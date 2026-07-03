@@ -413,7 +413,8 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     if (MAGIC_CHECKOUT) {
       const base = baseUrlFrom(req);
       orderOpts.line_items_total = Math.round(q.total * 100);
-      orderOpts.shipping_fee = 0;
+      // NOTE: shipping_fee intentionally NOT set — let Razorpay's Dashboard control
+      // shipping + COD serviceability rules (so COD shows per your dashboard config).
       orderOpts.line_items = (q.lines || []).map((l) => {
         const p = CATALOG[l.slug] || {};
         return {
@@ -1090,7 +1091,8 @@ app.post('/api/orders', authCustomer, async (req, res) => {
       // from Razorpay. A captured NON-cod payment = paid; a cod payment = COD/unpaid.
       try {
         const ro = await razorpay.orders.fetch(String(o.razorpayOrderId));
-        if (ro && String((ro.notes || {}).mobile || '') === mobile && ro.amount === Math.round(q.total * 100)) {
+        // >= (not ===) so a dashboard-added shipping/COD fee doesn't block reconciliation
+        if (ro && String((ro.notes || {}).mobile || '') === mobile && ro.amount >= Math.round(q.total * 100)) {
           const pays = await razorpay.orders.fetchPayments(String(o.razorpayOrderId));
           const list = (pays && pays.items) || [];
           const captured = list.find((p) => p.status === 'captured' && p.method !== 'cod');
