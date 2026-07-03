@@ -1279,8 +1279,8 @@
     loadPaymentConfig().then(function () {
       if (magicOn()) {
         var onCart = !!document.getElementById('dcal-cart-root');
-        // Magic Checkout collects address + payment (incl. COD) in its own modal
-        openMagic(onCart ? cartGet() : [pageProduct()], onCart);
+        // show the Pay Online / Cash on Delivery chooser
+        openBuyOptions(onCart ? cartGet() : [pageProduct()], onCart);
       } else {
         doAddToCart();
       }
@@ -1343,7 +1343,7 @@
     root.querySelectorAll('[data-rm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-rm')); if (k < 0) return; c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); toast('Removed from cart'); }; });
     root.querySelector('.dcal-cart-checkout').addEventListener('click', function () {
       // decide the flow AFTER login (config is loaded by then) — not at render time
-      window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openMagic(cartGet(), true) : startCheckout(); }); });
+      window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
     });
     wireCoupon(root, renderCartPage);
   }
@@ -1942,10 +1942,132 @@
     });
   }
 
-  /* ---------- Razorpay Magic Checkout (one-click) ----------
-     Buy Now / cart checkout open this directly. Razorpay's modal collects the
-     address AND the payment method (UPI/Card/Netbanking/COD) itself. The SERVER
-     prices the order from the catalog, so the amount can't be tampered with. */
+  /* ---------- Buy-flow chooser: Pay Online (Razorpay) vs Cash on Delivery ----------
+     Pay Online hands off to Razorpay (Magic). COD is MANUAL — it collects the
+     delivery address here and places an unpaid order (no Razorpay). */
+  var buyOverlay;
+  function ensureBuyOverlay() {
+    if (buyOverlay) return;
+    if (!document.getElementById('dcal-buy-style')) {
+      var st = document.createElement('style'); st.id = 'dcal-buy-style';
+      st.textContent =
+        '#dcal-buy-overlay .dcal-modal{position:relative}' +
+        '.dcal-buy-x{position:absolute;top:14px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:none;background:#F1F5F9;border-radius:50%;color:#334155;cursor:pointer;z-index:2}' +
+        '.dcal-buy-x:hover{background:#E2E8F0}' +
+        '.dcal-pay-card{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;padding:14px 16px;margin:0 0 12px;border:1.5px solid #E2E8F0;border-radius:14px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}' +
+        '.dcal-pay-card:hover{border-color:#90E0EF}' +
+        '.dcal-pay-card.sel{border-color:#0077B6;background:#F0FBFF;box-shadow:0 0 0 3px rgba(0,119,182,.12)}' +
+        '.dcal-pay-radio2{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:2px solid #CBD5E1;margin-top:2px;position:relative}' +
+        '.dcal-pay-card.sel .dcal-pay-radio2{border-color:#0077B6}' +
+        '.dcal-pay-card.sel .dcal-pay-radio2::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#0077B6}' +
+        '.dcal-pay-title{font-weight:700;font-size:15px;color:#0B1220;display:flex;align-items:center;gap:7px}' +
+        '.dcal-pay-sub{font-size:12.5px;color:#64748B;margin-top:2px;display:block}' +
+        '.dcal-pay-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}' +
+        '.dcal-pay-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:1px solid #E2E8F0;border-radius:6px;background:#fff;font-size:11px;font-weight:700;color:#334155;line-height:1}';
+      document.head.appendChild(st);
+    }
+    buyOverlay = el('<div class="dcal-overlay" id="dcal-buy-overlay" role="dialog" aria-modal="true" aria-label="Checkout">' +
+      '<div class="dcal-modal"><button class="dcal-buy-x" data-buy-close aria-label="Close">' + ICON_X + '</button>' +
+      '<div class="dcal-body" data-buy-body></div></div></div>');
+    document.body.appendChild(buyOverlay);
+    buyOverlay.addEventListener('click', function (e) { if (e.target === buyOverlay || e.target.closest('[data-buy-close]')) closeBuyOverlay(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && buyOverlay.classList.contains('open')) closeBuyOverlay(); });
+  }
+  function closeBuyOverlay() { if (buyOverlay) { buyOverlay.classList.remove('open'); document.documentElement.classList.remove('dcal-lock'); } }
+  function buyBody() { return buyOverlay.querySelector('[data-buy-body]'); }
+
+  var ICO_CARD = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>';
+  var ICO_CASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>';
+  var BR_PHONEPE = '<svg width="16" height="16" viewBox="0 0 20 20" role="img" aria-label="PhonePe"><rect width="20" height="20" rx="5" fill="#5F259F"/><text x="10" y="15" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="700" fill="#fff">पे</text></svg>';
+  var BR_GPAY = '<svg width="16" height="16" viewBox="0 0 48 48" role="img" aria-label="Google Pay"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+  var BR_PAYTM = '<svg width="40" height="14" viewBox="0 0 56 16" role="img" aria-label="Paytm"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800"><tspan fill="#002970">Pay</tspan><tspan fill="#00BAF2">tm</tspan></text></svg>';
+  var BR_UPI = '<svg width="30" height="14" viewBox="0 0 40 16" role="img" aria-label="UPI"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800" fill="#111827">UPI</text></svg>';
+  var BR_RUPAY = '<svg width="40" height="14" viewBox="0 0 56 16" role="img" aria-label="RuPay"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="800" fill="#111827">RuPay</text></svg>';
+  var BR_VISA = '<svg width="32" height="12" viewBox="0 0 48 16" role="img" aria-label="Visa"><text x="0" y="13" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="800" font-style="italic" fill="#1A1F71">VISA</text></svg>';
+  var BR_MC = '<svg width="26" height="16" viewBox="0 0 26 16" role="img" aria-label="Mastercard"><circle cx="10" cy="8" r="7" fill="#EB001B"/><circle cx="16" cy="8" r="7" fill="#F79E1B"/><path d="M13 2.6a7 7 0 0 0 0 10.8 7 7 0 0 0 0-10.8z" fill="#FF5F00"/></svg>';
+
+  function openBuyOptions(items, fromCart) {
+    if (!items || !items.length) { toast('Your cart is empty.'); return; }
+    ensureBuyOverlay();
+    var subtotal = items.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
+    buyBody().innerHTML =
+      '<h3 class="dcal-h">How would you like to pay?</h3>' +
+      '<p class="dcal-sub" style="margin-bottom:16px">Order total: <b>' + money(subtotal) + '</b></p>' +
+      '<div data-pay-opts>' +
+        '<div class="dcal-pay-card sel" data-opt="prepaid" role="button" tabindex="0" aria-pressed="true">' +
+          '<span class="dcal-pay-radio2"></span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span class="dcal-pay-title">' + ICO_CARD + 'Pay Online</span>' +
+            '<span class="dcal-pay-sub">Instant &amp; secure — pay now</span>' +
+            '<span class="dcal-pay-chips">' +
+              '<span class="dcal-pay-chip">' + BR_PHONEPE + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_GPAY + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_PAYTM + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_UPI + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_RUPAY + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_VISA + '</span>' +
+              '<span class="dcal-pay-chip">' + BR_MC + '</span>' +
+            '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="dcal-pay-card" data-opt="cod" role="button" tabindex="0" aria-pressed="false">' +
+          '<span class="dcal-pay-radio2"></span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span class="dcal-pay-title">' + ICO_CASH + 'Cash on Delivery</span>' +
+            '<span class="dcal-pay-sub">Pay in cash when your order arrives</span>' +
+          '</span>' +
+        '</div>' +
+      '</div>' +
+      '<button class="dcal-btn" data-buy-continue style="margin-top:4px">Continue</button>';
+    var opts = [].slice.call(buyBody().querySelectorAll('[data-opt]'));
+    var selected = 'prepaid';
+    function select(v) {
+      selected = v;
+      opts.forEach(function (o) { var on = o.getAttribute('data-opt') === v; o.classList.toggle('sel', on); o.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    }
+    opts.forEach(function (o) {
+      o.addEventListener('click', function () { select(o.getAttribute('data-opt')); });
+      o.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(o.getAttribute('data-opt')); } });
+    });
+    buyBody().querySelector('[data-buy-continue]').addEventListener('click', function () {
+      if (selected === 'cod') renderCodForm(items, fromCart);
+      else { closeBuyOverlay(); openMagic(items, fromCart); }   // Pay Online -> Razorpay
+    });
+    buyOverlay.classList.add('open');
+    document.documentElement.classList.add('dcal-lock');
+  }
+
+  // Cash on Delivery: collect the delivery address here, then place an unpaid order.
+  function renderCodForm(items, fromCart) {
+    var u = currentUser() || {};
+    buyBody().innerHTML =
+      '<button type="button" class="dcal-link" data-cod-back style="background:none;border:none;color:#0077B6;cursor:pointer;font-size:14px;margin-bottom:8px">&larr; Back</button>' +
+      '<h3 class="dcal-h">Delivery address</h3>' +
+      '<p class="dcal-sub">Where should we deliver your Cash on Delivery order?</p>' +
+      addressFormHTML({ name: u.name || '', phone: u.mobile || '' }, 'magiccod') +
+      '<button class="dcal-btn" data-cod-place>Place COD Order</button>';
+    wireAddressForm('magiccod');
+    buyBody().querySelector('[data-cod-back]').addEventListener('click', function () { openBuyOptions(items, fromCart); });
+    buyBody().querySelector('[data-cod-place]').addEventListener('click', function () {
+      var addr = readAddressForm('magiccod');
+      var err = addr ? validateAddress(addr) : 'Please fill in the address.';
+      var errBox = buyBody().querySelector('[data-addr-err]');
+      if (err) { if (errBox) { errBox.textContent = err; errBox.classList.add('show'); } return; }
+      var btn = buyBody().querySelector('[data-cod-place]'); if (btn) { btn.disabled = true; btn.textContent = 'Placing order…'; }
+      // manual COD -> unpaid order (no Razorpay); server re-prices from the catalog
+      placeMagicOrder(items, { paid: false }, addr, fromCart)
+        .then(function () { closeBuyOverlay(); })
+        .catch(function (e) {
+          if (errBox) { errBox.textContent = (e && e.message) || 'Could not place the order. Please check your details and try again.'; errBox.classList.add('show'); }
+          if (btn) { btn.disabled = false; btn.textContent = 'Place COD Order'; }
+        });
+    });
+  }
+
+  /* ---------- Razorpay Magic Checkout (one-click, PREPAID — "Pay Online") ----------
+     Opens Razorpay's modal (address + online payment). COD is handled manually above,
+     so disable Razorpay's own COD in the dashboard. The SERVER prices the order from
+     the catalog, so the amount can't be tampered with. */
   function openMagic(items, fromCart) {
     if (!items || !items.length) { toast('Your cart is empty.'); return; }
     loadPaymentConfig()
