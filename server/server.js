@@ -87,6 +87,10 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';     // e.g. https://y
 // inside Razorpay's modal. Turn ON only AFTER enabling Magic Checkout in the Razorpay
 // Dashboard; until then the site keeps using the existing multi-step checkout.
 const MAGIC_CHECKOUT = /^(1|true|on|yes)$/i.test(String(process.env.MAGIC_CHECKOUT || ''));
+// COD in Magic Checkout is controlled from the Razorpay Dashboard
+// (Magic Checkout -> COD settings), NOT from code — Razorpay's Orders API has no
+// per-order COD switch, and the shipping-info API route that could toggle it also
+// forces a "Delivery Options" step into the modal, which we don't want.
 
 /* ---------- customer sessions (signed httpOnly cookie) ----------
    A logged-in customer carries a signed token in an httpOnly cookie. Every
@@ -413,8 +417,7 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     if (MAGIC_CHECKOUT) {
       const base = baseUrlFrom(req);
       orderOpts.line_items_total = Math.round(q.total * 100);
-      // NOTE: shipping_fee intentionally NOT set — let Razorpay's Dashboard control
-      // shipping + COD serviceability rules (so COD shows per your dashboard config).
+      orderOpts.shipping_fee = 0;   // free shipping (Pay Online path only; COD is manual)
       orderOpts.line_items = (q.lines || []).map((l) => {
         const p = CATALOG[l.slug] || {};
         return {
