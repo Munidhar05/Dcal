@@ -90,6 +90,27 @@ h3{font-size:1.18rem;font-family:var(--sans);font-weight:700}
 .btn-light:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
 .btn.sm{padding:12px 22px;font-size:.92rem}
 .btn.lg{padding:18px 38px;font-size:1.1rem}
+/* real icons inside buttons / pills */
+.btn svg,.wa-float svg{width:1.15em;height:1.15em;flex-shrink:0;display:block}
+.btn.lg svg{width:1.25em;height:1.25em}
+/* WhatsApp (green) call-to-action */
+.btn-whatsapp{background:#25D366;color:#fff;box-shadow:0 14px 30px rgba(37,211,102,.4)}
+.btn-whatsapp:hover{transform:translateY(-3px);box-shadow:0 20px 44px rgba(37,211,102,.55)}
+/* Grouped Call / WhatsApp button rows */
+.final-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.apply-call{margin-top:26px;padding-top:22px;border-top:1px solid var(--line)}
+.apply-call-label{font-weight:700;margin-bottom:14px;color:var(--navy-700)}
+.apply-call-btns{display:flex;gap:12px;flex-wrap:wrap}
+/* Always-on floating WhatsApp button (bottom-left) */
+.wa-float{
+  position:fixed;bottom:26px;left:26px;z-index:90;
+  display:inline-flex;align-items:center;gap:10px;
+  background:#25D366;color:#fff;font-weight:800;font-size:.98rem;
+  padding:16px 24px;border-radius:50px;
+  box-shadow:0 16px 38px rgba(37,211,102,.5);
+  transition:transform .35s var(--ease),box-shadow .35s var(--ease);
+}
+.wa-float:hover{transform:translateY(-4px) scale(1.04);box-shadow:0 22px 50px rgba(37,211,102,.7)}
 .full-btn{width:100%;justify-content:center;margin-top:8px}
 
 /* ---------- Navbar ---------- */
@@ -223,6 +244,11 @@ h3{font-size:1.18rem;font-family:var(--sans);font-weight:700}
 .why-ic{font-size:2rem;width:60px;height:60px;border-radius:18px;display:grid;place-items:center;background:var(--grad-aqua);margin-bottom:16px;box-shadow:0 10px 22px rgba(26,140,199,.3)}
 .why-card h3{margin-bottom:8px;color:var(--navy-900)}
 .why-card p{color:var(--muted);font-size:.96rem}
+/* real stroke icons inside the Problem & Why cards */
+.pc-icon svg,.why-ic svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pc-icon{color:var(--blue)}
+.solution-card .pc-icon{color:#fff}
+.why-ic{color:#fff}
 
 /* ---------- COMPARE (D'Cal vs Ordinary) ---------- */
 .compare{background:var(--bg-soft)}
@@ -462,11 +488,14 @@ h3{font-size:1.18rem;font-family:var(--sans);font-weight:700}
   .fc-1,.fc-3{left:0}
   .fc-2{right:0}
 
-  /* floating CTA → bottom center on mobile */
-  .floating-cta{left:50%;right:auto;transform:translateX(-50%);bottom:18px;font-size:.9rem;padding:14px 22px;max-width:calc(100vw - 24px)}
+  /* On mobile, stack both floating buttons at bottom-center so they don't
+     overlap: WhatsApp on top, "Become a Dealer" below. */
+  .wa-float{left:50%;right:auto;transform:translateX(-50%);bottom:76px;font-size:.9rem;padding:13px 22px;max-width:calc(100vw - 24px)}
+  .wa-float:hover{transform:translateX(-50%) translateY(-3px) scale(1.03)}
+  .floating-cta{left:50%;right:auto;bottom:18px;font-size:.9rem;padding:13px 22px;max-width:calc(100vw - 24px)}
   .floating-cta:hover{transform:translateX(-50%) translateY(-3px) scale(1.03)}
-  /* keep the sticky CTA from covering the footer copyright */
-  .footer-bottom{padding:18px 0 88px}
+  /* keep both sticky CTAs from covering the footer copyright */
+  .footer-bottom{padding:18px 0 150px}
 
   /* buttons: fit small screens and never clip their label */
   .btn{max-width:100%}
