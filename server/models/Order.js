@@ -14,13 +14,19 @@ const OrderSchema = new mongoose.Schema({
   coupon: { type: String, default: '' },           // coupon code applied (e.g. DCAL200)
   discount: { type: Number, default: 0 },          // discount amount in rupees
   paid: { type: Boolean, default: false },         // true once Razorpay payment is verified
-  paymentId: { type: String, default: '' },        // Razorpay payment id (e.g. pay_XXXX)
-  razorpayOrderId: { type: String, default: '', index: true }, // Razorpay order id (order_XXXX) — for dedup/reconciliation
+  paymentId: { type: String, default: '' },        // Razorpay payment id (pay_XXXX)
+  razorpayOrderId: { type: String, default: '' },  // Razorpay order id (order_XXXX)
   status: { type: String, default: 'Confirmed' },
   cancelReason: { type: String, default: '' },
   cancelledAt: { type: Number, default: null },
   refundStatus: { type: String, default: '' },
   date: { type: Number, default: () => Date.now() }
 });
+
+// One Razorpay payment / order backs exactly ONE stored order — enforced by the DB
+// (partial so the many orders with empty '' ids are exempt). A concurrent double
+// submit now hits a duplicate-key error instead of creating a second paid order.
+OrderSchema.index({ paymentId: 1 }, { unique: true, partialFilterExpression: { paymentId: { $gt: '' } } });
+OrderSchema.index({ razorpayOrderId: 1 }, { unique: true, partialFilterExpression: { razorpayOrderId: { $gt: '' } } });
 
 module.exports = mongoose.model('Order', OrderSchema);

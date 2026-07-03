@@ -20,7 +20,7 @@ const Lead = require('./models/Lead');
 const Dealer = require('./models/Dealer');
 
 const app = express();
-app.set('trust proxy', true);   // so req.protocol is https behind Render's proxy
+app.set('trust proxy', 1);   // Render is a SINGLE proxy: req.protocol=https AND req.ip is the real client (not a spoofable X-Forwarded-For left value)
 // CORS: allow same-origin/no-origin (the storefront, curl, server-to-server) and an
 // explicit allowlist of our own domains — not every website on the internet.
 const CORS_ALLOW = [process.env.PUBLIC_BASE_URL, 'http://localhost:' + (process.env.PORT || 3000), 'http://127.0.0.1:' + (process.env.PORT || 3000)]
@@ -393,7 +393,9 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     // Bind this payment to the VERIFIED session identity (not the client-sent mobile),
     // so a payment can only ever be claimed by the customer who actually made it.
     const payerMobile = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || String(mobile || '');
-    const q = await quoteOrder(items, coupon, mobile);
+    // price with the SAME (verified) identity that /api/orders re-quotes with, so a
+    // once-per-user coupon can't make the two disagree and save a paid order as unpaid.
+    const q = await quoteOrder(items, coupon, payerMobile);
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
     if (!q.total || q.total <= 0) return res.status(400).json({ error: 'empty or invalid cart' });
     const orderOpts = {
@@ -435,7 +437,7 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
 
 // 2) verify the payment signature, then mark this order_id as paid-for so the
 //    order-save step can trust it. Returns the server total for display.
-app.post('/api/payment/verify', (req, res) => {
+app.post('/api/payment/verify', async (req, res) => {
   if (!RZP_KEY_SECRET) return res.status(503).json({ error: 'Razorpay not configured' });
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) return res.status(400).json({ error: 'missing fields' });
@@ -443,9 +445,17 @@ app.post('/api/payment/verify', (req, res) => {
     .update(razorpay_order_id + '|' + razorpay_payment_id).digest('hex');
   const valid = expected === razorpay_signature;
   if (!valid) return res.json({ valid: false });
+  // Magic Checkout COD returns a valid signature + payment id too, but the payment
+  // METHOD is 'cod' and no money is captured — so a COD order must NOT be "paid".
+  let cod = false, methodKnown = true;
+  try { if (razorpay) { const pay = await razorpay.payments.fetch(razorpay_payment_id); cod = !!(pay && pay.method === 'cod'); } else { methodKnown = false; } }
+  catch (e) { methodKnown = false; }   // couldn't read the method -> don't guess "paid"
   const pending = pendingPayments.get(razorpay_order_id);
-  if (pending) { pending.verified = true; pending.paymentId = razorpay_payment_id; }
-  res.json({ valid: true, total: pending ? pending.total : null });
+  // Only trust the pending as verified when we KNOW the method. If the fetch failed,
+  // leave it unverified so /api/orders reconciles paid/COD from Razorpay's real
+  // capture status instead of defaulting a COD payment to paid.
+  if (pending && methodKnown) { pending.verified = true; pending.paymentId = razorpay_payment_id; pending.cod = cod; }
+  res.json({ valid: true, cod: cod, methodKnown: methodKnown, total: pending ? pending.total : null });
 });
 
 // 3) Magic Checkout: after payment/COD, fetch the address the customer entered in
@@ -502,6 +512,10 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
     const full = await razorpay.orders.fetch(roid);
     const mobile = String(((full && full.notes) || {}).mobile || '');
     if (!mobile) return;
+    // order.paid fires for COD too (a method:'cod' payment, no cash captured) — that
+    // must NOT be recorded as paid. Read the payment method to classify it.
+    let isCod = false;
+    try { if (paymentId) { const pay = await razorpay.payments.fetch(paymentId); isCod = !!(pay && pay.method === 'cod'); } } catch (e) { isCod = true; }   // unknown -> safer to treat as unpaid COD
     const items = ((full && full.line_items) || []).map((li) => ({ slug: li.sku, id: li.sku, title: li.name, qty: li.quantity || 1, price: (li.offer_price || li.price || 0) / 100 }));
     const q = await quoteOrder(items, '', mobile);                      // re-price from the catalog
     const total = q.ok ? q.total : (full.amount || 0) / 100;
@@ -514,8 +528,8 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
       orderId: String(Date.now()).slice(-8), mobile, customerName: address.name || '',
       title: items.length ? (items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : '')) : 'Order',
       total: money(total), totalNum: total, image: '', items, address,
-      payment: 'Prepaid (Razorpay)', coupon: '', discount: 0,
-      paid: true, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now()
+      payment: isCod ? 'Cash on Delivery' : 'Prepaid (Razorpay)', coupon: '', discount: 0,
+      paid: !isCod, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now()
     });
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});
     console.log('razorpay webhook: recovered order', order.orderId, 'for', roid);
@@ -524,7 +538,7 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
 
 /* ---------- auth (phone-only, no password) ---------- */
 // returns { isNew:true } if the phone isn't registered yet, else logs the login and returns the user
-app.post('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 40, tag: 'login' }), async (req, res) => {
+app.post('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 120, tag: 'login' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     const { mobile, resume } = req.body || {};
@@ -562,7 +576,7 @@ app.get('/api/session/me', async (req, res) => {
 });
 
 /* Email OTP: request a code -> verify it -> (first time) bind a phone number. */
-app.post('/api/auth/email/request', rateLimit({ windowMs: 10 * 60 * 1000, max: 6, tag: 'emailotp' }), async (req, res) => {
+app.post('/api/auth/email/request', rateLimit({ windowMs: 10 * 60 * 1000, max: 30, tag: 'emailotp' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     sweepOtps();
@@ -807,7 +821,7 @@ app.post('/api/auth/google/bind-session', async (req, res) => {
 });
 
 // create a new account (or log in if it already exists)
-app.post('/api/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 40, tag: 'register' }), async (req, res) => {
+app.post('/api/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 120, tag: 'register' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     const { mobile, name, email, avatar, provider } = req.body || {};
@@ -968,7 +982,8 @@ app.put('/api/users/:mobile/addresses', authCustomer, async (req, res) => {
    a coupon as "already used" if the customer has a prior, non-cancelled order
    that carries that code. */
 const COUPONS = {
-  DCAL200: { type: 'flat', value: 200, min: 2000, oncePerUser: true, desc: '₹200 off orders over ₹2,000' }
+  // No app-level coupons. (DCAL200 removed — any Magic Checkout offers live in the
+  // Razorpay Dashboard.) An empty map = every code is rejected, discount is always 0.
 };
 function couponDiscount(c, subtotal) {
   if (!c) return 0;
@@ -1019,7 +1034,7 @@ async function quoteOrder(items, couponCode, mobile) {
 const pendingPayments = new Map();
 
 // validate a coupon for a given user+cart BEFORE they pay (the authoritative check)
-app.post('/api/coupon/validate', async (req, res) => {
+app.post('/api/coupon/validate', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, tag: 'coupon' }), async (req, res) => {
   try {
     const body = req.body || {};
     const code = String(body.code || '').trim().toUpperCase();
@@ -1055,11 +1070,11 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     // PAYMENT TRUST: only mark an order "paid" when a Razorpay payment was
     // verified for this exact amount. Otherwise paid stays false (e.g. COD), and
     // a client claiming paid:true with no real payment is ignored.
-    let paid = false, paymentId = '';
+    let paid = false, paymentId = '', payLabel = '';
     const pending = o.razorpayOrderId ? pendingPayments.get(String(o.razorpayOrderId)) : null;
     // Honour "paid" ONLY when a verified Razorpay payment was made BY THIS customer
-    // (pending.mobile === session mobile) for THIS exact amount. This stops one
-    // customer claiming another's payment by reusing their razorpay_order_id.
+    // (pending.mobile === session mobile) for THIS exact amount. A Magic COD payment
+    // is verified too but its method is 'cod' (no money captured) => stays UNPAID.
     if (pending && pending.verified && pending.mobile && pending.mobile === mobile && pending.amount === Math.round(q.total * 100)) {
       paymentId = pending.paymentId || '';
       // a payment id backs exactly one order — on a re-submit, return the existing order
@@ -1067,37 +1082,47 @@ app.post('/api/orders', authCustomer, async (req, res) => {
         const dupe = await Order.findOne({ paymentId });
         if (dupe) { pendingPayments.delete(String(o.razorpayOrderId)); return res.json({ order: dupe }); }
       }
-      paid = true;
+      if (pending.cod) { paid = false; payLabel = 'Cash on Delivery'; }
+      else { paid = true; payLabel = 'Prepaid (Razorpay)'; }
       pendingPayments.delete(String(o.razorpayOrderId));   // consume — can't be reused
-    } else if (!pending && razorpay && o.razorpayOrderId) {
-      // RESTART RESILIENCE: in-memory pending was lost — reconcile straight from
-      // Razorpay. Only trust it when the order is actually paid, was made by THIS
-      // customer (notes.mobile), and the amount matches the server-priced total.
+    } else if (razorpay && o.razorpayOrderId) {
+      // RESILIENCE: no verified pending (restart / verify failed) — reconcile straight
+      // from Razorpay. A captured NON-cod payment = paid; a cod payment = COD/unpaid.
       try {
         const ro = await razorpay.orders.fetch(String(o.razorpayOrderId));
-        if (ro && ro.status === 'paid' && String((ro.notes || {}).mobile || '') === mobile && ro.amount === Math.round(q.total * 100)) {
+        if (ro && String((ro.notes || {}).mobile || '') === mobile && ro.amount === Math.round(q.total * 100)) {
           const pays = await razorpay.orders.fetchPayments(String(o.razorpayOrderId));
-          const cap = ((pays && pays.items) || []).find((p) => p.status === 'captured');
-          paymentId = cap ? cap.id : '';
-          if (paymentId) {
-            const dupe = await Order.findOne({ paymentId });
-            if (dupe) return res.json({ order: dupe });
-            paid = true;
-          }
+          const list = (pays && pays.items) || [];
+          const captured = list.find((p) => p.status === 'captured' && p.method !== 'cod');
+          const codPay = list.find((p) => p.method === 'cod');
+          if (captured) { paid = true; paymentId = captured.id; payLabel = 'Prepaid (Razorpay)'; }
+          else if (codPay) { paid = false; paymentId = codPay.id; payLabel = 'Cash on Delivery'; }
+          if (paymentId) { const dupe = await Order.findOne({ paymentId }); if (dupe) return res.json({ order: dupe }); }
         }
       } catch (e) { /* reconciliation failed -> stays unpaid, safer than false-paid */ }
     } else if (!razorpay && o.demo === true) {
       paid = !!o.paid;   // demo mode only (no real Razorpay configured): simulated payment
     }
 
-    const order = await Order.create({
-      orderId: o.orderId, mobile, customerName: o.customerName || '',
-      title: o.title || '', total: money(q.total), totalNum: q.total,
-      image: o.image || '', items: o.items || [], address: o.address || {},
-      payment: o.payment || '', coupon: q.code, discount: q.discount,
-      paid, paymentId, razorpayOrderId: String(o.razorpayOrderId || ''),
-      status: 'Confirmed', date: Date.now()
-    });
+    let order;
+    try {
+      order = await Order.create({
+        orderId: o.orderId, mobile, customerName: o.customerName || '',
+        title: o.title || '', total: money(q.total), totalNum: q.total,
+        image: o.image || '', items: o.items || [], address: o.address || {},
+        payment: payLabel || o.payment || '', coupon: q.code, discount: q.discount,
+        paid, paymentId, razorpayOrderId: String(o.razorpayOrderId || ''),
+        status: 'Confirmed', date: Date.now()
+      });
+    } catch (e) {
+      // concurrent double-submit hit the unique paymentId/razorpayOrderId index —
+      // return the order that already exists instead of creating a duplicate.
+      if (e && e.code === 11000) {
+        const existing = await Order.findOne(paymentId ? { paymentId } : { razorpayOrderId: String(o.razorpayOrderId || '') });
+        if (existing) return res.json({ order: existing });
+      }
+      throw e;
+    }
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});   // fire-and-forget order confirmation
     res.json({ order });
   } catch (e) { serverErr(res, e); }
