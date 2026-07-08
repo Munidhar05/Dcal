@@ -95,6 +95,12 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
 .adm-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 @media(max-width:1100px){.adm-kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){
+  /* 5 tabs no longer fit — let them swipe sideways instead of wrapping/clipping */
+  .adm-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .adm-tabs::-webkit-scrollbar{display:none}
+  .adm-tab{flex:0 0 auto;white-space:nowrap}
+}
 @media(max-width:720px){
   .adm-kpis{grid-template-columns:repeat(2,1fr)}
   .adm-det{grid-template-columns:1fr;gap:16px}
@@ -107,14 +113,19 @@ body.adm-body{margin:0;background:var(--adm-bg);color:var(--adm-ink);font-family
   .adm-top-actions .adm-btn{width:100%;justify-content:center;padding:10px 8px;font-size:13px}
   .adm-kpi{padding:14px}
   .adm-kpi-val{font-size:20px}
-  .adm-statusbar{gap:6px}
-  .adm-chip{font-size:11.5px;padding:5px 10px}
+  .adm-statusbar{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+  .adm-statusbar::-webkit-scrollbar{display:none}
+  .adm-chip{font-size:11.5px;padding:5px 10px;white-space:nowrap;flex:0 0 auto}
   .adm-tab{padding:10px 12px;font-size:13px}
   .adm-table{font-size:12.5px}
   .adm-table th,.adm-table td{padding:10px}
-  .adm-tablewrap{-webkit-overflow-scrolling:touch}
+  /* keep tables inside their own scroller so the page body never scrolls sideways */
+  .adm-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .adm-search{font-size:16px}   /* 16px stops iOS from zooming on focus */
   .adm-gate-card{padding:28px 22px}
 }
 @media(max-width:420px){
   .adm-kpis{grid-template-columns:1fr}
+  .adm-wrap{padding:12px}
+  .adm-table th,.adm-table td{padding:9px 8px}
 }
