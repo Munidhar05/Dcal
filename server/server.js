@@ -83,10 +83,10 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const MAIL_FROM = process.env.MAIL_FROM || SMTP_USER;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';     // e.g. https://yourdomain.com (for email images)
-// Razorpay Magic Checkout (one-click): address, coupons, COD and payment all happen
-// inside Razorpay's modal. Turn ON only AFTER enabling Magic Checkout in the Razorpay
-// Dashboard; until then the site keeps using the existing multi-step checkout.
-const MAGIC_CHECKOUT = /^(1|true|on|yes)$/i.test(String(process.env.MAGIC_CHECKOUT || ''));
+// Razorpay Magic Checkout (one-click) is DISABLED. The store uses the standard
+// 3-step checkout (Address -> Order Summary -> Payment) with regular Razorpay.
+// Force-off regardless of the MAGIC_CHECKOUT env so it can't be turned on by mistake.
+const MAGIC_CHECKOUT = false;
 // COD in Magic Checkout is controlled from the Razorpay Dashboard
 // (Magic Checkout -> COD settings), NOT from code — Razorpay's Orders API has no
 // per-order COD switch, and the shipping-info API route that could toggle it also

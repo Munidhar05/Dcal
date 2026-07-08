@@ -91,9 +91,22 @@ h1,h2,h3,.font-display{font-family:'Montserrat','Inter',sans-serif;letter-spacin
 .btn-ghost:hover{transform:translateY(-3px)}
 
 /* HEADER CTA — Become a Business Partner */
-.header__partner-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;margin-right:6px;border-radius:999px;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;font-family:var(--font-heading-family);font-weight:600;font-size:13px;line-height:1;white-space:nowrap;letter-spacing:.01em;box-shadow:0 10px 24px -10px rgba(0,119,182,.55);transition:transform .25s ease,box-shadow .25s ease;text-decoration:none}
+.header__partner-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;margin-right:6px;border-radius:999px;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;font-family:var(--font-heading-family);font-weight:600;font-size:12px;line-height:1;white-space:nowrap;letter-spacing:.01em;box-shadow:0 10px 24px -10px rgba(0,119,182,.55);transition:transform .25s ease,box-shadow .25s ease;text-decoration:none}
 .header__partner-btn:hover{transform:translateY(-2px);box-shadow:0 16px 30px -10px rgba(0,119,182,.65);color:#fff}
 @media(max-width:990px){.header__partner-btn{display:none}}
+/* Keep each nav label on one line so items wrap as whole links, never letter-stacking over the logo */
+.header__inline-menu .header__menu-item{white-space:nowrap}
+/* Keep the whole nav on a single straight line — never let the pills wrap to a 2nd row */
+.header__inline-menu .list-menu--inline{flex-wrap:nowrap;align-items:center;column-gap:.6rem}
+/* Subtly emphasise the vertical-market links (For Campuses / Hospitals / Hotels) */
+/* Market links styled as outlined pills — matches the B2B nav */
+.header__menu-item.nav-solution{display:inline-flex;align-items:center;border:1.5px solid #CDE9F5;border-radius:999px;padding:6px 12px;color:var(--brand-2);font-weight:600;text-decoration:none;transition:border-color .25s ease,color .25s ease,background .25s ease}
+.header__menu-item.nav-solution:hover{border-color:var(--brand);color:var(--brand-2);background:#EEF9FE}
+/* kill Dawn's underline (from the .link class) on the pill buttons, in every state */
+.header__menu-item.nav-solution,
+.header__menu-item.nav-solution:hover,
+.header__menu-item.nav-solution:focus,
+.header__menu-item.nav-solution span{text-decoration:none!important;text-underline-offset:0;box-shadow:none!important}
 
 /* ====== HEADER SEARCH — clean single-bar dropdown (fixes broken Dawn modal) ====== */
 .header__search{position:relative}
@@ -366,9 +379,13 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
   .header--middle-left{
     grid-template-columns:1fr auto 1fr !important;
     column-gap:1rem !important;
+    padding-left:1.5rem !important;
+    padding-right:1.5rem !important;
   }
   .header--middle-left .header__heading,
   .header--middle-left .header__heading-link{justify-self:start !important}
+  /* Nudge the brand lockup hard to the left edge */
+  .header--middle-left .pp-brand-lockup{margin-left:-.5rem}
   .header--middle-left .header__inline-menu{justify-self:center !important}
   .header--middle-left .header__icons{justify-self:end !important}
 }

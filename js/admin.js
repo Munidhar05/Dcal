@@ -152,6 +152,26 @@
     return [];   // dealership applications are a server feature; no localStorage fallback
   }
 
+  /* The three B2B websites (campus / hotel / hospital) submit through the same
+     /api/dealership endpoint as the Become-a-Partner page, so they all land in
+     the Dealer collection. They are told apart by businessType, which the B2B
+     pages tag as "Campus – …", "Hotel – …" or "Hospital – …". */
+  function b2bVertical(businessType) {
+    var m = String(businessType || '').match(/^(Campus|Hotel|Hospital)\b/i);
+    return m ? (m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase()) : '';
+  }
+  // the type after the vertical prefix, e.g. "Campus – School" -> "School"
+  function b2bSubType(businessType) {
+    return String(businessType || '').replace(/^(Campus|Hotel|Hospital)\s*[–-]\s*/i, '').trim();
+  }
+  // dealership applications from the Become-a-Partner page only (excludes B2B sites)
+  function partnerRows() { return dealerRows().filter(function (r) { return !b2bVertical(r.businessType); }); }
+  // enquiries from the three B2B websites, tagged with vertical + sub-type
+  function b2bRows() {
+    return dealerRows().filter(function (r) { return b2bVertical(r.businessType); })
+      .map(function (r) { r.vertical = b2bVertical(r.businessType); r.subType = b2bSubType(r.businessType); return r; });
+  }
+
   function stats() {
     var custs = customerRows();
     var ords = allOrders();
@@ -169,7 +189,7 @@
       customers: custs.length, orders: ords.length, revenue: revenue,
       items: items, logins: logins, activeCarts: activeCarts, byStatus: byStatus,
       aov: paidCount ? revenue / paidCount : 0, demokits: demokitRows().length,
-      dealers: dealerRows().length
+      dealers: partnerRows().length, b2b: b2bRows().length
     };
   }
 
@@ -268,6 +288,7 @@
           '<button class="adm-tab' + (tab === 'customers' ? ' active' : '') + '" data-tab="customers">Customers (' + s.customers + ')</button>' +
           '<button class="adm-tab' + (tab === 'demokits' ? ' active' : '') + '" data-tab="demokits">Demo Kits (' + s.demokits + ')</button>' +
           '<button class="adm-tab' + (tab === 'dealers' ? ' active' : '') + '" data-tab="dealers">Dealers (' + s.dealers + ')</button>' +
+          '<button class="adm-tab' + (tab === 'b2b' ? ' active' : '') + '" data-tab="b2b">B2B Sites (' + s.b2b + ')</button>' +
         '</div>' +
         '<div class="adm-panel" id="adm-panel"></div>' +
       '</div>';
@@ -284,6 +305,7 @@
     if (tab === 'customers') renderCustomers();
     else if (tab === 'demokits') renderDemokits();
     else if (tab === 'dealers') renderDealers();
+    else if (tab === 'b2b') renderB2B();
     else renderOrders();
   }
 
@@ -466,10 +488,10 @@
       }).join('') + '</tbody></table>';
   }
 
-  /* ---------- dealership applications panel ---------- */
+  /* ---------- dealership applications panel (Become-a-Partner page) ---------- */
   function renderDealers() {
     var panel = document.getElementById('adm-panel');
-    var rows = dealerRows();
+    var rows = partnerRows();
     panel.innerHTML =
       '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-dlsearch" placeholder="Search by name, business, mobile, city, type…"></div>' +
       '<div class="adm-tablewrap">' + dealersTable(rows) + '</div>';
@@ -501,6 +523,50 @@
           '<td>' + esc(r.experience || '—') + '</td>' +
           '<td>' + fmtDay(r.appliedAt) + '</td>' +
           actionCell('dealer', r.id) +
+        '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  /* ---------- B2B website enquiries panel (campus / hotel / hospital) ---------- */
+  function renderB2B() {
+    var panel = document.getElementById('adm-panel');
+    var rows = b2bRows();
+    panel.innerHTML =
+      '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-bsearch" placeholder="Search by site, place, name, mobile, city, type…"></div>' +
+      '<div class="adm-tablewrap">' + b2bTable(rows) + '</div>';
+    wireActions();
+    var search = document.getElementById('adm-bsearch');
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      var filtered = !q ? rows : rows.filter(function (r) {
+        return [r.vertical, r.fullName, r.businessName, r.mobile, r.email, r.city, r.state, r.pincode, r.subType, r.businessType].join(' ').toLowerCase().indexOf(q) > -1;
+      });
+      panel.querySelector('.adm-tablewrap').innerHTML = b2bTable(filtered);
+      wireActions();
+    });
+  }
+
+  var B2B_BADGE = { Campus: '#7C3AED', Hotel: '#D97706', Hospital: '#0EA5E9' };
+  function b2bBadge(vertical) {
+    var col = B2B_BADGE[vertical] || '#0077B6';
+    return '<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700;font-size:12px;background:' + col + '1a;color:' + col + '">' + esc(vertical || '—') + '</span>';
+  }
+  function b2bTable(rows) {
+    if (!rows.length) return '<div class="adm-empty">No B2B website enquiries yet.</div>';
+    return '<table class="adm-table"><thead><tr>' +
+      '<th>Site</th><th>Place</th><th>Contact</th><th>Mobile</th><th>City</th><th>State</th><th>PIN</th><th>Type</th><th>Received</th><th></th>' +
+      '</tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr>' +
+          '<td>' + b2bBadge(r.vertical) + '</td>' +
+          '<td><b>' + esc(r.businessName || '—') + '</b></td>' +
+          '<td>' + esc(r.fullName || '—') + (r.email ? '<br><span class="adm-muted">' + esc(r.email) + '</span>' : '') + '</td>' +
+          '<td>+91 ' + esc(r.mobile) + '</td>' +
+          '<td>' + esc(r.city || '—') + '</td>' +
+          '<td>' + esc(r.state || '—') + '</td>' +
+          '<td>' + esc(r.pincode || '—') + '</td>' +
+          '<td>' + esc(r.subType || '—') + (r.currentProducts ? '<br><span class="adm-muted">' + esc(r.currentProducts) + '</span>' : '') + '</td>' +
+          '<td>' + fmtDay(r.appliedAt) + '</td>' +
+          actionCell('b2b', r.id) +
         '</tr>';
       }).join('') + '</tbody></table>';
   }
@@ -575,11 +641,11 @@
   }
   function pathFor(kind, id) {
     return kind === 'lead' ? '/api/admin/leads/' + encodeURIComponent(id)
-      : kind === 'dealer' ? '/api/admin/dealers/' + encodeURIComponent(id)
+      : (kind === 'dealer' || kind === 'b2b') ? '/api/admin/dealers/' + encodeURIComponent(id)
         : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
           : '/api/admin/orders/' + encodeURIComponent(id);
   }
-  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders'; }
+  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'b2b' ? 'b2b' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders'; }
 
   // UNDO an edit: re-apply the captured previous values
   function editUndo(kind, id, before) {
@@ -589,13 +655,13 @@
   // UNDO a delete: re-insert the captured document
   function restoreDeleted(kind, doc) {
     if (!doc) { toast('Nothing to undo'); return; }
-    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
+    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : (kind === 'dealer' || kind === 'b2b') ? 'dealers' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
       .then(function () { reloadAnd(tabFor(kind), 'Restored'); })
       .catch(function (e) { toast('Undo failed: ' + e.message); });
   }
   function snapshotFor(kind, id) {
     if (kind === 'lead') return serverLeads.filter(function (l) { return String(l._id) === String(id); })[0];
-    if (kind === 'dealer') return serverDealers.filter(function (d) { return String(d._id) === String(id); })[0];
+    if (kind === 'dealer' || kind === 'b2b') return serverDealers.filter(function (d) { return String(d._id) === String(id); })[0];
     if (kind === 'customer') return serverCustomers.filter(function (u) { return u.mobile === id; })[0];
     return serverOrders.filter(function (o) { return o.orderId === id; })[0];
   }
@@ -616,10 +682,17 @@
           .then(function () { close(); reloadAndUndo('demokits', 'Lead updated', function () { editUndo('lead', id, before); }); })
           .catch(function (e) { toast('Update failed: ' + e.message); });
       });
-    } else if (kind === 'dealer') {
+    } else if (kind === 'dealer' || kind === 'b2b') {
       var dr = dealerRows().filter(function (x) { return String(x.id) === String(id); })[0];
       if (!dr) return;
-      var df = [
+      var isB2B = kind === 'b2b';
+      var df = isB2B ? [
+        { key: 'businessName', label: 'Place Name' }, { key: 'fullName', label: 'Contact Person' },
+        { key: 'mobile', label: 'Mobile' }, { key: 'email', label: 'Email' },
+        { key: 'pincode', label: 'Pincode' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' },
+        { key: 'businessType', label: 'Site / Type (e.g. Campus – School)' },
+        { key: 'currentProducts', label: 'Size (students / rooms / beds)' }, { key: 'message', label: 'Message' }
+      ] : [
         { key: 'fullName', label: 'Full Name' }, { key: 'businessName', label: 'Business Name' },
         { key: 'mobile', label: 'Mobile' }, { key: 'email', label: 'Email' },
         { key: 'pincode', label: 'Pincode' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' },
@@ -627,9 +700,9 @@
         { key: 'experience', label: 'Experience' }, { key: 'message', label: 'Message' }
       ];
       var dbefore = {}; df.forEach(function (f) { dbefore[f.key] = dr[f.key] == null ? '' : dr[f.key]; });
-      editModal('Edit dealership application', df, dr, function (out, close) {
-        api('PUT', pathFor('dealer', id), out)
-          .then(function () { close(); reloadAndUndo('dealers', 'Dealer updated', function () { editUndo('dealer', id, dbefore); }); })
+      editModal(isB2B ? 'Edit B2B enquiry' : 'Edit dealership application', df, dr, function (out, close) {
+        api('PUT', pathFor(kind, id), out)
+          .then(function () { close(); reloadAndUndo(tabFor(kind), 'Saved', function () { editUndo(kind, id, dbefore); }); })
           .catch(function (e) { toast('Update failed: ' + e.message); });
       });
     } else if (kind === 'customer') {
@@ -676,16 +749,16 @@
   }
 
   function onDelete(kind, id) {
-    var label = kind === 'lead' ? 'demo-kit lead' : kind === 'dealer' ? 'dealership application' : kind;
+    var label = kind === 'lead' ? 'demo-kit lead' : kind === 'dealer' ? 'dealership application' : kind === 'b2b' ? 'B2B enquiry' : kind;
     if (!confirm('Delete this ' + label + '? You can Undo right after.')) return;
     var snap = SERVER ? snapshotFor(kind, id) : null;
     if (kind === 'lead') {
       api('DELETE', pathFor('lead', id))
         .then(function () { serverLeads = serverLeads.filter(function (l) { return String(l._id) !== String(id); }); renderDash('demokits'); undoToast('Lead deleted', function () { restoreDeleted('lead', snap); }); })
         .catch(function (e) { toast('Delete failed: ' + e.message); });
-    } else if (kind === 'dealer') {
-      api('DELETE', pathFor('dealer', id))
-        .then(function () { serverDealers = serverDealers.filter(function (d) { return String(d._id) !== String(id); }); renderDash('dealers'); undoToast('Dealer deleted', function () { restoreDeleted('dealer', snap); }); })
+    } else if (kind === 'dealer' || kind === 'b2b') {
+      api('DELETE', pathFor(kind, id))
+        .then(function () { serverDealers = serverDealers.filter(function (d) { return String(d._id) !== String(id); }); renderDash(tabFor(kind)); undoToast((kind === 'b2b' ? 'Enquiry' : 'Dealer') + ' deleted', function () { restoreDeleted(kind, snap); }); })
         .catch(function (e) { toast('Delete failed: ' + e.message); });
     } else if (kind === 'customer') {
       if (SERVER) {
@@ -731,10 +804,15 @@
       });
       download('dcal-demo-kits.csv', toCSV(['Name', 'Phone', 'Email', 'Age', 'Address', 'Village/Area', 'City/District', 'State', 'Pincode', 'HomeType', 'Source', 'RequestedAt'], drows));
     } else if (tab === 'dealers') {
-      var dlrows = dealerRows().map(function (r) {
+      var dlrows = partnerRows().map(function (r) {
         return [r.fullName, r.businessName, r.mobile, r.email, r.pincode, r.city, r.state, r.businessType, r.currentProducts, r.experience, r.message, fmtDate(r.appliedAt)];
       });
       download('dcal-dealers.csv', toCSV(['Name', 'Business', 'Mobile', 'Email', 'Pincode', 'City', 'State', 'BusinessType', 'CurrentProducts', 'Experience', 'Message', 'AppliedAt'], dlrows));
+    } else if (tab === 'b2b') {
+      var brows = b2bRows().map(function (r) {
+        return [r.vertical, r.businessName, r.fullName, r.mobile, r.email, r.pincode, r.city, r.state, r.subType, r.currentProducts, r.message, fmtDate(r.appliedAt)];
+      });
+      download('dcal-b2b-enquiries.csv', toCSV(['Site', 'Place', 'Contact', 'Mobile', 'Email', 'Pincode', 'City', 'State', 'Type', 'Size', 'Message', 'ReceivedAt'], brows));
     } else {
       var orows = allOrders().map(function (r) {
         var o = r.o, a = o.address || {};

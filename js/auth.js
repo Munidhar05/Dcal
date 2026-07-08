@@ -1833,9 +1833,9 @@
       .catch(function () { razorpayConfig = { enabled: false }; return razorpayConfig; });
   }
   function razorpayOn() { return !!(razorpayConfig && razorpayConfig.enabled); }
-  // Magic Checkout on? -> Buy Now / Checkout open Razorpay's one-click modal directly
-  // (address + coupons + COD all live in Razorpay), bypassing our own checkout steps.
-  function magicOn() { return !!(razorpayConfig && razorpayConfig.magic); }
+  // Magic Checkout is DISABLED. The store always uses the standard 3-step checkout
+  // (Address -> Order Summary -> Payment) with regular Razorpay, so this is always false.
+  function magicOn() { return false; }
 
   var NETBANKS = ['HDFC Bank', 'State Bank of India', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank',
     'Punjab National Bank', 'Bank of Baroda', 'Yes Bank', 'IDFC FIRST Bank', 'Other'];
