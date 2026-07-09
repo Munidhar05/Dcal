@@ -514,3 +514,7 @@ h3{font-size:1.18rem;font-family:var(--sans);font-weight:700}
 
 /* pincode auto-detect note: take no space until it has text */
 .pin-note:empty{display:none!important}
+
+.foot-social{display:flex;gap:12px;margin-top:16px}
+.foot-social a{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.1);display:inline-flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:background .3s,transform .3s}
+.foot-social a:hover{background:linear-gradient(135deg,#00B4D8,#0077B6);transform:translateY(-3px)}

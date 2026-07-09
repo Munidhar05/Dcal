@@ -1237,9 +1237,14 @@
      ==================================================== */
   // read product details from the current product page
   function pageProduct() {
-    // the catalog slug from ?id= is the STABLE identity — the server prices by it,
-    // so a wrong/struck scraped price can't change what's actually charged.
-    var slug = ''; try { slug = (new URLSearchParams(location.search).get('id') || '').trim(); } catch (e) {}
+    // the catalog slug is the STABLE identity — the server prices by it, so a
+    // wrong/struck scraped price can't change what's actually charged. Read it from
+    // the clean path (/product/<slug>) or the legacy ?id= query.
+    var slug = '';
+    try {
+      var m = location.pathname.match(/\/product\/([^\/?#]+)/i);
+      slug = (m && m[1] ? decodeURIComponent(m[1]) : (new URLSearchParams(location.search).get('id') || '')).trim();
+    } catch (e) {}
     var t = document.querySelector('[data-pp-title], #MainContent h1.h-section, #MainContent .product__title')
          || document.querySelector('#MainContent h1');
     // prefer the explicit live/sale-price hook; avoid the generic .price-item which
@@ -1247,22 +1252,29 @@
     var p = document.querySelector('[data-pp-price], [data-pp-atc-price]');
     var img = document.querySelector('[data-pp-main], #MainContent .product__media img, #MainContent .product-media img, #MainContent img');
     var title = t ? t.textContent.trim() : (document.title.split('—')[0].trim() || 'D’Cal product');
+    // honour the quantity stepper (input[name="quantity"] inside [data-pp-qty]); the
+    // server re-prices by slug × qty and caps it at 99, so this only sets how many.
+    var qtyEl = document.querySelector('[data-pp-qty] input[type="number"], #MainContent input[name="quantity"]');
+    var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+    if (isNaN(qty) || qty < 1) qty = 1;
+    if (qty > 99) qty = 99;
     return {
       id: slug || title,
       slug: slug || undefined,
       title: title.slice(0, 80),
       price: p ? p.textContent.trim().replace(/\s+/g, ' ') : '',
       image: img ? (img.getAttribute('src') || '') : '',
-      qty: 1
+      qty: qty
     };
   }
 
   function doAddToCart() {
     var p = pageProduct();
+    var addQty = Math.max(1, Math.min(99, parseInt(p.qty, 10) || 1));
     var cart = cartGet();
     var found = null;
     for (var i = 0; i < cart.length; i++) { if (cart[i].id === p.id) { found = cart[i]; break; } }
-    if (found) found.qty = (found.qty || 1) + 1; else cart.push(p);
+    if (found) found.qty = Math.min(99, (found.qty || 1) + addQty); else { p.qty = addQty; cart.push(p); }
     cartSave(cart);
     updateCartBubbles();
     toast('Added to cart ✓');

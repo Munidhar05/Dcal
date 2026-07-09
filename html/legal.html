@@ -10,13 +10,19 @@
   <link rel="stylesheet" href="../css/premium-custom.css" media="all">
   <style>
     body{margin:0}
-    .ip-head{position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#0077B6,#023E8A);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 6vw;flex-wrap:wrap}
-    .ip-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
-    .ip-brand img{width:40px;height:40px;border-radius:50%;background:#fff;padding:4px;object-fit:contain}
-    .ip-brand span{font-family:'Montserrat',sans-serif;font-weight:800;font-size:22px}
+    .ip-head{position:sticky;top:0;z-index:10;background:#fff;color:#0B1220;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 6vw;flex-wrap:wrap;border-bottom:1px solid #E2E8F0}
+    .ip-brand{display:flex;align-items:center;text-decoration:none;color:#0B1220}
+    /* same brand lockup as the homepage: clean logo + blue-gradient "D'Cal" wordmark */
+    .ip-brand .pp-brand-name{
+      font-family:'Montserrat','Inter',sans-serif;font-weight:800;font-size:30px;
+      letter-spacing:-.02em;line-height:1;white-space:nowrap;
+      background:linear-gradient(135deg,#0077B6 0%,#00B4D8 55%,#48CAE4 100%);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    @media(max-width:489px){ .ip-brand .pp-brand-name{font-size:24px} }
     .ip-nav{display:flex;gap:22px;flex-wrap:wrap}
-    .ip-nav a{color:#fff;text-decoration:none;font-weight:600;font-size:15px;opacity:.92}
-    .ip-nav a:hover{opacity:1;text-decoration:underline}
+    .ip-nav a{color:#0B1220;text-decoration:none;font-weight:600;font-size:15px;opacity:.9}
+    .ip-nav a:hover{opacity:1;color:#0077B6;text-decoration:underline}
     .ip-main{max-width:860px;margin:0 auto;padding:48px 6vw 64px}
     .ip-eyebrow{display:inline-block;background:#E0F2FE;color:#0369A1;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;border-radius:999px;margin-bottom:16px}
     .ip-main h1{font-family:'Montserrat',sans-serif;font-size:clamp(28px,5vw,40px);font-weight:800;color:#0B1220;margin:0 0 10px}
@@ -28,23 +34,16 @@
     .ip-dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:15px}
     .ip-dl dt{font-weight:700;color:#0B1220}
     .ip-dl dd{margin:0;color:#475569}
-    .ip-ft{background:linear-gradient(180deg,#0077B6,#03045E);color:#cfe3f0;padding:44px 6vw 28px;text-align:center}
-    .ip-ft-brand{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:800;color:#fff;margin-bottom:14px}
-    .ip-ft-links{display:flex;gap:8px 20px;flex-wrap:wrap;justify-content:center;margin-bottom:16px}
-    .ip-ft-links a{color:#90E0EF;text-decoration:none;font-size:14px}
-    .ip-ft-links a:hover{text-decoration:underline}
-    .ip-ft-entity{font-size:12.5px;opacity:.75;max-width:640px;margin:0 auto 10px;line-height:1.6}
-    .ip-ft-copy{font-size:12.5px;opacity:.6;margin:0}
   </style>
 </head>
 <body class="gradient color-scheme-1">
   <header class="ip-head">
-    <a class="ip-brand" href="../index.html"><img src="../img/dcal-logo.png" alt="D'Cal"><span>D'Cal</span></a>
+    <a class="ip-brand" href="/"><span class="pp-brand-lockup"><img class="pp-brand-logo" src="../img/dcal-logo.png" alt="D'Cal"><span class="pp-brand-name">D'Cal</span></span></a>
     <nav class="ip-nav">
-      <a href="../index.html">Home</a>
-      <a href="collection.html">Products</a>
-      <a href="contact.html">Contact</a>
-      <a href="cart.html">Cart</a>
+      <a href="/">Home</a>
+      <a href="/collection">Products</a>
+      <a href="/contact">Contact</a>
+      <a href="/cart">Cart</a>
     </nav>
   </header>
 
@@ -73,25 +72,172 @@
         <li>Orders are subject to acceptance and availability.</li>
         <li>All trademarks and content belong to BEFACH 4X Private Limited.</li>
       </ul>
-      <p>For details on payments and cancellations, see our <a href="shipping-returns.html">Shipping</a> and <a href="privacy-policy.html">Privacy Policy</a>.</p>
+      <p>For details on payments and cancellations, see our <a href="/shipping-returns">Shipping</a> and <a href="/privacy-policy">Privacy Policy</a>.</p>
     </div>
   </main>
 
-  <footer class="ip-ft">
-    <div class="ip-ft-brand">D'Cal</div>
-    <nav class="ip-ft-links">
-      <a href="../index.html">Home</a>
-      <a href="collection.html">Products</a>
-      <a href="about.html">About</a>
-      <a href="faq.html">FAQ</a>
-      <a href="shipping-returns.html">Shipping</a>
-      <a href="track-order.html">Track Order</a>
-      <a href="privacy-policy.html">Privacy</a>
-      <a href="legal.html">Legal</a>
-      <a href="contact.html">Contact</a>
-    </nav>
-    <p class="ip-ft-entity">BEFACH 4X PRIVATE LIMITED · Hyderabad, Telangana 500034, India · GSTIN 36AAHCB9338E1ZK · IEC AAHCB9338E</p>
-    <p class="ip-ft-copy">© 2026 D'Cal · A BEFACH 4X Pvt. Ltd. brand. Made in India 🇮🇳</p>
-  </footer>
+    <div id="shopify-section-premium-footer-aymt20" class="shopify-section"><footer class="pp-ft" aria-label="Site footer">
+  <div class="container">
+    <div class="pp-ft-grid">
+
+      <div class="pp-ft-brand">
+        
+        <div class="pp-ft-brand-name grad-text">D'Cal</div>
+        
+          <p class="pp-ft-tagline">India's first zero-electricity hard-water defense system.</p>
+        
+        <div class="pp-ft-socials">
+          <a href="https://wa.me/918622909192" target="_blank" rel="noopener" aria-label="Chat on WhatsApp" title="Chat on WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
+          <a href="https://www.instagram.com/dcalproducts/" target="_blank" rel="noopener" aria-label="Follow on Instagram" title="Follow on Instagram"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069M12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12s.014 3.667.072 4.947c.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24s3.667-.014 4.947-.072c4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0m0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324M12 16a4 4 0 110-8 4 4 0 010 8m6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881"/></svg></a>
+          <a href="https://www.facebook.com/profile.php?id=100076210472645" target="_blank" rel="noopener" aria-label="Follow on Facebook" title="Follow on Facebook"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073"/></svg></a>
+          
+        </div>
+      </div>
+
+      <nav class="pp-ft-col" aria-label="SHOP">
+        <h3 class="pp-ft-col-title">SHOP</h3>
+        <ul class="pp-ft-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/collection">Products</a></li>
+          <li><a href="/cart">Cart</a></li>
+        </ul>
+      </nav>
+
+      <nav class="pp-ft-col" aria-label="HELP">
+        <h3 class="pp-ft-col-title">HELP</h3>
+        <ul class="pp-ft-links">
+          <li><a href="/about">About Us</a></li>
+          <li><a href="/track-order">Track Order</a></li>
+          <li><a href="/shipping-returns">Shipping</a></li>
+          <li><a href="/faq">FAQ</a></li>
+          <li><a href="/privacy-policy">Privacy Policy</a></li>
+          <li><a href="/legal">Legal & Compliance</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+
+      <div class="pp-ft-col pp-ft-entity">
+        <h3 class="pp-ft-col-title">OPERATING ENTITY</h3>
+        <div class="pp-ft-entity-name">BEFACH 4X PRIVATE LIMITED</div>
+        <dl class="pp-ft-entity-dl">
+          
+            <dt class="pp-ft-entity-dt">Registered Office:</dt>
+            <dd class="pp-ft-entity-dd">3rd floor, Luxor Park, Banjara Hills Road No. 3, opp. LV Prasad Bus Stand, Hyderabad, Telangana 500034, India</dd>
+          
+          
+            <dt class="pp-ft-entity-dt">GSTIN</dt>
+            <dd class="pp-ft-entity-dd">36AAHCB9338E1ZK</dd>
+          
+          
+            <dt class="pp-ft-entity-dt">IEC</dt>
+            <dd class="pp-ft-entity-dd">AAHCB9338E</dd>
+          
+        </dl>
+        <div class="pp-ft-entity-contacts">
+          
+            <a href="mailto:sales@befach.com" aria-label="Email D&#39;Cal">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+<span>sales@befach.com</span>
+            </a>
+          
+          
+            <a href="tel:+918622909192" aria-label="Call D&#39;Cal">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+<span>+91 8622909192</span>
+            </a>
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PAYMENT TRUST STRIP ============ -->
+    <div class="pp-ft-pay">
+      <div class="pp-ft-pay-left">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+
+        <span>100% Secure Checkout · Razorpay Protected</span>
+      </div>
+      <div class="pp-ft-pay-methods" role="list" aria-label="Accepted payment methods">
+        <span class="pp-pay pp-pay--upi" role="listitem" title="UPI">UPI</span>
+        <span class="pp-pay pp-pay--visa" role="listitem" title="Visa">VISA</span>
+        <span class="pp-pay" role="listitem" title="Mastercard"><svg width="32" height="20" viewBox="0 0 32 20" aria-hidden="true"><circle cx="12" cy="10" r="8" fill="#EB001B"/><circle cx="20" cy="10" r="8" fill="#F79E1B" fill-opacity=".9"/></svg></span>
+        <span class="pp-pay pp-pay--rupay" role="listitem" title="RuPay">RuPay</span>
+        <span class="pp-pay pp-pay--razorpay" role="listitem" title="Razorpay">Razorpay</span>
+        <span class="pp-pay pp-pay--cod" role="listitem" title="Cash on Delivery">COD</span>
+      </div>
+    </div>
+
+    <div class="pp-ft-bottom">
+      <div class="pp-ft-copyright">© 2026 D'Cal · A BEFACH 4X Pvt. Ltd. brand. All rights reserved.</div>
+      <div class="pp-ft-made">
+        <span class="pp-ft-tricolor" aria-hidden="true"><span></span><span></span><span></span></span>
+        Made in India
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .pp-ft{background:linear-gradient(180deg,#0077B6 0%,#023E8A 45%,#03045E 100%);color:#fff;padding:48px 0 24px}
+  .pp-ft-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.4fr;gap:40px;margin-bottom:36px}
+
+  .pp-ft-brand{min-width:0}
+  .pp-ft-logo{height:36px;width:auto;display:block;margin-bottom:14px;object-fit:contain}
+  .pp-ft-brand-name{font-family:'Montserrat','Inter',sans-serif;font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .pp-ft-tagline{color:#94A3B8;margin:14px 0 24px;font-size:14px;line-height:1.6;max-width:36ch}
+  .pp-ft-socials{display:flex;gap:12px;flex-wrap:wrap}
+  .pp-ft-socials a{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.06);display:inline-flex;align-items:center;justify-content:center;color:#E2E8F0;text-decoration:none;transition:background .25s ease,color .25s ease,transform .25s ease}
+  .pp-ft-socials a:hover{background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff;transform:translateY(-2px)}
+
+  .pp-ft-col{min-width:0}
+  .pp-ft-col-title{font-size:12px;font-weight:700;color:#94A3B8;letter-spacing:.1em;text-transform:uppercase;margin:0 0 18px}
+  .pp-ft-links{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+  .pp-ft-links a{display:inline-block;color:#E2E8F0;text-decoration:none;font-size:14px;position:relative;transition:color .2s ease;width:fit-content}
+  .pp-ft-links a::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:1px;background:linear-gradient(135deg,#90E0EF,#0077B6);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+  .pp-ft-links a:hover{color:#90E0EF}
+  .pp-ft-links a:hover::after{transform:scaleX(1)}
+  .pp-ft-links a:focus-visible{outline:2px solid #90E0EF;outline-offset:3px;border-radius:4px}
+
+  .pp-ft-entity-name{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px;letter-spacing:.01em;line-height:1.35}
+  .pp-ft-entity-dl{margin:0;display:grid;gap:4px}
+  .pp-ft-entity-dt{font-size:11px;font-weight:700;color:#64748B;letter-spacing:.08em;text-transform:uppercase;margin-top:10px}
+  .pp-ft-entity-dt:first-of-type{margin-top:0}
+  .pp-ft-entity-dd{font-size:13px;color:#94A3B8;line-height:1.6;margin:0}
+  .pp-ft-entity-contacts{margin-top:16px;display:grid;gap:8px}
+  .pp-ft-entity-contacts a{display:inline-flex;align-items:center;gap:8px;color:#E2E8F0;text-decoration:none;font-size:13px;transition:color .2s ease}
+  .pp-ft-entity-contacts a:hover{color:#90E0EF;text-decoration:underline}
+  .pp-ft-entity-contacts a:focus-visible{outline:2px solid #90E0EF;outline-offset:3px;border-radius:4px}
+
+  /* Payment trust strip */
+  .pp-ft-pay{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:24px 0;border-top:1px solid rgba(255,255,255,.1)}
+  .pp-ft-pay-left{display:flex;align-items:center;gap:9px;color:#90E0EF;font-weight:600;font-size:14px}
+  .pp-ft-pay-left svg{flex-shrink:0}
+  .pp-ft-pay-methods{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .pp-pay{display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:48px;padding:0 11px;background:#fff;border-radius:7px;box-shadow:0 3px 10px rgba(2,8,23,.25);font-weight:800;font-size:12px;line-height:1}
+  .pp-pay svg{display:block}
+  .pp-pay--upi{color:#0B1220}
+  .pp-pay--visa{color:#1A1F71;font-style:italic;font-size:14px;letter-spacing:.02em}
+  .pp-pay--rupay{color:#0A4DA0}
+  .pp-pay--razorpay{color:#072654;font-size:11px}
+  .pp-pay--cod{color:#0B6E4F;letter-spacing:.04em}
+  .pp-ft-bottom{padding-top:22px;margin-top:0;display:flex;justify-content:space-between;align-items:center;color:#64748B;font-size:13px;flex-wrap:wrap;gap:12px}
+  .pp-ft-made{display:inline-flex;align-items:center;gap:10px}
+  .pp-ft-tricolor{display:inline-flex;flex-direction:column;width:24px;height:16px;border-radius:2px;overflow:hidden;border:1px solid rgba(255,255,255,.12);vertical-align:middle}
+  .pp-ft-tricolor>span{flex:1}
+  .pp-ft-tricolor>span:nth-child(1){background:#FF9933}
+  .pp-ft-tricolor>span:nth-child(2){background:#fff;position:relative}
+  .pp-ft-tricolor>span:nth-child(2)::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;border:.75px solid #000080;transform:translate(-50%,-50%)}
+  .pp-ft-tricolor>span:nth-child(3){background:#138808}
+
+  @media(max-width:1000px){.pp-ft-grid{grid-template-columns:1fr 1fr;gap:40px}}
+  @media(max-width:600px){
+    .pp-ft{padding:60px 0 24px}
+    .pp-ft-grid{grid-template-columns:1fr;gap:32px;margin-bottom:40px}
+    .pp-ft-bottom{justify-content:flex-start;margin-top:32px}
+  }
+</style>
+
+
+</div>
 </body>
 </html>

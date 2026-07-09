@@ -187,10 +187,43 @@
         });
     }
 
-    function showThanks() {
+    // ---- durable submit: never lose a lead, never fake success ----
+    // A submit counts as successful ONLY when the server actually accepts it (2xx).
+    // On any network error or error status the lead is saved locally and retried on
+    // later page loads, and the customer is shown how to reach us directly — so a
+    // lead is never silently dropped behind a false "thank you". (A plain fetch
+    // resolves even on a 500/503, so we must check r.ok explicitly.)
+    var LEAD_Q_KEY = "dcal_lead_queue";
+    function readLeadQ() { try { return JSON.parse(localStorage.getItem(LEAD_Q_KEY) || "[]"); } catch (e) { return []; } }
+    function writeLeadQ(q) { try { localStorage.setItem(LEAD_Q_KEY, JSON.stringify(q.slice(-50))); } catch (e) {} }
+    function queueLead(endpoint, data) { var q = readLeadQ(); q.push({ endpoint: endpoint, data: data, attempts: 0 }); writeLeadQ(q); }
+    function postLead(endpoint, data) {
+      return fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) })
+        .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return true; });
+    }
+    function flushLeadQ() {
+      var q = readLeadQ(); if (!q.length) return;
+      writeLeadQ([]);                          // take the batch; re-queue only what still fails
+      var keep = [], pending = q.length;
+      q.forEach(function (item) {
+        postLead(item.endpoint, item.data)
+          .catch(function () { item.attempts = (item.attempts || 0) + 1; if (item.attempts < 8) keep.push(item); })
+          .then(function () { if (--pending === 0 && keep.length) writeLeadQ(keep.concat(readLeadQ())); });
+      });
+    }
+    flushLeadQ();   // retry anything that failed to send on an earlier visit
+
+    var noteOkHtml = note ? note.innerHTML : "";
+    function showThanks(queued) {
       form.reset();
       if (pinNote) pinNote.textContent = "";
-      if (note) { note.hidden = false; note.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" }); }
+      if (note) {
+        note.innerHTML = queued
+          ? "✅ We saved your request. Our water expert will call you soon. If not, please call or WhatsApp <b>86229 09192</b>."
+          : noteOkHtml;
+        note.hidden = false;
+        note.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      }
     }
 
     form.addEventListener("submit", function (e) {
@@ -218,14 +251,10 @@
 
       var btn = form.querySelector('[type="submit"]');
       if (btn) btn.disabled = true;
-      fetch(API_BASE + "/api/dealership", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-        .then(function (r) { return r.json().catch(function () { return {}; }); })
-        .then(function () { showThanks(); })
-        .catch(function () { showThanks(); })
+      var endpoint = API_BASE + "/api/dealership";
+      postLead(endpoint, payload)
+        .then(function () { showThanks(false); })                               // server confirmed
+        .catch(function () { queueLead(endpoint, payload); showThanks(true); }) // preserve + retry later
         .then(function () { if (btn) btn.disabled = false; });
     });
   }
