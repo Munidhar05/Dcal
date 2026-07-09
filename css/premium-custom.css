@@ -758,3 +758,23 @@ select.dcal-input::-ms-expand{display:none}
 .dcal-addr-row{border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;margin-bottom:12px}
 .dcal-addr-row.is-default{border-color:#9BE3CB;background:#F6FCFA}
 .dcal-addr-rowacts{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+
+/* wishlist + share actions overlaid on product images */
+.pp-row-media,.pc-media,.pp-more-img,.pp-image-wrap{position:relative}
+.pp-img-actions{position:absolute;top:10px;right:10px;z-index:6;display:flex;flex-direction:column;gap:8px}
+.pp-img-btn{width:38px;height:38px;border-radius:11px;border:none;cursor:pointer;background:rgba(255,255,255,.92);color:#334155;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(2,42,90,.15);transition:transform .2s ease,background .2s ease,color .2s ease;padding:0;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.pp-img-btn:hover{transform:scale(1.08)}
+.pp-img-btn:active{transform:scale(.95)}
+.pp-img-btn svg{width:19px;height:19px}
+.pp-wish-btn:hover{color:#E11D48}
+.pp-wish-btn.active{color:#E11D48}
+.pp-wish-btn.active svg{fill:#E11D48}
+.pp-share-btn:hover{background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff}
+.pp-more-img .pp-img-actions{top:6px;right:6px;gap:6px}
+.pp-more-img .pp-img-btn{width:30px;height:30px;border-radius:9px}
+.pp-more-img .pp-img-btn svg{width:15px;height:15px}
+/* wishlist count badge inside the account menu row */
+.dcal-acct-badge{margin-left:auto;background:#E11D48;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;padding:0 5px}
+/* lightweight toast (wishlist feedback) */
+.pp-toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);z-index:9999;background:#0B1220;color:#fff;padding:11px 20px;border-radius:999px;font-size:14px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.3);opacity:0;transition:opacity .3s ease,transform .3s ease;pointer-events:none;max-width:90vw}
+.pp-toast.show{opacity:1;transform:translate(-50%,0)}

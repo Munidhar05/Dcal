@@ -121,10 +121,85 @@
       if (/wa\.me|whatsapp/i.test(h)) a.setAttribute('href', 'https://wa.me/?text=' + encodeURIComponent(title + ' ' + url));
       else if (/facebook\.com/i.test(h)) a.setAttribute('href', 'https://www.facebook.com/sharer/sharer.php?u=' + u);
       else if (/twitter\.com|x\.com/i.test(h)) a.setAttribute('href', 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t);
+      else if (/instagram\.com/i.test(h)) {
+        // Instagram has no web "share a link" URL. On mobile use the native share sheet
+        // (Instagram appears there); on desktop copy the link + open our IG profile.
+        a.addEventListener('click', function (e) {
+          if (navigator.share) { e.preventDefault(); navigator.share({ title: title, text: title, url: url }).catch(function () {}); }
+          else { try { if (navigator.clipboard) navigator.clipboard.writeText(url); if (typeof toast === 'function') toast('Link copied — paste it in your Instagram'); } catch (err) {} }
+        });
+      }
     });
   }
 
-  function init() { renderProduct(); wireLinks(); wireShare(); }
+  /* ---- 4) wishlist + share actions on every product image ----
+     A heart (save to wishlist, kept in localStorage) stacked above a send icon (native
+     share sheet -> WhatsApp/Instagram, with a WhatsApp fallback). Both act on the clean
+     /product/<slug> URL that carries the server-injected rich link preview. */
+  var SEND_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>';
+  var HEART_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>';
+
+  var WISH_KEY = 'dcal_wishlist';
+  function getWish() { try { return JSON.parse(localStorage.getItem(WISH_KEY) || '[]'); } catch (e) { return []; } }
+  function saveWish(a) { try { localStorage.setItem(WISH_KEY, JSON.stringify(a.slice(0, 200))); } catch (e) {} }
+  function inWish(slug) { return getWish().indexOf(slug) > -1; }
+  function toggleWish(slug) {
+    var a = getWish(), i = a.indexOf(slug);
+    if (i > -1) a.splice(i, 1); else a.push(slug);
+    saveWish(a); updateWishUI();
+    return i < 0;   // true when newly added
+  }
+  function updateWishUI() {
+    document.querySelectorAll('[data-wish]').forEach(function (b) { b.classList.toggle('active', inWish(b.getAttribute('data-wish'))); });
+  }
+
+  function toast(msg) {
+    var t = document.createElement('div'); t.className = 'pp-toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () { t.classList.remove('show'); setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300); }, 1800);
+  }
+  function shareProduct(slug, title) {
+    var url = location.origin + '/product/' + slug;
+    if (navigator.share) navigator.share({ title: title, text: title, url: url }).catch(function () {});
+    else window.open('https://wa.me/?text=' + encodeURIComponent(title + ' ' + url), '_blank', 'noopener');
+  }
+
+  function iconBtn(cls, icon, label, onClick) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'pp-img-btn ' + cls; b.setAttribute('aria-label', label); b.title = label;
+    b.innerHTML = icon;
+    b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); onClick(); });
+    return b;
+  }
+  function addImageActions(el, slug, title) {
+    if (!el) return;
+    var media = (el.tagName === 'IMG') ? el.parentNode : el;   // attach beside the image, not inside it
+    if (!media || media.querySelector('.pp-img-actions')) return;
+    try { if (getComputedStyle(media).position === 'static') media.style.position = 'relative'; } catch (e) {}
+    var box = document.createElement('div'); box.className = 'pp-img-actions';
+    var wish = iconBtn('pp-wish-btn' + (inWish(slug) ? ' active' : ''), HEART_ICON, 'Save ' + title + ' to wishlist', function () {
+      toast(toggleWish(slug) ? '♥ Saved to wishlist' : 'Removed from wishlist');
+    });
+    wish.setAttribute('data-wish', slug);
+    box.appendChild(wish);
+    box.appendChild(iconBtn('pp-share-btn', SEND_ICON, 'Share ' + title, function () { shareProduct(slug, title); }));
+    media.appendChild(box);
+  }
+
+  function wireImageActions() {
+    document.querySelectorAll('.pp-row, .pc, .pp-more-card').forEach(function (card) {
+      var title = (titleOf(card) || '').trim();
+      var slug = TITLE2SLUG[norm(title)];
+      if (!slug) return;
+      addImageActions(card.querySelector('.pp-row-media, .pc-media, .pp-more-img'), slug, title || (CATALOG[slug] && CATALOG[slug].title) || "D'Cal");
+    });
+    var main = document.querySelector('[data-pp-main]');
+    if (main) { var s = pageSlug(); if (CATALOG[s]) addImageActions(main.closest('.pp-image-wrap') || main.parentNode, s, CATALOG[s].title); }
+    updateWishUI();
+  }
+
+  function init() { renderProduct(); wireLinks(); wireShare(); wireImageActions(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

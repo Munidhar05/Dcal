@@ -1111,9 +1111,10 @@
 
   /* resolve a root-relative path from the current page depth */
   function rel(rootPath) {
-    // pages live either at site root (index.html) or in /html/
-    var inSub = /\/html\//.test(location.pathname);
-    return (inSub ? '../' : '') + rootPath;
+    // return an ABSOLUTE, clean path so links work from any URL depth
+    // (/product/<slug>, /campus/, /html/… all resolve the same).
+    var p = String(rootPath).replace(/^html\//, '').replace(/\.html$/, '');
+    return '/' + (p === 'index' ? '' : p);
   }
 
   /* ====================================================
@@ -1121,6 +1122,13 @@
      ==================================================== */
   var CARET = '<svg class="dcal-acct-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
   var PERSON_ICON = '<svg class="icon dcal-acct-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>';
+
+  // wishlist lives in the account menu now (device-local; works logged-in or not)
+  function wishCount() { try { return (JSON.parse(localStorage.getItem('dcal_wishlist') || '[]') || []).length; } catch (e) { return 0; } }
+  function wishItem() {
+    var n = wishCount();
+    return '<button class="dcal-acct-item" data-ai="wishlist">' + IC.heart + ' Wishlist' + (n ? '<span class="dcal-acct-badge">' + n + '</span>' : '') + '</button>';
+  }
 
   function renderAcctMenu(menu) {
     var u = currentUser();
@@ -1130,12 +1138,14 @@
         '<button class="dcal-acct-item" data-ai="profile">' + IC.user + ' My Profile</button>' +
         (magicOn() ? '' : '<button class="dcal-acct-item" data-ai="addresses">' + IC.pin + ' My Addresses</button>') +
         '<button class="dcal-acct-item" data-ai="orders">' + IC.bag + ' My Orders</button>' +
+        wishItem() +
         '<button class="dcal-acct-item dcal-acct-item--danger" data-ai="logout">' + IC.logout + ' Logout</button>';
     } else {
       menu.innerHTML =
         '<div class="dcal-acct-menu__signup"><span>New customer?</span><button data-ai="signup">Sign Up</button></div>' +
         '<button class="dcal-acct-item" data-ai="login">' + IC.user + ' Login</button>' +
-        '<button class="dcal-acct-item" data-ai="orders">' + IC.bag + ' My Orders</button>';
+        '<button class="dcal-acct-item" data-ai="orders">' + IC.bag + ' My Orders</button>' +
+        wishItem();
     }
   }
 
@@ -1178,6 +1188,7 @@
           else if (act === 'profile') openProfile();
           else if (act === 'addresses') isLoggedIn() ? openProfile('addresses') : openAuth();
           else if (act === 'orders') isLoggedIn() ? openProfile('orders') : openAuth();
+          else if (act === 'wishlist') location.href = '/wishlist';
           else openAuth(); // login / signup
         });
       }
@@ -1278,25 +1289,28 @@
     cartSave(cart);
     updateCartBubbles();
     toast('Added to cart ✓');
-    // take the user to the cart page to review their order
-    var cartUrl = /\/html\//.test(location.pathname) ? 'cart.html' : 'html/cart.html';
-    setTimeout(function () { location.href = cartUrl; }, 500);
+    // take the user to the cart page to review their order (absolute path works
+    // from any URL depth, incl. /product/<slug>)
+    setTimeout(function () { location.href = '/cart'; }, 500);
   }
 
-  // "Buy now" -> with Magic Checkout on, open Razorpay's one-click modal directly for
-  // this product (no cart, no address form). Otherwise fall back to the cart flow.
+  // "Buy now" -> go straight to checkout, skipping the cart review. On the cart page we
+  // open checkout right away; on a product page we add this item, flag express checkout,
+  // then jump to /cart where init() opens checkout immediately (the checkout UI renders
+  // into #dcal-cart-root, which only exists on the cart page).
   function doBuyNow() {
-    // Wait for payment config so a fast click (e.g. right after login) doesn't fall
-    // back to the cart flow before we know Magic is on.
-    loadPaymentConfig().then(function () {
-      if (magicOn()) {
-        var onCart = !!document.getElementById('dcal-cart-root');
-        // show the Pay Online / Cash on Delivery chooser
-        openBuyOptions(onCart ? cartGet() : [pageProduct()], onCart);
-      } else {
-        doAddToCart();
-      }
-    });
+    if (document.getElementById('dcal-cart-root')) {
+      loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); });
+      return;
+    }
+    var p = pageProduct();
+    var addQty = Math.max(1, Math.min(99, parseInt(p.qty, 10) || 1));
+    var cart = cartGet(), found = null;
+    for (var i = 0; i < cart.length; i++) { if (cart[i].id === p.id) { found = cart[i]; break; } }
+    if (found) found.qty = Math.min(99, (found.qty || 1) + addQty); else { p.qty = addQty; cart.push(p); }
+    cartSave(cart); updateCartBubbles();
+    try { sessionStorage.setItem('dcal_buynow', '1'); } catch (e) {}
+    location.href = '/cart';
   }
 
   function updateCartBubbles() {
@@ -1318,7 +1332,7 @@
       '<div style="color:#0077B6;display:flex;justify-content:center">' + CART_ICON + '</div>' +
       '<h2 style="font-size:24px;font-weight:700;margin:14px 0 8px">Your cart is empty</h2>' +
       '<p class="lead" style="margin:0 auto 24px">Looks like you haven’t added anything yet.</p>' +
-      '<a href="collection.html" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Shop D’Cal →</a></div>';
+      '<a href="/collection" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Shop D’Cal →</a></div>';
   }
 
   function cartItemHTML(item, i) {
@@ -1346,7 +1360,7 @@
           '<h3>Order Summary</h3>' +
           summaryBodyHTML(subtotal) +
           '<button class="dcal-btn dcal-cart-checkout">Proceed to Checkout</button>' +
-          '<a class="dcal-cart-continue" href="collection.html">Continue shopping</a>' +
+          '<a class="dcal-cart-continue" href="/collection">Continue shopping</a>' +
         '</aside>' +
       '</div>';
 
@@ -1694,7 +1708,7 @@
         }).join('') + '</div>' +
         '<button type="button" class="dcal-addr-add" data-addr-new>+ Add a new address</button>' +
         '<div class="dcal-co-actions">' +
-          '<a class="dcal-cart-continue" href="cart.html" style="margin-top:0">← Back to cart</a>' +
+          '<a class="dcal-cart-continue" href="/cart" style="margin-top:0">← Back to cart</a>' +
           '<button class="dcal-btn dcal-co-next" style="width:auto;padding-left:30px;padding-right:30px">Deliver here →</button>' +
         '</div>' +
       '</div>');
@@ -1738,7 +1752,7 @@
     wireAddressForm('checkout');
     var cancel = root.querySelector('.dcal-co-cancel');
     if (hasList) cancel.addEventListener('click', coAddress);
-    else cancel.addEventListener('click', function () { location.href = 'cart.html'; });
+    else cancel.addEventListener('click', function () { location.href = '/cart'; });
     root.querySelector('.dcal-addr-save').addEventListener('click', function () {
       var addr = readAddressForm('checkout');
       var err = root.querySelector('[data-addr-err]');
@@ -2265,7 +2279,7 @@
         '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
         (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
         '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Track it in <b>My Orders</b>.</p>' +
-        '<a href="collection.html" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Continue shopping →</a></div>';
+        '<a href="/collection" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Continue shopping →</a></div>';
     toast('Order placed! 🎉');
   }
 
@@ -2301,6 +2315,15 @@
     updateHeader();
     updateCartBubbles();
     renderCartPage();
+    // "Buy Now" from a product page lands here -> open checkout straight away, skipping
+    // the cart review (the flag is set by doBuyNow before it navigates to /cart).
+    if (document.getElementById('dcal-cart-root')) {
+      var wantCheckout = false;
+      try { if (sessionStorage.getItem('dcal_buynow') === '1') { wantCheckout = true; sessionStorage.removeItem('dcal_buynow'); } } catch (e) {}
+      if (wantCheckout && cartGet().length) {
+        window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
+      }
+    }
     loadPaymentConfig();   // learn early if Magic Checkout is on (drives Buy Now + hides the address book)
     // Learn which login methods the server offers, then reconcile our local session.
     api('GET', '/api/config').then(function (c) {
