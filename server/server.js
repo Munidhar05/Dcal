@@ -1160,6 +1160,41 @@ app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
   } catch (e) { serverErr(res, e); }
 });
 
+/* ---------- public order tracking (no login) ----------
+   Look up ONE order by its number + the mobile it was placed with. BOTH must match:
+   the phone is the shared secret that stops anyone enumerating orders by guessing an
+   8-digit id. Returns only status-level fields (never the full address, payment id or
+   customer name), and is rate-limited so the pair can't be brute-forced. This lets a
+   customer on a new device / after clearing their browser still find their order. */
+app.post('/api/orders/track', rateLimit({ windowMs: 10 * 60 * 1000, max: 20, tag: 'track' }), async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const b = req.body || {};
+    const orderId = String(b.orderId || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 20);
+    const phone = String(b.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    if (!orderId || phone.length !== 10) {
+      return res.status(400).json({ error: 'Enter your order number and the 10-digit mobile number used to place it.' });
+    }
+    const order = await Order.findOne({ orderId, mobile: phone });
+    if (!order) return res.status(404).json({ error: 'No order found with that number and mobile number. Please check and try again.' });
+    // minimal, non-sensitive projection — enough to show status, not to leak PII
+    res.json({ order: {
+      orderId: order.orderId,
+      status: order.status,
+      date: order.date,
+      title: order.title,
+      total: order.total,
+      paid: order.paid,
+      payment: order.payment,
+      items: (order.items || []).map((it) => ({ title: it.title, qty: it.qty })),
+      city: (order.address || {}).city || '',
+      refundStatus: order.refundStatus || '',
+      cancelReason: order.cancelReason || '',
+      cancelledAt: order.cancelledAt || null
+    } });
+  } catch (e) { serverErr(res, e); }
+});
+
 /* ---------- admin (password protected) ---------- */
 function adminAuth(req, res, next) {
   const pw = req.headers['x-admin-password'] || (req.body && req.body.password);
@@ -1327,6 +1362,89 @@ app.post('/api/admin/dealers/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ dealer: await restoreDoc(Dealer, req.body) }); }
   catch (e) { serverErr(res, e); }
+});
+
+/* ---------- short URLs for the B2B landing pages ----------
+   The pages physically live in long-named folders (campus-water-softener/…), but
+   we expose them at short, clean paths (/campus, /hotel, /hospital, /partner). Each
+   short path serves that folder's files, so the page's own relative assets
+   (styles.css, script.js, images/…) keep resolving under the short URL. The old
+   long URLs are permanently redirected to the short one so there's a single
+   canonical address. Registered BEFORE the clean-URL/static handlers below. */
+const B2B_SHORT = [
+  ['campus',   'campus-water-softener'],
+  ['hotel',    'hotel-water-softener'],
+  ['hospital', 'hospital-water-softener'],
+  ['partner',  'become-a-business-partner'],
+];
+B2B_SHORT.forEach(function (pair) {
+  const short = pair[0], folder = pair[1];
+  // old long URL (/folder, /folder/, /folder/index.html) -> short canonical /short/
+  app.get(['/' + folder, '/' + folder + '/', '/' + folder + '/index.html'], (req, res) => res.redirect(301, '/' + short + '/'));
+  // serve the folder's files under the short path; express.static redirects
+  // "/short" (no slash) -> "/short/" so relative asset paths resolve correctly.
+  app.use('/' + short, express.static(path.join(ROOT, folder)));
+});
+
+/* ---------- clean product URLs (/product/<slug> instead of /product?id=<slug>) ----------
+   Serve the product page for any /product/<slug>; the client reads the slug from the
+   path. The single path segment keeps the page's relative assets (../css, ../js,
+   ../images) resolving to root, exactly as they did at /product. The legacy
+   /product?id=<slug> is 301-redirected to the clean path for one canonical URL. */
+app.get('/product', (req, res, next) => {
+  const id = (req.query && req.query.id) ? String(req.query.id).replace(/[^a-z0-9-]/gi, '') : '';
+  if (id) return res.redirect(301, '/product/' + id);
+  next();   // no slug -> fall through to the default product page
+});
+// Serve the product page with product-specific Open Graph / Twitter / JSON-LD meta
+// injected, so a shared link (WhatsApp, Facebook, X, Instagram, etc.) shows the right
+// image + title + price, and clicking it opens this product on the site. Social
+// scrapers don't run JavaScript, so these tags MUST come from the server HTML.
+const PRODUCT_HTML = path.join(ROOT, 'html', 'product.html');
+// Per-product share-image override: WhatsApp/social previews are most reliable with
+// JPG/PNG, so where a product's catalog image is a .webp we point the share image at
+// a JPG twin when one exists (the storefront cards still use the original .webp).
+const OG_IMAGE = { 'washing-ball': 'Introducing-the-D_cal-Washing-Ball.jpg' };
+app.get('/product/:slug', (req, res) => {
+  const slug = String(req.params.slug || '');
+  const p = CATALOG[slug];
+  if (!p) return res.sendFile(PRODUCT_HTML);   // unknown slug -> default page
+  fs.readFile(PRODUCT_HTML, 'utf8', (err, html) => {
+    if (err || !html) return res.sendFile(PRODUCT_HTML);
+    const base = baseUrlFrom(req) || (req.protocol + '://' + req.get('host'));
+    const url = base + '/product/' + encodeURIComponent(slug);
+    const img = absUrl(base, 'images/' + (OG_IMAGE[slug] || preferRasterImage(p.img)));
+    const title = p.title + " — D'Cal";
+    const desc = p.desc || "D'Cal — India's hard water defense system.";
+    const price = Number(p.price) || 0;
+    const jsonld = JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'Product',
+      name: p.title, description: desc, image: img, sku: slug,
+      brand: { '@type': 'Brand', name: "D'Cal" },
+      offers: { '@type': 'Offer', priceCurrency: 'INR', price: price, availability: 'https://schema.org/InStock', url: url }
+    });
+    const meta =
+      '<meta property="og:type" content="product">\n' +
+      '  <meta property="og:site_name" content="D\'Cal">\n' +
+      '  <meta property="og:title" content="' + escHtml(title) + '">\n' +
+      '  <meta property="og:description" content="' + escHtml(desc) + '">\n' +
+      '  <meta property="og:image" content="' + escHtml(img) + '">\n' +
+      '  <meta property="og:image:alt" content="' + escHtml(p.title) + '">\n' +
+      '  <meta property="og:url" content="' + escHtml(url) + '">\n' +
+      '  <meta property="product:price:amount" content="' + price + '">\n' +
+      '  <meta property="product:price:currency" content="INR">\n' +
+      '  <meta name="twitter:card" content="summary_large_image">\n' +
+      '  <meta name="twitter:title" content="' + escHtml(title) + '">\n' +
+      '  <meta name="twitter:description" content="' + escHtml(desc) + '">\n' +
+      '  <meta name="twitter:image" content="' + escHtml(img) + '">\n' +
+      '  <link rel="canonical" href="' + escHtml(url) + '">\n' +
+      '  <script type="application/ld+json">' + jsonld + '</script>';
+    let out = html.replace(/<title>[\s\S]*?<\/title>/i, '<title>' + escHtml(title) + '</title>');
+    out = out.replace(/<meta\s+name="description"[^>]*>/i, '<meta name="description" content="' + escHtml(desc) + '">');
+    out = out.replace(/<head([^>]*)>/i, '<head$1>\n  ' + meta);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(out);
+  });
 });
 
 /* ---------- clean URLs (no “.html”, no “/html/” in the address bar) ----------

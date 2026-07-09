@@ -42,14 +42,19 @@
   function num(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
   function savePct(p) { var w = num(p.was), c = num(p.price); return w > c && w ? Math.round((w - c) / w * 100) : 0; }
   function param(n) { try { return new URLSearchParams(location.search).get(n); } catch (e) { return null; } }
+  // product slug from the clean path (/product/<slug>) or the legacy ?id= query
+  function pageSlug() {
+    var m = location.pathname.match(/\/product\/([^\/?#]+)/i);
+    if (m && m[1]) { try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; } }
+    return param('id') || '';
+  }
 
-  /* ---- 1) rewrite every product-card link to carry ?id ---- */
+  /* ---- 1) rewrite every product-card link to the clean /product/<slug> path ---- */
   function tagLink(a, slug) {
     if (!a || !slug) return;
     var href = (a.getAttribute('href') || '').split('?')[0];
-    if (!/product(-classic)?\.html$/.test(href)) return;
-    href = href.replace(/product-classic\.html$/, 'product.html');   // classic template isn't catalog-wired — always use the real one
-    a.setAttribute('href', href + '?id=' + slug);
+    if (!/product(-classic)?\.html$/.test(href) && !/\/product(\/|$)/.test(href)) return;
+    a.setAttribute('href', '/product/' + slug);
   }
 
   function titleOf(scope) {
@@ -64,7 +69,8 @@
       if (slug) card.querySelectorAll('a[href*="product"]').forEach(function (a) { tagLink(a, slug); });
     });
     // standalone product links: home .pp-row, "More from D'Cal" .pp-more-card, etc.
-    document.querySelectorAll('a[href*="product.html"], a[href*="product-classic.html"]').forEach(function (a) {
+    // (links are the clean "/product" now; keep the old .html forms as a fallback)
+    document.querySelectorAll('a[href="/product"], a[href*="product.html"], a[href*="product-classic.html"]').forEach(function (a) {
       if (a.closest('.pc')) return; // already handled above
       var slug = TITLE2SLUG[norm(titleOf(a))];
       if (slug) tagLink(a, slug);
@@ -75,8 +81,8 @@
   function renderProduct() {
     var main = document.querySelector('[data-pp-main]');
     if (!main) return; // not a product page
-    var p = CATALOG[param('id')];
-    if (!p) return;    // no/unknown id -> leave the default page as-is
+    var p = CATALOG[pageSlug()];
+    if (!p) return;    // no/unknown slug -> leave the default page as-is
 
     var info = document.querySelector('.pp-col-info') || document;
     function set(el, txt) { if (el) el.textContent = txt; }
@@ -98,7 +104,27 @@
     if (vj) { try { var arr = JSON.parse(vj.textContent); if (arr[0]) { arr[0].price = p.price; arr[0].compare_at = p.was; } vj.textContent = JSON.stringify(arr); } catch (e) {} }
   }
 
-  function init() { renderProduct(); wireLinks(); }
+  /* ---- 3) point the Share buttons at the REAL page URL ----
+     The static markup shares the literal string "product.html"; rewrite each button
+     to share this page's actual absolute URL (incl. ?id=) + the product title, so a
+     shared link opens the right product for whoever receives it. */
+  function wireShare() {
+    var box = document.querySelector('.pp-share');
+    if (!box) return;
+    var url = location.href;
+    var pid = pageSlug();
+    var pr = pid && CATALOG[pid];
+    var title = (pr && pr.title) || (document.title.split('—')[0].trim()) || "D'Cal";
+    var u = encodeURIComponent(url), t = encodeURIComponent(title);
+    box.querySelectorAll('a[href]').forEach(function (a) {
+      var h = a.getAttribute('href') || '';
+      if (/wa\.me|whatsapp/i.test(h)) a.setAttribute('href', 'https://wa.me/?text=' + encodeURIComponent(title + ' ' + url));
+      else if (/facebook\.com/i.test(h)) a.setAttribute('href', 'https://www.facebook.com/sharer/sharer.php?u=' + u);
+      else if (/twitter\.com|x\.com/i.test(h)) a.setAttribute('href', 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t);
+    });
+  }
+
+  function init() { renderProduct(); wireLinks(); wireShare(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

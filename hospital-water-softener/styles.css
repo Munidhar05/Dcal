@@ -364,29 +364,29 @@ body.nav-open{overflow:hidden}
 
 /* floating ctas */
 .wa-float,.call-float{position:fixed;z-index:90;display:grid;place-items:center;border-radius:50%;box-shadow:var(--shadow-lg);transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
-.wa-float{bottom:26px;right:26px;width:58px;height:58px;background:#25D366;color:#fff}
+.wa-float{bottom:26px;left:26px;width:58px;height:58px;background:#25D366;color:#fff}
 .wa-float svg{width:30px;height:30px}
 .wa-float:hover{transform:translateY(-4px) scale(1.06);box-shadow:0 22px 50px rgba(37,211,102,.6)}
-.call-float{bottom:96px;right:26px;width:58px;height:58px;background:var(--grad-blue);color:#fff}
+.call-float{bottom:96px;left:26px;width:58px;height:58px;background:var(--grad-blue);color:#fff}
 .call-float svg{width:26px;height:26px}
 .call-float:hover{transform:translateY(-4px) scale(1.06);box-shadow:0 22px 50px rgba(26,140,199,.6)}
 .wa-float::after,.call-float::after{content:"";position:absolute;inset:0;border-radius:50%;animation:ring 2.6s ease-out infinite}
 .wa-float::after{border:2px solid #25D366}
 .call-float::after{border:2px solid var(--blue)}
 /* ---------- Floating "fill the form" CTA (bottom-left) + back-to-top ---------- */
-.form-float{position:fixed;left:26px;bottom:92px;z-index:92;display:inline-flex;align-items:center;gap:8px;background:var(--grad-blue);color:#fff;font-weight:800;font-size:.95rem;padding:14px 22px;border-radius:50px;box-shadow:0 16px 38px rgba(26,140,199,.5);text-decoration:none;opacity:0;visibility:hidden;transform:translateY(14px);pointer-events:none;transition:transform .35s var(--ease),box-shadow .35s var(--ease),opacity .3s,visibility .3s}
+.form-float{position:fixed;right:26px;bottom:26px;z-index:92;display:inline-flex;align-items:center;gap:8px;background:var(--grad-blue);color:#fff;font-weight:800;font-size:.95rem;padding:14px 22px;border-radius:50px;box-shadow:0 16px 38px rgba(26,140,199,.5);text-decoration:none;opacity:0;visibility:hidden;transform:translateY(14px);pointer-events:none;transition:transform .35s var(--ease),box-shadow .35s var(--ease),opacity .3s,visibility .3s}
 .form-float.show{opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto}
 .form-float:hover{transform:translateY(-4px) scale(1.04);box-shadow:0 22px 50px rgba(26,140,199,.7)}
 .form-float .ff-pulse{position:absolute;inset:0;border-radius:50px;background:var(--blue);z-index:-1;animation:ffping 2s cubic-bezier(0,0,.2,1) infinite}
 .form-float .ff-text{position:relative;display:inline-flex;align-items:center;gap:8px}
 @keyframes ffping{0%{transform:scale(1);opacity:.5}75%,100%{transform:scale(1.4);opacity:0}}
-.totop-float{position:fixed;left:26px;bottom:26px;z-index:92;width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;background:var(--grad-blue);color:#fff;box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transform:translateY(14px);transition:opacity .3s,visibility .3s,transform .3s,box-shadow .3s}
+.totop-float{position:fixed;right:26px;bottom:92px;z-index:92;width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;background:var(--grad-blue);color:#fff;box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transform:translateY(14px);transition:opacity .3s,visibility .3s,transform .3s,box-shadow .3s}
 .totop-float.show{opacity:1;visibility:visible;transform:translateY(0)}
 .totop-float:hover{transform:translateY(-4px) scale(1.06);box-shadow:0 22px 50px rgba(26,140,199,.6);color:#fff}
 .totop-float svg{width:22px;height:22px}
 @media(max-width:680px){
   .form-float{display:none}
-  .totop-float{left:16px;bottom:96px;width:46px;height:46px}
+  .totop-float{right:16px;bottom:96px;width:46px;height:46px}
 }
 @keyframes ring{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.8);opacity:0}}
 
@@ -461,3 +461,7 @@ body.nav-open{overflow:hidden}
 /* Nav logo text: match main homepage gradient "D'Cal" */
 .brand .brand-text{background:linear-gradient(135deg,#0077B6 0%,#00B4D8 55%,#48CAE4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 .brand .brand-text small{-webkit-text-fill-color:var(--blue);color:var(--blue)}
+
+.foot-social{display:flex;gap:12px;margin-top:16px}
+.foot-social a{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.1);display:inline-flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:background .3s,transform .3s}
+.foot-social a:hover{background:linear-gradient(135deg,#00B4D8,#0077B6);transform:translateY(-3px)}
