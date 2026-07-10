@@ -828,12 +828,15 @@
         '<button class="dcal-mi" data-go="edit">' + IC.edit + ' Edit Profile ' + IC.chev + '</button>' +
         (magicOn() ? '' : '<button class="dcal-mi" data-go="addresses">' + IC.pin + ' My Addresses ' + IC.chev + '</button>') +
         '<button class="dcal-mi" data-go="orders">' + IC.bag + ' My Orders ' + IC.chev + '</button>' +
+        '<button class="dcal-mi" data-act="wishlist">' + IC.heart + ' Wishlist ' + IC.chev + '</button>' +
         '<button class="dcal-mi dcal-mi--danger" data-act="logout">' + IC.logout + ' Logout</button>' +
       '</div>';
     drawer.querySelector('[data-dcal-dclose]').addEventListener('click', closeDrawer);
     drawer.querySelectorAll('[data-go]').forEach(function (b) {
       b.addEventListener('click', function () { openSub(b.getAttribute('data-go')); });
     });
+    var dWish = drawer.querySelector('[data-act="wishlist"]');
+    if (dWish) dWish.addEventListener('click', function () { location.href = '/wishlist'; });
     drawer.querySelector('[data-act="logout"]').addEventListener('click', logout);
   }
 

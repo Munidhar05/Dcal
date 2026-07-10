@@ -231,7 +231,7 @@
       <div
         class="search-modal__content search-modal__content-bottom"
         tabindex="-1"
-      ><search-form class="search-modal__form"><form action="html/search.html" method="get" role="search" class="search search-modal__form">
+      ><search-form class="search-modal__form"><form action="/search" method="get" role="search" class="search search-modal__form">
           <div class="field">
             <input
               class="search__input field__input"
@@ -2282,6 +2282,20 @@
     if(x) x.addEventListener('click',function(){ f.remove(); try{ sessionStorage.setItem('dcal_free_float','1'); }catch(e){} });
     var link=f.querySelector('.pp-free-float__link');
     if(link) link.addEventListener('click',function(){ f.classList.add('pp-free-float--min'); });
+  })();
+  </script>
+  <script>
+  /* Smooth-scroll the "Free Demo Kit" CTAs to the form WITHOUT leaving #demo-form
+     in the address bar (preventDefault stops the browser adding the hash). */
+  (function(){
+    document.querySelectorAll('a[href="#demo-form"]').forEach(function(a){
+      a.addEventListener('click',function(e){
+        var t=document.getElementById('demo-form'); if(!t) return;
+        e.preventDefault();
+        var y=t.getBoundingClientRect().top+window.pageYOffset-80;
+        window.scrollTo({ top:y, behavior:'smooth' });
+      });
+    });
   })();
   </script>
 </body>
