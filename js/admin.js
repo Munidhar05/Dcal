@@ -60,8 +60,8 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(n) { return '₹' + (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function priceNum(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
-  function fmtDate(t) { return t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
-  function fmtDay(t) { return t ? new Date(t).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'; }
+  // full date + exact time (to the second) — admins need the precise moment an order/login landed
+  function fmtDate(t) { return t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium' }) : '—'; }
 
   /* ---------- data access ---------- */
   function getUsers() { return read(K_USERS, {}); }
@@ -338,7 +338,7 @@
         var itemCount = (o.items || []).reduce(function (n, it) { return n + (it.qty || 1); }, 0);
         return '<tr class="adm-orow" data-row="' + i + '" data-mobile="' + esc(r.mobile) + '" data-idx="' + r.idx + '">' +
           '<td><b>#' + esc(o.id) + '</b></td>' +
-          '<td>' + fmtDay(o.date) + '</td>' +
+          '<td style="white-space:nowrap">' + fmtDate(o.date) + '</td>' +
           '<td>' + esc(r.user.name || '—') + '<br><span class="adm-muted">+91 ' + esc(r.mobile) + '</span></td>' +
           '<td>' + itemCount + '</td>' +
           '<td><b>' + esc(o.total || '') + '</b></td>' +
@@ -437,7 +437,7 @@
         return '<tr>' +
           '<td><b>' + esc(r.name) + '</b><br><span class="adm-muted">' + esc(r.provider) + '</span></td>' +
           '<td>+91 ' + esc(r.mobile) + '<br><span class="adm-muted">' + esc(r.email) + '</span></td>' +
-          '<td>' + fmtDay(r.createdAt) + '</td>' +
+          '<td style="white-space:nowrap">' + fmtDate(r.createdAt) + '</td>' +
           '<td><b>' + r.logins + '</b></td>' +
           '<td>' + fmtDate(r.lastLogin) + '</td>' +
           '<td>' + r.orders + '</td>' +
@@ -482,7 +482,7 @@
           '<td>' + esc(r.pincode || '—') + '</td>' +
           '<td>' + esc(r.home_type || '—') + '</td>' +
           '<td>' + esc(r.source || '—') + '</td>' +
-          '<td>' + fmtDay(r.claimedAt) + '</td>' +
+          '<td style="white-space:nowrap">' + fmtDate(r.claimedAt) + '</td>' +
           actionCell('lead', r.id) +
         '</tr>';
       }).join('') + '</tbody></table>';
@@ -521,7 +521,7 @@
           '<td>' + esc(r.pincode || '—') + '</td>' +
           '<td>' + esc(r.businessType || '—') + '</td>' +
           '<td>' + esc(r.experience || '—') + '</td>' +
-          '<td>' + fmtDay(r.appliedAt) + '</td>' +
+          '<td style="white-space:nowrap">' + fmtDate(r.appliedAt) + '</td>' +
           actionCell('dealer', r.id) +
         '</tr>';
       }).join('') + '</tbody></table>';
@@ -565,7 +565,7 @@
           '<td>' + esc(r.state || '—') + '</td>' +
           '<td>' + esc(r.pincode || '—') + '</td>' +
           '<td>' + esc(r.subType || '—') + (r.currentProducts ? '<br><span class="adm-muted">' + esc(r.currentProducts) + '</span>' : '') + '</td>' +
-          '<td>' + fmtDay(r.appliedAt) + '</td>' +
+          '<td style="white-space:nowrap">' + fmtDate(r.appliedAt) + '</td>' +
           actionCell('b2b', r.id) +
         '</tr>';
       }).join('') + '</tbody></table>';
@@ -795,7 +795,7 @@
   function exportCSV(tab) {
     if (tab === 'customers') {
       var rows = customerRows().map(function (r) {
-        return [r.name, r.mobile, r.email, fmtDay(r.createdAt), r.logins, fmtDate(r.lastLogin), r.orders, r.spent.toFixed(2), r.addresses, r.cart];
+        return [r.name, r.mobile, r.email, fmtDate(r.createdAt), r.logins, fmtDate(r.lastLogin), r.orders, r.spent.toFixed(2), r.addresses, r.cart];
       });
       download('dcal-customers.csv', toCSV(['Name', 'Mobile', 'Email', 'Joined', 'Logins', 'LastLogin', 'Orders', 'Spent', 'Addresses', 'CartItems'], rows));
     } else if (tab === 'demokits') {

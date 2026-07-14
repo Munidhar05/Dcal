@@ -753,6 +753,10 @@ select.dcal-input::-ms-expand{display:none}
 .dcal-link-btn{background:none;border:none;color:#0077B6;font-weight:700;font-size:13px;cursor:pointer;padding:0;font-family:inherit}
 .dcal-link-btn:hover{text-decoration:underline}
 .dcal-link-btn--danger{color:#DC2626}
+/* primary "Track order" action inside an order card */
+.dcal-order__track{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff;text-decoration:none;font-weight:700;font-size:13.5px;padding:9px 18px;border-radius:999px;box-shadow:0 8px 18px -8px rgba(0,119,182,.55);transition:filter .2s ease,transform .2s ease}
+.dcal-order__track:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.dcal-order__track svg{flex-shrink:0}
 
 /* ===== Address book rows (profile drawer) ===== */
 .dcal-addr-row{border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;margin-bottom:12px}

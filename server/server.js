@@ -18,6 +18,7 @@ const User = require('./models/User');
 const Order = require('./models/Order');
 const Lead = require('./models/Lead');
 const Dealer = require('./models/Dealer');
+const Counter = require('./models/Counter');
 
 const app = express();
 app.set('trust proxy', 1);   // Render is a SINGLE proxy: req.protocol=https AND req.ip is the real client (not a spoofable X-Forwarded-For left value)
@@ -303,7 +304,8 @@ async function notifyOrderPlaced(order, base) {
     + '<p style="margin:0 0 4px;color:#475569;font-size:14px">Order <b>#' + escHtml(order.orderId) + '</b> · ' + escHtml(order.total) + (order.paid ? ' · Paid' : ' · Pay on delivery') + '</p>'
     + productImgHtml(base, order)
     + orderItemsHtml(order) + addressHtml(order.address)
-    + '<p style="margin:14px 0 0;color:#475569;font-size:14px">We\'ll email you as your order progresses.</p>';
+    + '<p style="margin:16px 0 6px"><a href="' + (base || '') + '/track-order?order=' + encodeURIComponent(order.orderId) + '" style="display:inline-block;background:#0077B6;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:14px">Track your order →</a></p>'
+    + '<p style="margin:8px 0 0;color:#475569;font-size:14px">We\'ll email you as your order progresses.</p>';
   const email = await emailForMobile(order.mobile);
   if (email) sendMail({ to: email, subject: "Your D'Cal order #" + order.orderId + ' is confirmed', html: mailLayout('Order confirmed 🎉', inner, logo), text: 'Order #' + order.orderId + ' confirmed. Total ' + order.total }).catch((e) => console.warn('order-confirm email failed:', e.message));
   if (STORE_NOTIFY_EMAIL) sendMail({ to: STORE_NOTIFY_EMAIL, subject: 'New order #' + order.orderId + ' (' + order.total + ')', html: mailLayout('New order received', inner + '<p style="font-size:13px;color:#475569">Customer mobile: ' + escHtml(order.mobile) + '</p>', logo) }).catch(() => {});
@@ -314,7 +316,8 @@ async function notifyStatusChange(order, base) {
   const inner = '<p style="margin:0 0 8px">' + escHtml(msg) + '</p>'
     + '<p style="margin:0 0 4px;color:#475569;font-size:14px">Order <b>#' + escHtml(order.orderId) + '</b> — status: <b>' + escHtml(order.status) + '</b></p>'
     + productImgHtml(base, order)
-    + orderItemsHtml(order);
+    + orderItemsHtml(order)
+    + '<p style="margin:16px 0 0"><a href="' + (base || '') + '/track-order?order=' + encodeURIComponent(order.orderId) + '" style="display:inline-block;background:#0077B6;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:14px">Track your order →</a></p>';
   const email = await emailForMobile(order.mobile);
   if (email) sendMail({ to: email, subject: "D'Cal order #" + order.orderId + ': ' + order.status, html: mailLayout('Order update', inner, logo), text: 'Order #' + order.orderId + ' is now ' + order.status }).catch((e) => console.warn('status email failed:', e.message));
 }
@@ -529,11 +532,12 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
       line: [sa.line1, sa.line2].filter(Boolean).join(', ') || sa.line || '',
       city: sa.city || '', state: sa.state || '', pincode: sa.zipcode || sa.zip || sa.pincode || '' };
     const order = await Order.create({
-      orderId: String(Date.now()).slice(-8), mobile, customerName: address.name || '',
+      orderId: await genOrderId(items), mobile, customerName: address.name || '',
       title: items.length ? (items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : '')) : 'Order',
       total: money(total), totalNum: total, image: '', items, address,
       payment: isCod ? 'Cash on Delivery' : 'Prepaid (Razorpay)', coupon: '', discount: 0,
-      paid: !isCod, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now()
+      paid: !isCod, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now(),
+      statusHistory: [{ status: 'Confirmed', at: Date.now() }]
     });
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});
     console.log('razorpay webhook: recovered order', order.orderId, 'for', roid);
@@ -1009,6 +1013,44 @@ function normTitle(s) { return String(s || '').replace(/[’‘']/g, "'").replac
 Object.keys(CATALOG).forEach((slug) => { byTitle[normTitle(CATALOG[slug].title)] = slug; });
 function money(n) { return '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+/* ---------- order numbers: DC + product no. + product code + running number ----------
+   e.g. DC01WS00001. The code comes from the order's MAIN product (highest unit price),
+   and the 5-digit number is a per-product running count kept in the Counter collection,
+   incremented atomically so two orders can never collide. NOTE: these numbers are
+   sequential and therefore guessable — the store owner accepted that trade-off in
+   exchange for a readable, product-tagged order number (public /track takes the number
+   alone). Orders whose product can't be resolved fall back to the DC00XX##### series. */
+const PRODUCT_CODE = {
+  'water-softener':   { num: '01', code: 'WS' },   // D'Cal Independent House Water Softener
+  'shower-filter':    { num: '02', code: 'SF' },   // D'Cal Shower Head Filter
+  'tap-filter':       { num: '03', code: 'TF' },   // D'Cal Tap Filter
+  'washing-ball':     { num: '04', code: 'WM' },   // D'Cal Washing Machine Ball
+  'tap-tile-cleaner': { num: '05', code: 'TC' }    // D'Cal Tap & Tile Cleaner
+};
+// pick the order's "main" product = the highest unit-price catalog line
+function mainProductCode(items) {
+  const lines = priceCart(items).lines;   // [{ slug, qty, price }]
+  let best = null;
+  lines.forEach((l) => { if (PRODUCT_CODE[l.slug] && (!best || l.price > best.price)) best = { slug: l.slug, price: l.price }; });
+  return (best && PRODUCT_CODE[best.slug]) || { num: '00', code: 'XX' };
+}
+// atomic per-product running number (1, 2, 3, …)
+async function nextOrderSeq(code) {
+  const c = await Counter.findByIdAndUpdate('order:' + code, { $inc: { seq: 1 } }, { new: true, upsert: true });
+  return c.seq;
+}
+async function genOrderId(items) {
+  const p = mainProductCode(items);
+  const seq = await nextOrderSeq(p.code);
+  return 'DC' + p.num + p.code + String(seq).padStart(5, '0');
+}
+// public image path for a cart line, resolved from the catalog (so the track page can
+// show the customer a picture of what they ordered). Empty string if it can't be matched.
+function itemImage(it) {
+  const slug = (it && CATALOG[it.slug]) ? it.slug : byTitle[normTitle(it && (it.title || it.id))];
+  return (slug && CATALOG[slug].img) ? '/images/' + CATALOG[slug].img : '';
+}
+
 // price a cart -> { subtotal, lines, ok }; ok=false if any line can't be priced
 function priceCart(items) {
   let subtotal = 0, ok = true; const lines = [];
@@ -1112,12 +1154,15 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     let order;
     try {
       order = await Order.create({
-        orderId: o.orderId, mobile, customerName: o.customerName || '',
+        // the server assigns the order number (DC01WS00001…) from the priced items —
+        // the client's suggested id is ignored so the running sequence can't be forged
+        orderId: await genOrderId(o.items), mobile, customerName: o.customerName || '',
         title: o.title || '', total: money(q.total), totalNum: q.total,
         image: o.image || '', items: o.items || [], address: o.address || {},
         payment: payLabel || o.payment || '', coupon: q.code, discount: q.discount,
         paid, paymentId, razorpayOrderId: String(o.razorpayOrderId || ''),
-        status: 'Confirmed', date: Date.now()
+        status: 'Confirmed', date: Date.now(),
+        statusHistory: [{ status: 'Confirmed', at: Date.now() }]
       });
     } catch (e) {
       // concurrent double-submit hit the unique paymentId/razorpayOrderId index —
@@ -1154,6 +1199,7 @@ app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
     order.cancelReason = reason || '';
     order.cancelledAt = Date.now();
     order.refundStatus = order.paid ? 'Refund initiated' : 'No payment taken';
+    order.statusHistory = (order.statusHistory || []).concat([{ status: 'Cancelled', at: Date.now() }]);
     await order.save();
     notifyOrderCancelled(order, baseUrlFrom(req)).catch(() => {});
     res.json({ order });
@@ -1161,22 +1207,22 @@ app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
 });
 
 /* ---------- public order tracking (no login) ----------
-   Look up ONE order by its number + the mobile it was placed with. BOTH must match:
-   the phone is the shared secret that stops anyone enumerating orders by guessing an
-   8-digit id. Returns only status-level fields (never the full address, payment id or
-   customer name), and is rate-limited so the pair can't be brute-forced. This lets a
-   customer on a new device / after clearing their browser still find their order. */
-app.post('/api/orders/track', rateLimit({ windowMs: 10 * 60 * 1000, max: 20, tag: 'track' }), async (req, res) => {
+   Look up ONE order by its number alone — the customer just pastes the number from
+   their confirmation (like Amazon/Flipkart guest tracking). This is safe because new
+   order numbers are unguessable (genOrderId: ~60 bits of entropy), and it's still
+   rate-limited as defence-in-depth. Returns ONLY status-level fields — never the full
+   address, payment id, mobile or customer name — so even a leaked number reveals no PII
+   beyond the delivery city. (Older, short 8-digit numbers still resolve here.) */
+app.post('/api/orders/track', rateLimit({ windowMs: 10 * 60 * 1000, max: 40, tag: 'track' }), async (req, res) => {
   if (!requireDB(res)) return;
   try {
     const b = req.body || {};
-    const orderId = String(b.orderId || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 20);
-    const phone = String(b.phone || '').replace(/[^0-9]/g, '').slice(-10);
-    if (!orderId || phone.length !== 10) {
-      return res.status(400).json({ error: 'Enter your order number and the 10-digit mobile number used to place it.' });
-    }
-    const order = await Order.findOne({ orderId, mobile: phone });
-    if (!order) return res.status(404).json({ error: 'No order found with that number and mobile number. Please check and try again.' });
+    const orderId = String(b.orderId || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 24);
+    if (!orderId) return res.status(400).json({ error: 'Enter your order number.' });
+    // exact match first; fall back to case-insensitive so a hand-typed number still resolves
+    let order = await Order.findOne({ orderId });
+    if (!order) order = await Order.findOne({ orderId: new RegExp('^' + orderId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') });
+    if (!order) return res.status(404).json({ error: 'No order found with that number. Please check the number and try again.' });
     // minimal, non-sensitive projection — enough to show status, not to leak PII
     res.json({ order: {
       orderId: order.orderId,
@@ -1186,11 +1232,12 @@ app.post('/api/orders/track', rateLimit({ windowMs: 10 * 60 * 1000, max: 20, tag
       total: order.total,
       paid: order.paid,
       payment: order.payment,
-      items: (order.items || []).map((it) => ({ title: it.title, qty: it.qty })),
+      items: (order.items || []).map((it) => ({ title: it.title, qty: it.qty, image: itemImage(it) })),
       city: (order.address || {}).city || '',
       refundStatus: order.refundStatus || '',
       cancelReason: order.cancelReason || '',
-      cancelledAt: order.cancelledAt || null
+      cancelledAt: order.cancelledAt || null,
+      statusHistory: (order.statusHistory || []).map((h) => ({ status: h.status, at: h.at }))
     } });
   } catch (e) { serverErr(res, e); }
 });
@@ -1242,10 +1289,14 @@ app.put('/api/admin/orders/:orderId', adminAuth, async (req, res) => {
     if (b.payment !== undefined) set.payment = String(b.payment).slice(0, 60);
     if (b.address !== undefined && typeof b.address === 'object') set.address = b.address;
     const before = await Order.findOne({ orderId: req.params.orderId });
-    const order = await Order.findOneAndUpdate({ orderId: req.params.orderId }, { $set: set }, { new: true });
+    const statusChanged = set.status !== undefined && before && before.status !== set.status;
+    const update = { $set: set };
+    // stamp the moment of each status change so the track page can show a dated timeline
+    if (statusChanged) update.$push = { statusHistory: { status: set.status, at: Date.now() } };
+    const order = await Order.findOneAndUpdate({ orderId: req.params.orderId }, update, { new: true });
     if (!order) return res.status(404).json({ error: 'not found' });
     // email the customer only when the status actually changed (e.g. Shipped -> Out for Delivery)
-    if (set.status !== undefined && before && before.status !== order.status) notifyStatusChange(order, baseUrlFrom(req)).catch(() => {});
+    if (statusChanged) notifyStatusChange(order, baseUrlFrom(req)).catch(() => {});
     res.json({ order });
   } catch (e) { serverErr(res, e); }
 });

@@ -17,6 +17,9 @@ const OrderSchema = new mongoose.Schema({
   paymentId: { type: String, default: '' },        // Razorpay payment id (pay_XXXX)
   razorpayOrderId: { type: String, default: '' },  // Razorpay order id (order_XXXX)
   status: { type: String, default: 'Confirmed' },
+  // when each status was set, e.g. [{ status:'Confirmed', at:169... }, { status:'Shipped', at:... }]
+  // — drives the timestamped delivery timeline on the public track page
+  statusHistory: { type: Array, default: [] },
   cancelReason: { type: String, default: '' },
   cancelledAt: { type: Number, default: null },
   refundStatus: { type: String, default: '' },

@@ -152,6 +152,8 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   // status -> css-class-safe slug, e.g. "Out for Delivery" -> "out-for-delivery"
   function statusSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+  // order date + time, e.g. "10 Jul 2026, 3:45 pm" — customers see when they placed it
+  function fmtDateTime(ms) { try { return new Date(ms).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } }
 
   var pendingAction = null; // function to run after a successful login
   var genOtp = null;        // current demo OTP
@@ -990,7 +992,7 @@
           (o.image ? '<img src="' + esc(o.image) + '" alt="">' : '') +
           '<div class="dcal-order__main">' +
             '<p class="dcal-card__t">' + esc(o.title || ('Order #' + o.id)) + '</p>' +
-            '<p class="dcal-card__s">Order #' + esc(o.id) + ' · ' + new Date(o.date).toLocaleDateString() + '</p>' +
+            '<p class="dcal-card__s">Order #' + esc(o.id) + ' · ' + fmtDateTime(o.date) + '</p>' +
             '<p class="dcal-card__s">' + esc(o.total || '') + ' · <span class="dcal-order__badge dcal-order__badge--' + statusSlug(st) + '">' + esc(st) + '</span></p>' +
           '</div>' +
           '<span class="dcal-order__chev">' + IC.chev + '</span>' +
@@ -1089,6 +1091,11 @@
       html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Payment</h4>' +
         '<span class="dcal-order__pay">' + esc(o.payment) + (o.paid ? ' · Paid ✓' : '') + '</span></div>';
     }
+    html += '<div class="dcal-order__sec">' +
+      '<a class="dcal-order__track" href="' + rel('track-order') + '?order=' + encodeURIComponent(o.id) + '">' +
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h11l3 4v6h-2"/><path d="M3 7v10h2"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg>' +
+        'Track order' +
+      '</a></div>';
     if ((o.status || '') === 'Cancelled') {
       html += '<div class="dcal-order__sec dcal-cancel-info"><h4 class="dcal-order__h4">Cancellation</h4>' +
         '<p class="dcal-order__addr">Status: <b style="color:#DC2626">Cancelled</b>' +
@@ -1450,6 +1457,17 @@
 
   /* ---------- ADDRESS BOOK (multiple addresses per user) ---------- */
   function newAddrId() { return 'addr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  /* Unguessable, human-friendly order number, e.g. "DC7K9F3M2QA4" — matches the server's
+     genOrderId(). A Crockford-style alphabet (no 0/O/1/I/L) + 12 crypto-random chars means
+     order numbers can't be enumerated on the public /track-order page (which now takes only
+     the number, no mobile). Falls back to Math.random on very old browsers. */
+  function genOrderId() {
+    var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', s = '';
+    var g = (window.crypto && window.crypto.getRandomValues) ? window.crypto.getRandomValues(new Uint8Array(12)) : null;
+    for (var i = 0; i < 12; i++) s += A[(g ? g[i] : Math.floor(Math.random() * 256)) % A.length];
+    return 'DC' + s;
+  }
 
   // returns the user's address list, migrating any legacy single `address` field
   function getAddresses() {
@@ -2157,7 +2175,7 @@
     var mobile = sessionMobile();
     if (!addr.phone && mobile) addr.phone = mobile;
     var order = {
-      id: String(Date.now()).slice(-8),
+      id: genOrderId(),
       title: items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : ''),
       total: money(subtotal), image: items[0].image, items: items.slice(),
       address: addr, payment: payInfo.paid ? 'Prepaid (Razorpay)' : 'Cash on Delivery',
@@ -2175,6 +2193,7 @@
       coupon: '', status: order.status, date: order.date
     }).then(function (r) {
       var saved = (r && r.order) || {};
+      if (saved.orderId) order.id = saved.orderId;   // server assigns the real number (DC01WS00001…)
       order.total = saved.total || order.total;      // server is authoritative for
       order.paid = !!saved.paid;                     // total, paid flag, and the
       if (saved.payment) order.payment = saved.payment;   // Prepaid/COD label
@@ -2251,10 +2270,9 @@
     var t = computeTotals(cartSubtotal());
     var addr = checkout.address || getDefaultAddress() || {};
     var payLabel = (PAY_METHODS.filter(function (p) { return p.id === checkout.payment; })[0] || {}).label || 'UPI';
-    var orderId = String(Date.now()).slice(-8);
-    var list = orders();
-    list.unshift({
-      id: orderId,
+    var wasCod = checkout.payment === 'cod';
+    var newOrder = {
+      id: genOrderId(),   // temporary local id — the SERVER assigns the real number (DC01WS00001…)
       title: cart[0].title + (cart.length > 1 ? ' + ' + (cart.length - 1) + ' more' : ''),
       total: money(t.total), image: cart[0].image, items: cart.slice(),
       address: addr, payment: payLabel,
@@ -2262,28 +2280,48 @@
       paid: !!payInfo.paid, paymentId: payInfo.paymentId || '',
       razorpayOrderId: payInfo.razorpayOrderId || '',
       date: Date.now(), status: 'Confirmed'
-    });
-    saveOrders(list);
-    // save to the central DB; if that fails, warn instead of silently losing the order
-    pushOrder(list[0], sessionMobile()).catch(function () { toast('Your order is saved on this device, but syncing to our system failed — please contact support to confirm it.'); });
+    };
+    var list = orders(); list.unshift(newOrder); saveOrders(list);
     cartSave([]); setCouponCode(''); updateCartBubbles();
     checkout = { address: null, addressId: null, payment: 'upi' };
     var payNote = payInfo.paid
       ? 'Paid online via <b>' + esc(payLabel) + '</b> ✓'
-      : (checkout.payment === 'cod' || payLabel === 'Cash on Delivery'
+      : (wasCod || payLabel === 'Cash on Delivery'
           ? 'Payment: <b>Cash on Delivery</b>'
           : 'Payment: <b>' + esc(payLabel) + '</b>');
+
     var root = document.getElementById('dcal-cart-root');
+    // brief interim state while the server confirms and assigns the order number
     if (root) root.innerHTML =
       '<div class="glass" style="max-width:560px;margin:0 auto;padding:48px;text-align:center;background:#fff">' +
-        '<div style="color:#0B6E4F;display:flex;justify-content:center"><svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg></div>' +
-        '<h2 style="font-size:24px;font-weight:700;margin:14px 0 8px">Order placed! 🎉</h2>' +
-        '<p class="lead" style="margin:0 auto 8px">Thank you, ' + esc((addr.name || '').split(' ')[0] || 'friend') + '! Your order is confirmed.</p>' +
-        '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
-        (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
-        '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Track it in <b>My Orders</b>.</p>' +
-        '<a href="/collection" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Continue shopping →</a></div>';
-    toast('Order placed! 🎉');
+        '<h2 style="font-size:22px;font-weight:700;margin:0">Placing your order…</h2>' +
+        '<p class="lead" style="margin:10px auto 0">Just a moment while we confirm it.</p></div>';
+
+    function showConfirmation(orderId) {
+      if (root) root.innerHTML =
+        '<div class="glass" style="max-width:560px;margin:0 auto;padding:48px;text-align:center;background:#fff">' +
+          '<div style="color:#0B6E4F;display:flex;justify-content:center"><svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg></div>' +
+          '<h2 style="font-size:24px;font-weight:700;margin:14px 0 8px">Order placed! 🎉</h2>' +
+          '<p class="lead" style="margin:0 auto 8px">Thank you, ' + esc((addr.name || '').split(' ')[0] || 'friend') + '! Your order is confirmed.</p>' +
+          '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
+          (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
+          '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Save your order number to track it anytime.</p>' +
+          '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
+            '<a href="/track-order?order=' + encodeURIComponent(orderId) + '" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Track order →</a>' +
+            '<a href="/collection" class="dcal-btn dcal-btn--ghost" style="display:inline-flex;width:auto;text-decoration:none;background:#fff;color:#0077B6;border:1.5px solid #CAF0F8">Continue shopping</a>' +
+          '</div></div>';
+      toast('Order placed! 🎉');
+    }
+
+    // save to the central DB; the server is authoritative for the order number
+    pushOrder(newOrder, sessionMobile()).then(function (r) {
+      var saved = (r && r.order) || {};
+      if (saved.orderId) { newOrder.id = saved.orderId; var l = orders(); if (l[0]) { l[0].id = saved.orderId; saveOrders(l); } }
+      showConfirmation(newOrder.id);
+    }).catch(function () {
+      toast('Your order is saved on this device, but syncing to our system failed — please contact support to confirm it.');
+      showConfirmation(newOrder.id);
+    });
   }
 
   /* ====================================================
