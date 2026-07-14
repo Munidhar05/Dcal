@@ -102,8 +102,8 @@ h3{font-size:1.2rem;font-family:var(--sans);font-weight:700;letter-spacing:-.01e
 .btn-primary:hover{transform:translateY(-3px);box-shadow:0 24px 52px rgba(26,140,199,.5)}
 .btn-primary::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.42),transparent 70%);transform:translateX(-130%);transition:transform .75s}
 .btn-primary:hover::after{transform:translateX(130%)}
-.btn-ghost{background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.55);backdrop-filter:blur(6px)}
-.btn-ghost:hover{background:rgba(255,255,255,.24);transform:translateY(-3px)}
+.btn-ghost{background:#fff;color:var(--navy-700);border:1.5px solid var(--line)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-3px);box-shadow:0 10px 24px rgba(26,140,199,.18)}
 .btn-light{background:#fff;color:var(--navy-700);box-shadow:var(--shadow-md)}
 .btn-light:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
 .btn-whatsapp{background:#25D366;color:#fff;box-shadow:0 14px 30px rgba(37,211,102,.4)}

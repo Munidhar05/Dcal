@@ -44,6 +44,64 @@
     .ip-step .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
     .ip-step.done .dot{background:#0077B6}
     .ip-step.todo .dot{background:#CBD5E1}
+
+    /* single-field input with a leading icon */
+    .ip-inputwrap{position:relative;margin:0 0 12px}
+    .ip-inputicon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:#94A3B8;pointer-events:none}
+    .ip-field--icon{padding-left:42px;margin:0;letter-spacing:.04em;font-weight:600}
+    .ip-field--icon::placeholder{letter-spacing:normal;font-weight:400}
+
+    /* ---- result: order card + delivery timeline (Amazon/Flipkart-style) ---- */
+    .to-card{border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;text-align:left;box-shadow:0 14px 40px -28px rgba(2,42,90,.45);animation:toFade .35s ease}
+    @keyframes toFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .to-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:20px 22px;background:linear-gradient(135deg,#F0F9FF,#fff)}
+    .to-ordno{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0369A1}
+    .to-ordid{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;color:#0B1220;margin-top:2px;letter-spacing:.02em;word-break:break-all}
+    .to-meta{color:#64748B;font-size:13px;margin-top:7px;line-height:1.7}
+    .to-pill{flex-shrink:0;font-size:12px;font-weight:800;padding:7px 13px;border-radius:999px;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
+    .to-pill--blue{background:#E0F2FE;color:#0369A1}
+    .to-pill--amber{background:#FEF3C7;color:#B45309}
+    .to-pill--green{background:#D1FAE5;color:#047857}
+    .to-pill--red{background:#FEE2E2;color:#B91C1C}
+
+    .to-eta{display:flex;align-items:center;gap:10px;padding:13px 22px;font-weight:600;font-size:14px;border-top:1px solid #E2E8F0}
+    .to-eta--pending{background:#F0F9FF;color:#0369A1}
+    .to-eta--done{background:#ECFDF5;color:#047857}
+    .to-eta svg{flex-shrink:0}
+
+    .to-items{padding:14px 22px;border-top:1px solid #E2E8F0}
+    .to-items-h{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin:0 0 8px}
+    .to-item{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:#334155;padding:7px 0}
+    .to-item-l{display:flex;align-items:center;gap:12px;min-width:0}
+    .to-item-img{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#F1F5F9;border:1px solid #E2E8F0;flex-shrink:0}
+    .to-item-img--ph{display:inline-block}
+    .to-item b{color:#0B1220;font-weight:600}
+    .to-item-qty{color:#64748B;flex-shrink:0}
+
+    /* vertical stepper */
+    .to-track{padding:18px 22px 22px;border-top:1px solid #E2E8F0}
+    .to-step{position:relative;display:flex;gap:16px;padding-bottom:24px}
+    .to-step:last-child{padding-bottom:0}
+    .to-step::before{content:"";position:absolute;left:15px;top:36px;bottom:-2px;width:2px;background:#E2E8F0}
+    .to-step:last-child::before{display:none}
+    .to-step.done::before{background:#0077B6}
+    .to-dot{position:relative;z-index:1;flex-shrink:0;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#F1F5F9;color:#94A3B8;border:2px solid #E2E8F0;transition:all .3s}
+    .to-step.done .to-dot{background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff;border-color:transparent}
+    .to-step.current .to-dot{background:#fff;color:#0077B6;border-color:#0077B6;animation:toPulse 1.9s ease-in-out infinite}
+    @keyframes toPulse{0%,100%{box-shadow:0 0 0 3px rgba(0,119,182,.18)}50%{box-shadow:0 0 0 7px rgba(0,119,182,.04)}}
+    .to-body{padding-top:5px;min-width:0}
+    .to-name{font-weight:700;font-size:15px;color:#0B1220}
+    .to-step.current .to-name{color:#0077B6}
+    .to-step.todo .to-name{color:#94A3B8;font-weight:600}
+    .to-sub{font-size:12.5px;color:#64748B;margin-top:3px;line-height:1.5}
+
+    .to-cancel{margin:0 22px 22px;padding:14px 16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:12px}
+    .to-cancel-h{display:flex;align-items:center;gap:8px;color:#B91C1C;font-weight:700;font-size:15px}
+    .to-cancel-p{color:#7F1D1D;font-size:13.5px;margin:6px 0 0;line-height:1.6}
+
+    .to-help{font-size:13px;color:#64748B;margin:14px 2px 0;text-align:center}
+    .to-help a{color:#0077B6;font-weight:600;text-decoration:none}
+    .to-help a:hover{text-decoration:underline}
   </style>
   <script src="../js/auth.js" defer></script>
 </head>
@@ -61,14 +119,16 @@
   <main class="ip-main">
     <span class="ip-eyebrow">Order Status</span>
     <h1>Track your order</h1>
-    <p class="ip-lead">Enter your order number to see its live status — Confirmed, Processing, Shipped or Delivered. No sign-in needed.</p>
+    <p class="ip-lead">Paste your order number to see its live status — Confirmed, Processing, Shipped, Out for Delivery or Delivered. No sign-in needed.</p>
 
     <div class="ip-card">
       <h2>Track by order number</h2>
-      <p>Use the order number from your confirmation and the mobile number you ordered with.</p>
+      <p>Enter the order number from your confirmation email or SMS (for example, <b>DC7K9F3M2QA4</b>).</p>
       <form id="ip-track-form" novalidate>
-        <input class="ip-field" name="orderId" inputmode="numeric" autocomplete="off" placeholder="Order number (e.g. 48217391)" required>
-        <input class="ip-field" name="phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="Mobile number used to order" required>
+        <div class="ip-inputwrap">
+          <svg class="ip-inputicon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="12" x="3" y="6" rx="2"/><path d="M7 12h.01M11 12h6"/></svg>
+          <input class="ip-field ip-field--icon" name="orderId" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Order number" required>
+        </div>
         <button type="submit" class="ip-btn" style="width:100%;justify-content:center">Track order →</button>
         <p class="ip-msg" id="ip-track-msg"></p>
       </form>
@@ -256,9 +316,27 @@
       else { location.href = '/'; }
     });
 
-    /* ---- public order lookup: order number + mobile (no login) ---- */
+    /* ---- public order lookup by order number only (no login, no mobile) ---- */
     (function () {
-      var STEPS = ['Confirmed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
+      // steps mirror the admin dashboard's status list (minus the terminal "Cancelled")
+      var STEPS = [
+        { name: 'Order Confirmed', icon: '<path d="M20 6 9 17l-5-5"/>' },
+        { name: 'Processing', icon: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
+        { name: 'Shipped', icon: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>' },
+        { name: 'Out for Delivery', icon: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>' },
+        { name: 'Delivered', icon: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>' }
+      ];
+      // admin status value -> our step index
+      var STATUS_INDEX = { 'Confirmed': 0, 'Order Confirmed': 0, 'Processing': 1, 'Shipped': 2, 'Out for Delivery': 3, 'Delivered': 4 };
+      // step index -> the stored status value, to look up its timestamp in statusHistory
+      var STEP_STATUS = ['Confirmed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
+      var STEP_MSG = {
+        1: "We're preparing your items for dispatch.",
+        2: 'Your order has left our warehouse and is on its way.',
+        3: 'Arriving today — please keep your phone reachable.',
+        4: 'Delivered. Thank you for shopping with D\'Cal!'
+      };
+
       var form = document.getElementById('ip-track-form');
       var msg = document.getElementById('ip-track-msg');
       var out = document.getElementById('ip-track-result');
@@ -266,50 +344,119 @@
 
       function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
       function fmtDate(ms) { try { return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return ''; } }
+      function fmtDateTime(ms) { try { return new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+      function addDays(ms, n) { return ms + n * 86400000; }
 
-      function renderOrder(o) {
-        var head = '<div style="font-weight:800;font-size:16px;color:#0B1220">Order #' + esc(o.orderId) + '</div>'
-          + '<div style="color:#475569;font-size:13.5px;margin:2px 0 14px">' + esc(fmtDate(o.date))
-          + (o.total ? ' · ' + esc(o.total) : '')
-          + ' · ' + (o.paid ? 'Paid' : esc(o.payment || 'Pay on delivery'))
-          + (o.city ? ' · ' + esc(o.city) : '') + '</div>';
-        var items = (o.items || []).map(function (it) {
-          return '<div style="font-size:14px;color:#334155;padding:3px 0">' + esc(it.title || 'Item') + ' × ' + (it.qty || 1) + '</div>';
-        }).join('');
-        var body;
-        if (o.status === 'Cancelled') {
-          body = '<div class="ip-step done" style="color:#B91C1C"><span class="dot" style="background:#B91C1C"></span>Cancelled'
-            + (o.cancelReason ? ' — ' + esc(o.cancelReason) : '') + '</div>'
-            + (o.refundStatus ? '<div style="font-size:13.5px;color:#475569;margin-top:6px">Refund: ' + esc(o.refundStatus) + '</div>' : '');
-        } else {
-          var idx = STEPS.indexOf(o.status);
-          if (idx < 0) idx = 0;
-          body = STEPS.map(function (s, i) {
-            var done = i <= idx;
-            return '<div class="ip-step ' + (done ? 'done' : 'todo') + '"><span class="dot"></span>' + s + '</div>';
-          }).join('');
-        }
-        return '<div style="border-top:1px solid #E2E8F0;padding-top:16px">' + head + items
-          + '<div style="margin-top:14px">' + body + '</div></div>';
+      // accept a raw number, or a pasted tracking link like ".../track-order?order=DC123"
+      function extractOrderId(raw) {
+        raw = String(raw || '').trim();
+        var m = raw.match(/[?&#]order=([^&#\s]+)/i);
+        if (m) { try { raw = decodeURIComponent(m[1]); } catch (e) { raw = m[1]; } }
+        return raw.replace(/[^0-9A-Za-z]/g, '');
       }
 
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
+      function pill(status) {
+        var cls = 'to-pill--blue';
+        if (status === 'Shipped' || status === 'Out for Delivery') cls = 'to-pill--amber';
+        else if (status === 'Delivered') cls = 'to-pill--green';
+        else if (status === 'Cancelled') cls = 'to-pill--red';
+        return '<span class="to-pill ' + cls + '">' + esc(status || 'Confirmed') + '</span>';
+      }
+
+      function renderOrder(o) {
+        var status = o.status || 'Confirmed';
+        var cancelled = status === 'Cancelled';
+        var idx = STATUS_INDEX[status]; if (idx == null) idx = 0;
+        // when each status was reached, from the admin's updates (latest wins if repeated)
+        var stampAt = {};
+        (o.statusHistory || []).forEach(function (h) { if (h && h.status) stampAt[h.status] = h.at; });
+
+        var meta = [];
+        if (o.date) meta.push('Placed ' + esc(fmtDateTime(o.date)));
+        if (o.total) meta.push(esc(o.total));
+        meta.push(o.paid ? 'Paid' : esc(o.payment || 'Pay on delivery'));
+        if (o.city) meta.push('Ships to ' + esc(o.city));
+
+        var top = '<div class="to-top">'
+          + '<div><div class="to-ordno">Order number</div>'
+          + '<div class="to-ordid">' + esc(o.orderId) + '</div>'
+          + '<div class="to-meta">' + meta.join(' &nbsp;·&nbsp; ') + '</div></div>'
+          + pill(status) + '</div>';
+
+        // delivery-estimate banner
+        var eta = '';
+        if (!cancelled) {
+          if (idx >= 4) {
+            eta = '<div class="to-eta to-eta--done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Delivered</div>';
+          } else if (o.date) {
+            var days = idx >= 3 ? 0 : (idx >= 2 ? 2 : 5);
+            var by = days === 0 ? 'today' : ('by ' + esc(fmtDate(addDays(o.date, days))));
+            eta = '<div class="to-eta to-eta--pending"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Estimated delivery ' + by + '</div>';
+          }
+        }
+
+        var items = (o.items || []).map(function (it) {
+          var img = it.image
+            ? '<img class="to-item-img" src="' + esc(it.image) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+            : '<span class="to-item-img to-item-img--ph" aria-hidden="true"></span>';
+          return '<div class="to-item"><span class="to-item-l">' + img + '<b>' + esc(it.title || 'Item') + '</b></span>'
+            + '<span class="to-item-qty">Qty ' + (Number(it.qty) || 1) + '</span></div>';
+        }).join('');
+        var itemsBlock = items ? '<div class="to-items"><p class="to-items-h">Items</p>' + items + '</div>' : '';
+
+        var body;
+        if (cancelled) {
+          body = '<div class="to-cancel"><div class="to-cancel-h">'
+            + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Order cancelled</div>'
+            + (o.cancelReason ? '<p class="to-cancel-p">Reason: ' + esc(o.cancelReason) + '</p>' : '')
+            + (o.refundStatus ? '<p class="to-cancel-p">Refund: ' + esc(o.refundStatus) + '</p>' : '')
+            + '</div>';
+        } else {
+          body = '<div class="to-track">' + STEPS.map(function (s, i) {
+            var state = i < idx ? 'done' : (i === idx ? 'current' : 'todo');
+            var done = i <= idx;
+            var sub = '';
+            // date + time this step was reached — step 0 falls back to the order's placed date
+            var at = stampAt[STEP_STATUS[i]]; if (i === 0 && !at) at = o.date;
+            if (at) sub += '<div class="to-sub">' + esc(fmtDateTime(at)) + '</div>';
+            if (i === idx && STEP_MSG[i]) sub += '<div class="to-sub">' + esc(STEP_MSG[i]) + '</div>';
+            var mark = done ? s.icon : '<circle cx="12" cy="12" r="3"/>';
+            return '<div class="to-step ' + state + '">'
+              + '<span class="to-dot"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + mark + '</svg></span>'
+              + '<div class="to-body"><div class="to-name">' + esc(s.name) + '</div>' + sub + '</div></div>';
+          }).join('') + '</div>';
+        }
+
+        return '<div class="to-card">' + top + eta + itemsBlock + body + '</div>'
+          + '<p class="to-help">Something look wrong? <a href="/contact">Contact us</a> or WhatsApp <a href="https://wa.me/918622909192" target="_blank" rel="noopener">+91 8622909192</a>.</p>';
+      }
+
+      function track(orderId) {
         msg.textContent = ''; out.innerHTML = '';
-        var orderId = (form.orderId.value || '').replace(/[^0-9A-Za-z]/g, '');
-        var phone = (form.phone.value || '').replace(/[^0-9]/g, '').slice(-10);
-        if (!orderId || phone.length !== 10) { msg.textContent = 'Enter your order number and the 10-digit mobile number used to order.'; return; }
+        if (!orderId) { msg.textContent = 'Enter your order number.'; return; }
         var btn = form.querySelector('button[type="submit"]');
         var label = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Checking…';
-        fetch('/api/orders/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: orderId, phone: phone }) })
+        fetch('/api/orders/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: orderId }) })
           .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
           .then(function (res) {
-            if (!res.ok || !res.d || !res.d.order) { msg.textContent = (res.d && res.d.error) || 'No order found. Please check the number and mobile.'; return; }
+            if (!res.ok || !res.d || !res.d.order) { msg.textContent = (res.d && res.d.error) || 'No order found. Please check the number and try again.'; return; }
             out.innerHTML = renderOrder(res.d.order);
           })
           .catch(function () { msg.textContent = 'Could not reach the server. Please try again, or WhatsApp us at +91 8622909192.'; })
           .then(function () { btn.disabled = false; btn.innerHTML = label; });
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        track(extractOrderId(form.orderId.value));
       });
+
+      // deep-link: /track-order?order=DC123 (from a confirmation email / shared link)
+      // auto-fills and tracks straight away — "paste the link and see the status".
+      try {
+        var pre = new URLSearchParams(location.search).get('order');
+        if (pre) { var id = extractOrderId(pre); if (id) { form.orderId.value = id; track(id); } }
+      } catch (e) {}
     })();
   </script>
 </body>
