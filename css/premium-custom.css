@@ -689,16 +689,18 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
   .dcal-otp input{font-size:20px;border-radius:10px}
   .dcal-otp-pop{top:10px}
 
-  /* New footer pages — override their inline styles via higher specificity */
-  body .ip-head{padding:12px 18px;gap:8px}
-  body .ip-brand img{width:34px;height:34px}
-  body .ip-brand span{font-size:18px}
-  body .ip-nav{gap:6px 16px;width:100%;justify-content:flex-start}
-  body .ip-nav a{font-size:14px}
+  /* Footer/utility pages (track-order, faq, about, legal, privacy, shipping, wishlist)
+     — clean, centered mobile header instead of a cramped left-aligned wrap.
+     `body ` prefix raises specificity so these beat each page's inline .ip- styles. */
+  body .ip-head{flex-direction:column;align-items:center;gap:10px;padding:13px 18px 11px}
+  body .ip-brand img{width:30px;height:30px}
+  body .ip-brand .pp-brand-name{font-size:23px}
+  body .ip-nav{width:auto;gap:16px;justify-content:center;flex-wrap:wrap}
+  body .ip-nav a{font-size:14px;padding:2px 0}
   body .ip-main{padding:32px 5vw 48px}
   body .ip-main h1{font-size:26px}
   body .ip-lead{font-size:15.5px}
-  body .ip-card{padding:20px 18px}
+  body .ip-card{padding:22px 18px}
 
   /* Contact page */
   body .cf-wa{padding:14px;gap:12px}
