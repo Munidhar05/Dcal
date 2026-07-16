@@ -226,7 +226,7 @@ img,video{max-width:100%}
 @media(max-width:900px){
   body{overflow-x:clip}   /* clip (not hidden) so it can't break the sticky header */
   /* let grid/flex children shrink below their content so media can't blow out the row */
-  .sci-grid>div,.demokit-grid>div,.pp-demo-grid>div,.pp-row>*{min-width:0}
+  .sci-grid>div,.pp-row>*{min-width:0}
 }
 
 /* GRID */
@@ -262,10 +262,10 @@ input[list]{
 .pp-toast.show{transform:translate(-50%,0)}
 
 /* BACK TO TOP */
-.pp-back-to-top{position:fixed;right:24px;bottom:24px;z-index:9997;width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:var(--glass);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);box-shadow:var(--shadow);color:var(--brand);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(20px);pointer-events:none;transition:opacity .3s ease,transform .3s ease}
+.pp-back-to-top{position:fixed;right:24px;bottom:92px;z-index:9997;width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:var(--glass);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);box-shadow:var(--shadow);color:var(--brand);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(20px);pointer-events:none;transition:opacity .3s ease,transform .3s ease}
 .pp-back-to-top.show{opacity:1;transform:translateY(0);pointer-events:auto}
 .pp-back-to-top:hover{transform:translateY(-3px)}
-@media(max-width:600px){.pp-back-to-top{width:46px;height:46px;right:16px;bottom:16px}}
+@media(max-width:600px){.pp-back-to-top{width:46px;height:46px;right:16px;bottom:78px}}
 
 /* Respect reduced-motion preferences */
 @media(prefers-reduced-motion:reduce){
@@ -274,7 +274,7 @@ input[list]{
   html{scroll-behavior:auto}
 }
 
-/* ANCHOR OFFSET — keep #science / #demo-form etc. clear of the sticky header + promo bar */
+/* ANCHOR OFFSET — keep #science etc. clear of the sticky header + promo bar */
 section[id]{scroll-margin-top:96px}
 
 /* UNIFIED DROPDOWN CHEVRON — applies to every native select + datalist input */
@@ -644,27 +644,6 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 @media(max-width:560px){
   .dcal-co-grid2{grid-template-columns:1fr;gap:0}
   .dcal-co-grid2 .dcal-co-field{margin-bottom:16px}
-}
-
-/* ===== Highlight the FREE demo kit offer ===== */
-.pp-free-tag{display:inline-block;background:#FFD60A;color:#0B1220;font-weight:800;font-size:11px;letter-spacing:.08em;padding:3px 8px;border-radius:6px;margin-right:9px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.pp-free-cta{position:relative;animation:ppFreePulse 2.2s ease-in-out infinite}
-@keyframes ppFreePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,214,10,.55)}50%{box-shadow:0 0 0 12px rgba(255,214,10,0)}}
-
-.pp-free-float{position:fixed;left:20px;bottom:20px;z-index:9000;display:flex;align-items:stretch;background:linear-gradient(135deg,#0077B6,#00B4D8);color:#fff;border-radius:999px;box-shadow:0 14px 34px -10px rgba(0,119,182,.65);animation:ppFloatPulse 2.6s ease-in-out infinite;transition:transform .2s}
-.pp-free-float:hover{transform:translateY(-2px)}
-.pp-free-float__link{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;padding:11px 8px 11px 18px}
-.pp-free-float__icon{font-size:22px;line-height:1}
-.pp-free-float__text{display:flex;flex-direction:column;line-height:1.15}
-.pp-free-float__text b{font-size:14px;font-weight:800}
-.pp-free-float__text span{font-size:11px;opacity:.92}
-.pp-free-float__x{background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;line-height:1;cursor:pointer;padding:0 14px 0 6px}
-.pp-free-float__x:hover{color:#fff}
-@keyframes ppFloatPulse{0%,100%{box-shadow:0 14px 34px -10px rgba(0,119,182,.65),0 0 0 0 rgba(0,180,216,.5)}50%{box-shadow:0 14px 34px -10px rgba(0,119,182,.65),0 0 0 16px rgba(0,180,216,0)}}
-@media(max-width:600px){
-  .pp-free-float{left:12px;bottom:12px}
-  .pp-free-float__text span{display:none}
-  .pp-free-float__link{padding:10px 6px 10px 14px}
 }
 
 /* ===================== MOBILE POLISH ===================== */

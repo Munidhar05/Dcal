@@ -16,7 +16,6 @@ const mongoose = require('mongoose');
 
 const User = require('./models/User');
 const Order = require('./models/Order');
-const Lead = require('./models/Lead');
 const Dealer = require('./models/Dealer');
 const Counter = require('./models/Counter');
 
@@ -71,6 +70,15 @@ function rateLimit(opts) {
 // Generic 500: log the real error server-side, return a safe message to the client
 // (never leak internal exception text / DB / driver details to the browser).
 function serverErr(res, e) { try { console.error('server error:', e && e.message); } catch (x) {} return res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+
+/* ---------- AI voice assistant (OpenRouter) ----------
+   Powers the mic assistant on every page. Rate-limited so a runaway page or
+   abuse can't rack up API cost. If no key is set (or a call fails), the browser
+   widget automatically falls back to its free offline engine. */
+const assistant = require('./assistant');
+app.get('/api/assistant/health', assistant.health);
+app.post('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, tag: 'assistant' }), assistant.handle);
+console.log(assistant.ENABLED ? ('✓ AI voice assistant enabled via OpenRouter (' + assistant.MODEL + ')') : 'ℹ AI voice assistant off (set OPENROUTER_API_KEY) — widget uses free offline engine');
 
 const ROOT = path.join(__dirname, '..');                 // project root (where index.html lives)
 const PORT = process.env.PORT || 3000;
@@ -332,20 +340,11 @@ async function notifyOrderCancelled(order, base) {
   if (email) sendMail({ to: email, subject: "D'Cal order #" + order.orderId + ' cancelled', html: mailLayout('Order cancelled', inner, logo), text: 'Order #' + order.orderId + ' cancelled.' }).catch(() => {});
   if (STORE_NOTIFY_EMAIL) sendMail({ to: STORE_NOTIFY_EMAIL, subject: 'Order #' + order.orderId + ' cancelled', html: mailLayout('Order cancelled', inner + '<p style="font-size:13px;color:#475569">Customer mobile: ' + escHtml(order.mobile) + '</p>', logo) }).catch(() => {});
 }
-// label/value table for lead & dealership notifications (skips empty fields)
+// label/value table for dealership notifications (skips empty fields)
 function detailTable(rows) {
   return '<table style="width:100%;border-collapse:collapse;font-size:14px">'
     + rows.filter((r) => r[1]).map((r) => '<tr><td style="padding:5px 10px 5px 0;color:#64748B;white-space:nowrap;vertical-align:top">' + escHtml(r[0]) + '</td><td style="padding:5px 0;color:#0B1220">' + escHtml(r[1]) + '</td></tr>').join('')
     + '</table>';
-}
-async function notifyNewLead(lead, base) {
-  const logo = logoFor(base);
-  const inner = detailTable([
-    ['Name', lead.name], ['Phone', lead.phone], ['Email', lead.email], ['Village/Area', lead.village],
-    ['City', lead.city], ['State', lead.state], ['Pincode', lead.pincode], ['Home type', lead.home_type], ['Source', lead.source]
-  ]);
-  if (STORE_NOTIFY_EMAIL) sendMail({ to: STORE_NOTIFY_EMAIL, subject: 'New demo-kit request: ' + (lead.name || lead.phone), html: mailLayout('New demo-kit request', inner, logo) }).catch(() => {});
-  if (lead.email) sendMail({ to: lead.email, subject: "We've received your D'Cal demo-kit request", html: mailLayout('Request received 🎉', '<p>Hi ' + escHtml(lead.name || 'there') + ", thanks for requesting a D'Cal demo kit! Our team will contact you shortly.</p>", logo) }).catch(() => {});
 }
 async function notifyNewDealer(dealer, base) {
   const logo = logoFor(base);
@@ -851,67 +850,9 @@ app.post('/api/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 120, tag: '
   } catch (e) { serverErr(res, e); }
 });
 
-/* ---------- free demo kit (one per logged-in account) ----------
-   The claim is recorded on the user record. The update is atomic (it only
-   succeeds when freeKitClaimed isn't already true), so a double-tap or two
-   tabs can never get two kits. */
-app.post('/api/freekit/claim', authCustomer, async (req, res) => {
-  if (!requireDB(res)) return;
-  try {
-    const { info } = req.body || {};
-    const mobile = req.customerMobile;
-    const claimed = await User.findOneAndUpdate(
-      { mobile, freeKitClaimed: { $ne: true } },
-      { $set: { freeKitClaimed: true, freeKitAt: Date.now(), freeKitInfo: info || {} } },
-      { new: true }
-    );
-    if (claimed) return res.json({ ok: true, alreadyClaimed: false });
-    // update didn't match -> either no such user, or already claimed
-    const existing = await User.findOne({ mobile });
-    if (!existing) return res.status(404).json({ error: 'not found' });
-    return res.json({ ok: false, alreadyClaimed: true, claimedAt: existing.freeKitAt });
-  } catch (e) { serverErr(res, e); }
-});
-
-app.get('/api/freekit/status/:mobile', authCustomer, async (req, res) => {
-  if (!requireDB(res)) return;
-  try {
-    const u = await User.findOne({ mobile: req.customerMobile });
-    res.json({ claimed: !!(u && u.freeKitClaimed), claimedAt: (u && u.freeKitAt) || null });
-  } catch (e) { serverErr(res, e); }
-});
-
-/* ---------- demo-kit leads (PUBLIC form — no login required) ----------
-   Every free-demo-kit submission is stored here and shows up in the admin
-   "Demo Kits" tab + its Excel/CSV export. */
-app.post('/api/leads', async (req, res) => {
-  if (!requireDB(res)) return;
-  try {
-    const b = req.body || {};
-    const phone = String(b.phone || '').replace(/[^0-9]/g, '').slice(0, 15);
-    if (!String(b.name || '').trim() || phone.length < 10) {
-      return res.status(400).json({ error: 'name & valid phone required' });
-    }
-    // ONE demo-kit request per phone number — if this number already requested,
-    // don't create a duplicate; tell the client so it can show "already requested".
-    const existing = await Lead.findOne({ phone });
-    if (existing) return res.json({ ok: true, already: true, at: existing.createdAt });
-
-    const pick = (k) => String(b[k] == null ? '' : b[k]).trim().slice(0, 200);
-    const lead = await Lead.create({
-      name: pick('name'), phone: phone, email: pick('email'),
-      age: pick('age'), address: pick('address'), village: pick('village'),
-      city: pick('city'), state: pick('state'), pincode: pick('pincode'),
-      source: pick('source'), home_type: pick('home_type'), createdAt: Date.now()
-    });
-    notifyNewLead(lead, baseUrlFrom(req)).catch(() => {});
-    res.json({ ok: true, already: false, id: lead._id });
-  } catch (e) { serverErr(res, e); }
-});
-
 /* ---------- dealership applications (PUBLIC form — no login required) ----------
    Every "Become a Business Partner" submission is stored here and shows up in the
-   admin "Dealers" tab + its CSV export. Same pattern as demo-kit leads. */
+   admin "Dealers" tab + its CSV export. */
 app.post('/api/dealership', async (req, res) => {
   if (!requireDB(res)) return;
   try {
@@ -1267,12 +1208,6 @@ app.get('/api/admin/customers', adminAuth, async (req, res) => {
   catch (e) { serverErr(res, e); }
 });
 
-app.get('/api/admin/leads', adminAuth, async (req, res) => {
-  if (!requireDB(res)) return;
-  try { res.json({ leads: await Lead.find({}).sort({ createdAt: -1 }) }); }
-  catch (e) { serverErr(res, e); }
-});
-
 app.get('/api/admin/dealers', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ dealers: await Dealer.find({}).sort({ createdAt: -1 }) }); }
@@ -1333,29 +1268,6 @@ app.delete('/api/admin/customers/:mobile', adminAuth, async (req, res) => {
   } catch (e) { serverErr(res, e); }
 });
 
-/* edit / delete a demo-kit lead */
-app.put('/api/admin/leads/:id', adminAuth, async (req, res) => {
-  if (!requireDB(res)) return;
-  try {
-    const b = req.body || {};
-    const allow = ['name', 'phone', 'email', 'age', 'address', 'village', 'city', 'state', 'pincode', 'source', 'home_type'];
-    const set = {};
-    allow.forEach((k) => { if (b[k] !== undefined) set[k] = String(b[k]).slice(0, 200); });
-    const lead = await Lead.findByIdAndUpdate(req.params.id, { $set: set }, { new: true });
-    if (!lead) return res.status(404).json({ error: 'not found' });
-    res.json({ lead });
-  } catch (e) { res.status(400).json({ error: 'invalid id' }); }
-});
-
-app.delete('/api/admin/leads/:id', adminAuth, async (req, res) => {
-  if (!requireDB(res)) return;
-  try {
-    const r = await Lead.findByIdAndDelete(req.params.id);
-    if (!r) return res.status(404).json({ error: 'not found' });
-    res.json({ ok: true });
-  } catch (e) { res.status(400).json({ error: 'invalid id' }); }
-});
-
 /* edit / delete a dealership application */
 app.put('/api/admin/dealers/:id', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
@@ -1394,11 +1306,6 @@ function restoreDoc(Model, body) {
   });
   return Model.create(d);
 }
-app.post('/api/admin/leads/restore', adminAuth, async (req, res) => {
-  if (!requireDB(res)) return;
-  try { res.json({ lead: await restoreDoc(Lead, req.body) }); }
-  catch (e) { serverErr(res, e); }
-});
 app.post('/api/admin/orders/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ order: await restoreDoc(Order, req.body) }); }

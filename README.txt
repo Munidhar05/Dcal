@@ -32,6 +32,6 @@ IMAGES
   the matching  <img src="images/...">  reference in the HTML.
 
 WHAT IS NOT INCLUDED (needs a real backend)
-  Shopify handled checkout, payments, real cart, login and the demo-kit form.
+  Shopify handled checkout, payments, real cart and login.
   Those buttons are visual only in this static version. To make them work,
   connect them to your own backend / form service / payment provider.
