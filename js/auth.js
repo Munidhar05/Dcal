@@ -2333,23 +2333,7 @@
     isLoggedIn: isLoggedIn,
     user: currentUser,
     logout: logout,
-    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } },
-    // has the logged-in user already taken their one free demo kit?
-    freeKitStatus: function () {
-      var m = sessionMobile();
-      if (!m) return Promise.resolve({ claimed: false, loggedIn: false });
-      return api('GET', '/api/freekit/status/' + encodeURIComponent(m))
-        .then(function (r) { return { claimed: !!(r && r.claimed), loggedIn: true }; })
-        .catch(function () { return { claimed: false, loggedIn: true }; });   // server down -> let them try
-    },
-    // claim the one free demo kit for the logged-in user.
-    // resolves { ok:true } first time, { ok:false, alreadyClaimed:true } after that.
-    claimFreeKit: function (info) {
-      var m = sessionMobile();
-      if (!m) return Promise.resolve({ ok: false, needLogin: true });
-      return api('POST', '/api/freekit/claim', { mobile: m, info: info || {} })
-        .catch(function () { return { ok: true, offline: true }; });          // server down -> don't block the lead
-    }
+    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } }
   };
 
   function init() {

@@ -30,7 +30,6 @@
   var SERVER = false;          // true once we confirm a live backend with a database
   var serverOrders = [];        // cache of orders fetched from the server
   var serverCustomers = [];     // cache of customers fetched from the server
-  var serverLeads = [];         // cache of demo-kit leads fetched from the server
   var serverDealers = [];       // cache of dealership applications fetched from the server
 
   function api(method, p, body) {
@@ -46,12 +45,11 @@
   }
   // load all data from the server into the caches
   function loadServerData() {
-    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers'), api('GET', '/api/admin/leads'), api('GET', '/api/admin/dealers')])
+    return Promise.all([api('GET', '/api/admin/orders'), api('GET', '/api/admin/customers'), api('GET', '/api/admin/dealers')])
       .then(function (res) {
         serverOrders = (res[0] && res[0].orders) || [];
         serverCustomers = (res[1] && res[1].customers) || [];
-        serverLeads = (res[2] && res[2].leads) || [];
-        serverDealers = (res[3] && res[3].dealers) || [];
+        serverDealers = (res[2] && res[2].dealers) || [];
       });
   }
 
@@ -121,21 +119,6 @@
     }).sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
   }
 
-  // every free-demo-kit form submission (public form -> Lead collection)
-  function demokitRows() {
-    if (SERVER) {
-      return serverLeads.map(function (i) {
-        return {
-          id: i._id, name: i.name || '—', phone: i.phone || '—', email: i.email || '',
-          age: i.age || '', address: i.address || '', village: i.village || '',
-          city: i.city || '', state: i.state || '', pincode: i.pincode || '',
-          source: i.source || '', home_type: i.home_type || '', claimedAt: i.createdAt
-        };
-      }).sort(function (a, b) { return (b.claimedAt || 0) - (a.claimedAt || 0); });
-    }
-    return [];   // leads are a server feature; no localStorage fallback
-  }
-
   // every dealership application (public form -> Dealer collection)
   function dealerRows() {
     if (SERVER) {
@@ -188,7 +171,7 @@
     return {
       customers: custs.length, orders: ords.length, revenue: revenue,
       items: items, logins: logins, activeCarts: activeCarts, byStatus: byStatus,
-      aov: paidCount ? revenue / paidCount : 0, demokits: demokitRows().length,
+      aov: paidCount ? revenue / paidCount : 0,
       dealers: partnerRows().length, b2b: b2bRows().length
     };
   }
@@ -286,7 +269,6 @@
         '<div class="adm-tabs">' +
           '<button class="adm-tab' + (tab === 'orders' ? ' active' : '') + '" data-tab="orders">Orders (' + s.orders + ')</button>' +
           '<button class="adm-tab' + (tab === 'customers' ? ' active' : '') + '" data-tab="customers">Customers (' + s.customers + ')</button>' +
-          '<button class="adm-tab' + (tab === 'demokits' ? ' active' : '') + '" data-tab="demokits">Demo Kits (' + s.demokits + ')</button>' +
           '<button class="adm-tab' + (tab === 'dealers' ? ' active' : '') + '" data-tab="dealers">Dealers (' + s.dealers + ')</button>' +
           '<button class="adm-tab' + (tab === 'b2b' ? ' active' : '') + '" data-tab="b2b">B2B Sites (' + s.b2b + ')</button>' +
         '</div>' +
@@ -303,7 +285,6 @@
       b.addEventListener('click', function () { renderDash(b.getAttribute('data-tab')); });
     });
     if (tab === 'customers') renderCustomers();
-    else if (tab === 'demokits') renderDemokits();
     else if (tab === 'dealers') renderDealers();
     else if (tab === 'b2b') renderB2B();
     else renderOrders();
@@ -445,45 +426,6 @@
           '<td>' + r.addresses + '</td>' +
           '<td>' + (r.cart > 0 ? '<span class="adm-chip adm-chip--processing">' + r.cart + '</span>' : '—') + '</td>' +
           actionCell('customer', r.mobile) +
-        '</tr>';
-      }).join('') + '</tbody></table>';
-  }
-
-  /* ---------- demo-kit leads panel ---------- */
-  function renderDemokits() {
-    var panel = document.getElementById('adm-panel');
-    var rows = demokitRows();
-    panel.innerHTML =
-      '<div class="adm-toolbar"><input class="adm-input adm-search" id="adm-dsearch" placeholder="Search by name, phone, village, city, PIN…"></div>' +
-      '<div class="adm-tablewrap">' + demokitsTable(rows) + '</div>';
-    wireActions();
-    var search = document.getElementById('adm-dsearch');
-    search.addEventListener('input', function () {
-      var q = search.value.trim().toLowerCase();
-      var filtered = !q ? rows : rows.filter(function (r) {
-        return [r.name, r.phone, r.email, r.village, r.city, r.state, r.pincode].join(' ').toLowerCase().indexOf(q) > -1;
-      });
-      panel.querySelector('.adm-tablewrap').innerHTML = demokitsTable(filtered);
-      wireActions();
-    });
-  }
-
-  function demokitsTable(rows) {
-    if (!rows.length) return '<div class="adm-empty">No demo-kit requests yet.</div>';
-    return '<table class="adm-table"><thead><tr>' +
-      '<th>Name</th><th>Phone</th><th>Village / Area</th><th>City / District</th><th>State</th><th>PIN</th><th>Home</th><th>Source</th><th>Requested</th><th></th>' +
-      '</tr></thead><tbody>' + rows.map(function (r) {
-        return '<tr>' +
-          '<td><b>' + esc(r.name) + '</b>' + (r.email ? '<br><span class="adm-muted">' + esc(r.email) + '</span>' : '') + '</td>' +
-          '<td>+91 ' + esc(r.phone) + '</td>' +
-          '<td>' + esc(r.village || '—') + '</td>' +
-          '<td>' + esc(r.city || '—') + '</td>' +
-          '<td>' + esc(r.state || '—') + '</td>' +
-          '<td>' + esc(r.pincode || '—') + '</td>' +
-          '<td>' + esc(r.home_type || '—') + '</td>' +
-          '<td>' + esc(r.source || '—') + '</td>' +
-          '<td style="white-space:nowrap">' + fmtDate(r.claimedAt) + '</td>' +
-          actionCell('lead', r.id) +
         '</tr>';
       }).join('') + '</tbody></table>';
   }
@@ -640,12 +582,11 @@
     else { renderDash(tab); undoToast(msg, onUndo); }
   }
   function pathFor(kind, id) {
-    return kind === 'lead' ? '/api/admin/leads/' + encodeURIComponent(id)
-      : (kind === 'dealer' || kind === 'b2b') ? '/api/admin/dealers/' + encodeURIComponent(id)
-        : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
-          : '/api/admin/orders/' + encodeURIComponent(id);
+    return (kind === 'dealer' || kind === 'b2b') ? '/api/admin/dealers/' + encodeURIComponent(id)
+      : kind === 'customer' ? '/api/admin/customers/' + encodeURIComponent(id)
+        : '/api/admin/orders/' + encodeURIComponent(id);
   }
-  function tabFor(kind) { return kind === 'lead' ? 'demokits' : kind === 'b2b' ? 'b2b' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders'; }
+  function tabFor(kind) { return kind === 'b2b' ? 'b2b' : kind === 'dealer' ? 'dealers' : kind === 'customer' ? 'customers' : 'orders'; }
 
   // UNDO an edit: re-apply the captured previous values
   function editUndo(kind, id, before) {
@@ -655,34 +596,18 @@
   // UNDO a delete: re-insert the captured document
   function restoreDeleted(kind, doc) {
     if (!doc) { toast('Nothing to undo'); return; }
-    api('POST', '/api/admin/' + (kind === 'lead' ? 'leads' : (kind === 'dealer' || kind === 'b2b') ? 'dealers' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
+    api('POST', '/api/admin/' + ((kind === 'dealer' || kind === 'b2b') ? 'dealers' : kind === 'customer' ? 'customers' : 'orders') + '/restore', { doc: doc })
       .then(function () { reloadAnd(tabFor(kind), 'Restored'); })
       .catch(function (e) { toast('Undo failed: ' + e.message); });
   }
   function snapshotFor(kind, id) {
-    if (kind === 'lead') return serverLeads.filter(function (l) { return String(l._id) === String(id); })[0];
     if (kind === 'dealer' || kind === 'b2b') return serverDealers.filter(function (d) { return String(d._id) === String(id); })[0];
     if (kind === 'customer') return serverCustomers.filter(function (u) { return u.mobile === id; })[0];
     return serverOrders.filter(function (o) { return o.orderId === id; })[0];
   }
 
   function onEdit(kind, id) {
-    if (kind === 'lead') {
-      var r = demokitRows().filter(function (x) { return String(x.id) === String(id); })[0];
-      if (!r) return;
-      var lf = [
-        { key: 'name', label: 'Name' }, { key: 'phone', label: 'Phone' }, { key: 'email', label: 'Email' },
-        { key: 'age', label: 'Age' }, { key: 'address', label: 'Address' }, { key: 'village', label: 'Village / Area' },
-        { key: 'city', label: 'City / District' }, { key: 'state', label: 'State' }, { key: 'pincode', label: 'Pincode' },
-        { key: 'home_type', label: 'Home type' }, { key: 'source', label: 'Source' }
-      ];
-      var before = {}; lf.forEach(function (f) { before[f.key] = r[f.key] == null ? '' : r[f.key]; });
-      editModal('Edit demo-kit lead', lf, r, function (out, close) {
-        api('PUT', pathFor('lead', id), out)
-          .then(function () { close(); reloadAndUndo('demokits', 'Lead updated', function () { editUndo('lead', id, before); }); })
-          .catch(function (e) { toast('Update failed: ' + e.message); });
-      });
-    } else if (kind === 'dealer' || kind === 'b2b') {
+    if (kind === 'dealer' || kind === 'b2b') {
       var dr = dealerRows().filter(function (x) { return String(x.id) === String(id); })[0];
       if (!dr) return;
       var isB2B = kind === 'b2b';
@@ -749,14 +674,10 @@
   }
 
   function onDelete(kind, id) {
-    var label = kind === 'lead' ? 'demo-kit lead' : kind === 'dealer' ? 'dealership application' : kind === 'b2b' ? 'B2B enquiry' : kind;
+    var label = kind === 'dealer' ? 'dealership application' : kind === 'b2b' ? 'B2B enquiry' : kind;
     if (!confirm('Delete this ' + label + '? You can Undo right after.')) return;
     var snap = SERVER ? snapshotFor(kind, id) : null;
-    if (kind === 'lead') {
-      api('DELETE', pathFor('lead', id))
-        .then(function () { serverLeads = serverLeads.filter(function (l) { return String(l._id) !== String(id); }); renderDash('demokits'); undoToast('Lead deleted', function () { restoreDeleted('lead', snap); }); })
-        .catch(function (e) { toast('Delete failed: ' + e.message); });
-    } else if (kind === 'dealer' || kind === 'b2b') {
+    if (kind === 'dealer' || kind === 'b2b') {
       api('DELETE', pathFor(kind, id))
         .then(function () { serverDealers = serverDealers.filter(function (d) { return String(d._id) !== String(id); }); renderDash(tabFor(kind)); undoToast((kind === 'b2b' ? 'Enquiry' : 'Dealer') + ' deleted', function () { restoreDeleted(kind, snap); }); })
         .catch(function (e) { toast('Delete failed: ' + e.message); });
@@ -798,11 +719,6 @@
         return [r.name, r.mobile, r.email, fmtDate(r.createdAt), r.logins, fmtDate(r.lastLogin), r.orders, r.spent.toFixed(2), r.addresses, r.cart];
       });
       download('dcal-customers.csv', toCSV(['Name', 'Mobile', 'Email', 'Joined', 'Logins', 'LastLogin', 'Orders', 'Spent', 'Addresses', 'CartItems'], rows));
-    } else if (tab === 'demokits') {
-      var drows = demokitRows().map(function (r) {
-        return [r.name, r.phone, r.email, r.age, r.address, r.village, r.city, r.state, r.pincode, r.home_type, r.source, fmtDate(r.claimedAt)];
-      });
-      download('dcal-demo-kits.csv', toCSV(['Name', 'Phone', 'Email', 'Age', 'Address', 'Village/Area', 'City/District', 'State', 'Pincode', 'HomeType', 'Source', 'RequestedAt'], drows));
     } else if (tab === 'dealers') {
       var dlrows = partnerRows().map(function (r) {
         return [r.fullName, r.businessName, r.mobile, r.email, r.pincode, r.city, r.state, r.businessType, r.currentProducts, r.experience, r.message, fmtDate(r.appliedAt)];

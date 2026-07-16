@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /* A "Become a Business Partner" / dealership application. Captured WITHOUT login
    from the public dealership landing page, and surfaced in the admin "Dealers"
-   tab (and its CSV export) — exactly like demo-kit Leads. */
+   tab (and its CSV export). */
 const DealerSchema = new mongoose.Schema({
   fullName: { type: String, default: '' },
   businessName: { type: String, default: '' },
