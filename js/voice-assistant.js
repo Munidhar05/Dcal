@@ -36,12 +36,12 @@
     te: {
       title: 'డీకాల్ సహాయకురాలు',
       tagline: 'మైక్ నొక్కి మాట్లాడండి',
-      listening: 'వినుచున్నాను…',
+      listening: 'వింటున్నాను…',
       tapToSpeak: 'మాట్లాడటానికి మైక్ నొక్కండి',
       thinking: 'ఆలోచిస్తున్నాను…',
-      greeting: 'నమస్తే! నేను డీకాల్ సహాయకురాలిని. కొనడం, ఆర్డర్ ట్రాక్ చేయడం, ధరలు, లేదా ఏదైనా అడగండి. మైక్ నొక్కి మాట్లాడండి.',
-      noMic: 'క్షమించండి, మీ బ్రౌజర్‌లో మైక్ పని చేయడం లేదు. దయచేసి క్రింద ఉన్న బటన్లను నొక్కండి, లేదా Chrome ఉపయోగించండి.',
-      micDenied: 'మైక్ అనుమతి ఇవ్వలేదు. దయచేసి మైక్ అనుమతి ఇవ్వండి లేదా క్రింద బటన్లను నొక్కండి.',
+      greeting: 'నమస్తే! డిక్యాల్ కు స్వాగతము! నేను మీ వాయిస్ సహాయకు రాలిని. కొన డానికి, ధరలు, ఆర్డర్ ట్రాక్, లేదా ఏదైనా అడ గండి — మై కు నొ క్కి మాట్లాడండి.',
+      noMic: 'క్షమించండి, మీ బ్రౌజర్‌లో మైక్ పని చేయడం లేదు. దయచేసి కింద ఉన్న బటన్లను నొక్కండి, లేదా Chrome ఉపయోగించండి.',
+      micDenied: 'మైక్ అనుమతి ఇవ్వలేదు. దయచేసి మైక్ అనుమతి ఇవ్వండి లేదా కింద బటన్లను నొక్కండి.',
       quick: 'త్వరిత సహాయం',
       chips: [
         ['ఎలా కొనాలి?',      'how to buy'],
@@ -56,7 +56,7 @@
       listening: 'सुन रही हूँ…',
       tapToSpeak: 'बोलने के लिए माइक दबाएँ',
       thinking: 'सोच रही हूँ…',
-      greeting: 'नमस्ते! मैं डीकाल सहायक हूँ। खरीदना, ऑर्डर ट्रैक करना, दाम, या कुछ भी पूछें। माइक दबाकर बोलें।',
+      greeting: 'नमस्ते! डीकाल में आपका स्वागत है! मैं आपकी वॉइस सहायक हूँ। खरीदना, दाम, ऑर्डर ट्रैक, या कुछ भी पूछें — माइक दबाकर बोलें।',
       noMic: 'माफ़ कीजिए, आपके ब्राउज़र में माइक काम नहीं कर रहा। कृपया नीचे दिए बटन दबाएँ, या Chrome इस्तेमाल करें।',
       micDenied: 'माइक की अनुमति नहीं मिली। कृपया माइक की अनुमति दें या नीचे बटन दबाएँ।',
       quick: 'तुरंत मदद',
@@ -73,7 +73,7 @@
       listening: 'Listening…',
       tapToSpeak: 'Tap the mic to speak',
       thinking: 'Thinking…',
-      greeting: "Hello! I am the D'Cal assistant. Ask me how to buy, track your order, prices, or anything about our products. Tap the mic and speak.",
+      greeting: "Hi! Welcome to D'Cal! I am your voice assistant. Ask me how to buy, prices, track your order, or anything about our products — just tap the mic and speak.",
       noMic: 'Sorry, the microphone is not working in your browser. Please tap the buttons below, or use Chrome.',
       micDenied: 'Microphone permission was blocked. Please allow the mic, or tap the buttons below.',
       quick: 'Quick help',
@@ -564,7 +564,7 @@
         en: ['electricity', 'power', 'maintenance', 'chemical', 'chemicals', 'how long does it last', 'lifespan', 'servicing', 'no power']
       },
       reply: {
-        te: 'డీకాల్‌కు విద్యుత్తు అవసరం లేదు, రసాయనాలు అవసరం లేదు, నిర్వహణ అవసరం లేదు. ఇది ఏడాది పొడవునా — దాదాపు 365 రోజులు — నిరంతరం పని చేస్తుంది.',
+        te: 'డిక్యాల్ కు విద్యుత్తు అవసరం లేదు, రసాయనాలు అవసరం లేదు, నిర్వహణ అవసరం లేదు. ఇది ఏడాది పొడవునా — దాదాపు 365 రోజులు — నిరంతరం పని చేస్తుంది.',
         hi: 'डीकाल को न बिजली चाहिए, न केमिकल, न रखरखाव। यह पूरे साल — लगभग 365 दिन — लगातार काम करता है।',
         en: 'D\'Cal needs no electricity, no chemicals and no maintenance. It works continuously for a full year — up to 365 days.'
       }
@@ -853,6 +853,14 @@
     +   'color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto;position:relative;transition:.15s}'
     + '.dcv-mic:active{transform:scale(.93)}'
     + '.dcv-mic svg{width:24px;height:24px}'
+    // talking-lady avatar: swaps in for the mic while she speaks, mouth animates
+    + '.dcv-ic{display:flex;align-items:center;justify-content:center}'
+    + '.dcv-ic-lady{display:none}'
+    + '.dcv-speaking .dcv-ic-mic{display:none}'
+    + '.dcv-speaking .dcv-ic-lady{display:flex}'
+    + '.dcv-mouth{transform-box:fill-box;transform-origin:center}'
+    + '.dcv-speaking .dcv-mouth{animation:dcvTalk .32s ease-in-out infinite}'
+    + '@keyframes dcvTalk{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1.15)}}'
     + '.dcv-mic.dcv-live{background:linear-gradient(135deg,#e63946,#f77f8b)}'
     + '.dcv-mic.dcv-live::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:3px solid rgba(230,57,70,.5);animation:dcvPulse 1.3s ease-out infinite}'
     + '.dcv-mic-label{flex:1;min-width:0;font-size:13.5px;color:#3a5c6b;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
@@ -864,7 +872,7 @@
     + '.dcv-typing span{display:inline-block;width:6px;height:6px;margin:0 1px;border-radius:50%;background:#8fb4c4;animation:dcvBlink 1s infinite}'
     + '.dcv-typing span:nth-child(2){animation-delay:.2s}.dcv-typing span:nth-child(3){animation-delay:.4s}'
     + '@keyframes dcvBlink{0%,100%{opacity:.3}50%{opacity:1}}'
-    + '@media(prefers-reduced-motion:reduce){.dcv-fab,.dcv-fab .dcv-ring,.dcv-fab.dcv-pop::before,.dcv-fab.dcv-pop svg,.dcv-mic.dcv-live::after{animation:none}'
+    + '@media(prefers-reduced-motion:reduce){.dcv-fab,.dcv-fab .dcv-ring,.dcv-fab.dcv-pop::before,.dcv-fab.dcv-pop svg,.dcv-mic.dcv-live::after,.dcv-speaking .dcv-mouth{animation:none}'
     +   '.dcv-panel.dcv-open{animation:none}.dcv-panel{transition:opacity .2s ease}.dcv-langs,.dcv-body,.dcv-chips,.dcv-foot{transition:none;transform:none}}';
 
   /* ------------------------------------------------------------------ *
@@ -873,6 +881,9 @@
   var MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
   var STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   var MIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
+  // Female avatar shown IN PLACE of the mic while the assistant is speaking.
+  // The mouth is its own element (.dcv-mouth) so CSS can animate it "talking".
+  var LADY_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M4.5 20.5C3.6 13 4.2 3 12 3S20.4 13 19.5 20.5Z" fill="currentColor"/><circle cx="12" cy="9.5" r="4.7" fill="currentColor"/><circle cx="10.1" cy="9.2" r=".95" fill="#08334a"/><circle cx="13.9" cy="9.2" r=".95" fill="#08334a"/><ellipse class="dcv-mouth" cx="12" cy="12.1" rx="1.7" ry=".95" fill="#08334a"/></svg>';
 
   var styleEl = document.createElement('style');
   styleEl.textContent = CSS;
@@ -881,7 +892,7 @@
   var fab = document.createElement('button');
   fab.className = 'dcv-fab';
   fab.setAttribute('aria-label', 'Voice assistant');
-  fab.innerHTML = '<span class="dcv-ring"></span>' + MIC_SVG + '<span class="dcv-hint"></span>';
+  fab.innerHTML = '<span class="dcv-ring"></span><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_SVG + '</span><span class="dcv-hint"></span>';
 
   var panel = document.createElement('div');
   panel.className = 'dcv-panel';
@@ -900,7 +911,7 @@
     + '<div class="dcv-status"></div>'
     + '<div class="dcv-chips"></div>'
     + '<div class="dcv-foot">'
-    +   '<button class="dcv-mic" aria-label="Speak">' + MIC_SVG + '</button>'
+    +   '<button class="dcv-mic" aria-label="Speak"><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_SVG + '</span></button>'
     +   '<span class="dcv-mic-label"></span>'
     +   '<button class="dcv-stop" aria-label="Stop">' + STOP_SVG + '</button>'
     + '</div>';
@@ -987,7 +998,7 @@
 
   // speak(text[, onEnd]) — onEnd fires when the voice FINISHES (used so we only
   // navigate after the reply has been fully spoken, never cutting it off).
-  var keepAlive = null;
+  var keepAlive = null, speakingU = null;
   function stopKeepAlive() { if (keepAlive) { clearInterval(keepAlive); keepAlive = null; } }
   function speak(text, onEnd) {
     if (!synth) return;                       // no TTS: caller's fallback timer handles onEnd
@@ -998,13 +1009,19 @@
     var u = new SpeechSynthesisUtterance(spoken);
     if (sel.voice) { u.voice = sel.voice; u.lang = sel.voice.lang; }
     else u.lang = sel.code;
-    u.rate = lang === 'en' ? 0.96 : 0.9;    // slower for Telugu/Hindi clarity
+    u.rate = lang === 'en' ? 0.96 : lang === 'te' ? 0.84 : 0.9;   // Telugu slowest for clarity
     u.pitch = 1.05;                          // slightly higher -> warmer female tone
     u.volume = 1;
-    function done() { stopKeepAlive(); if (onEnd) onEnd(); }   // fire onEnd only when TRULY done
+    function done() { stopKeepAlive(); if (speakingU === u) { setSpeaking(false); speakingU = null; } if (onEnd) onEnd(); }   // fire onEnd only when TRULY done
     u.onend = done;
     u.onerror = done;
     try {
+      // (single utterance — a queued silent warm-up could hang Chrome's
+      // speech queue and block the real reply from ever playing. The greeting
+      // starts with a throwaway "నమస్తే!/नमस्ते!/Hi!" so any first-syllable
+      // clip eats that word, not the brand name.
+      // ("డీ" in "డిక్యాల్ కు స్వాగతం" ->       was clipped before this fix).' ');
+      speakingU = u; setSpeaking(true);   // show the talking-lady avatar
       synth.speak(u);
       // Chrome silently STOPS speech after ~15s on long text; nudging resume()
       // keeps a long reply going so it finishes before we navigate.
@@ -1013,7 +1030,7 @@
       }, 9000);
     } catch (e) { done(); }
   }
-  function stopSpeaking() { stopKeepAlive(); if (synth) { try { synth.cancel(); } catch (e) {} } }
+  function stopSpeaking() { stopKeepAlive(); setSpeaking(false); speakingU = null; if (synth) { try { synth.cancel(); } catch (e) {} } }
 
   /* ------------------------------------------------------------------ *
    *  7. SPEECH RECOGNITION  (listen)                                    *
@@ -1346,6 +1363,8 @@
   }
   function removeEl(node) { if (node && node.parentNode) node.parentNode.removeChild(node); }
   function setStatus(t) { el.status.textContent = t || ''; }
+  // show the talking-lady avatar (mouth animating) on the mic + FAB while speaking
+  function setSpeaking(on) { fab.classList.toggle('dcv-speaking', on); el.micBtn.classList.toggle('dcv-speaking', on); }
   function setLive(on) {
     fab.classList.toggle('dcv-live', on);
     el.micBtn.classList.toggle('dcv-live', on);
@@ -1403,7 +1422,10 @@
    *  11. OPEN / CLOSE                                                   *
    * ------------------------------------------------------------------ */
   var opened = false, greeted = false;
-  function openPanel(fromRestore) {
+  // fromRestore: reopened after a page change (no burst, no speak).
+  // noSpeak: open + show the greeting but don't speak yet (used for the auto-welcome,
+  //          where the voice is played on the first user gesture instead).
+  function openPanel(fromRestore, noSpeak) {
     panel.classList.add('dcv-open');
     fab.classList.add('dcv-open');      // stop the attention blink while open
     opened = true;
@@ -1417,8 +1439,35 @@
     if (!greeted) {
       greeted = true;
       var g = UI[lang].greeting;
-      addBot(g); if (!fromRestore) speak(g);   // don't re-speak greeting on page restore
+      addBot(g); if (!fromRestore && !noSpeak) speak(g);   // don't re-speak on restore / auto-welcome
     }
+  }
+
+  // Auto-welcome on the first visit: open the panel and show the welcome message.
+  // Audio is blocked by browsers until the user interacts, so we speak the welcome
+  // on the FIRST tap/scroll/key (skipping it if they go straight to the mic).
+  function autoWelcome() {
+    if (opened) return;
+    openPanel(false, true);             // open + show welcome (no immediate speak)
+    if (!synth) return;
+    var fire = function (e) {
+      document.removeEventListener('pointerdown', fire, true);
+      document.removeEventListener('keydown', fire, true);
+      document.removeEventListener('touchstart', fire, true);
+      var t = e && e.target;
+      // if they went straight to the assistant's own buttons, don't talk over them
+      if (t && (fab.contains(t) || (el.micBtn && el.micBtn.contains(t)) || (el.stopBtn && el.stopBtn.contains(t)) ||
+                (el.closeBtn && el.closeBtn.contains(t)) || (el.minBtn && el.minBtn.contains(t)))) return;
+      // speak the welcome, THEN auto-open the mic so the customer can talk
+      // right away. Both audio and mic are only allowed off a real user
+      // gesture, which this first tap/scroll/key provides.
+      if (opened && !listening) speak(UI[lang].greeting, function () {
+        if (opened && !listening) startListening();
+      });
+    };
+    document.addEventListener('pointerdown', fire, true);
+    document.addEventListener('keydown', fire, true);
+    document.addEventListener('touchstart', fire, true);
   }
   // Minimize: collapse to the mic button but KEEP the conversation, so the
   // customer can maximize again and continue. (Only the ✕ close clears it.)
@@ -1480,8 +1529,13 @@
   checkAI();      // ask the server whether the OpenRouter AI brain is available
   // bring back the conversation from before this page change (same browser tab)
   if (restoreChat()) greeted = true;
-  // if the assistant was open when the page changed, reopen it and continue
-  var wasOpen = false;
-  try { wasOpen = sessionStorage.getItem(OPEN_KEY) === '1'; } catch (e) {}
-  if (wasOpen) openPanel(true);
+  // Decide how the assistant starts on this page:
+  var openState = null;
+  try { openState = sessionStorage.getItem(OPEN_KEY); } catch (e) {}
+  if (openState === '1') {
+    openPanel(true);                 // it was open before this page change -> keep it open
+  } else if (openState === null) {
+    setTimeout(autoWelcome, 1200);   // FIRST visit this session -> auto-open + welcome (after the page settles)
+  }
+  // openState === '0' means the user closed/minimized it earlier -> leave it closed
 })();
