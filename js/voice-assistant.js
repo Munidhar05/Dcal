@@ -766,6 +766,9 @@
   /* ------------------------------------------------------------------ *
    *  4. STYLES                                                          *
    * ------------------------------------------------------------------ */
+  // Photo of the assistant, shown in place of the mic while she is speaking.
+  var LADY_IMG = '/images/Ai_lady.jpg';
+
   var CSS = ''
     + '.dcv-fab{position:fixed;right:24px;bottom:24px;z-index:9998;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;'
     +   'background:linear-gradient(135deg,#0077B6,#00B4D8);color:#fff;box-shadow:0 14px 34px -8px rgba(0,119,182,.7);'
@@ -853,14 +856,24 @@
     +   'color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto;position:relative;transition:.15s}'
     + '.dcv-mic:active{transform:scale(.93)}'
     + '.dcv-mic svg{width:24px;height:24px}'
-    // talking-lady avatar: swaps in for the mic while she speaks, mouth animates
+    // talking-lady avatar: her photo swaps in for the mic while she speaks
     + '.dcv-ic{display:flex;align-items:center;justify-content:center}'
-    + '.dcv-ic-lady{display:none}'
+    + '.dcv-ic-lady{display:none;position:absolute;inset:0;border-radius:50%;overflow:hidden;background:#fff}'
+    // the floating bubble IS her face: show the photo, hide the mic there always
+    + '.dcv-fab .dcv-ic-mic{display:none}'
+    + '.dcv-fab .dcv-ic-lady{display:block}'
+    // the footer button stays a mic ("press to speak"), swapping to her face only while she speaks
     + '.dcv-speaking .dcv-ic-mic{display:none}'
-    + '.dcv-speaking .dcv-ic-lady{display:flex}'
-    + '.dcv-mouth{transform-box:fill-box;transform-origin:center}'
-    + '.dcv-speaking .dcv-mouth{animation:dcvTalk .32s ease-in-out infinite}'
-    + '@keyframes dcvTalk{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1.15)}}'
+    + '.dcv-speaking .dcv-ic-lady{display:block}'
+    // crop the portrait to head + shoulders so the face still reads at 52-60px
+    + '.dcv-lady{position:relative;width:100%;height:100%;background:#fff url(' + LADY_IMG + ') no-repeat 49% 30%/200% auto}'
+    // her photo is closed-mouth, so we fake talking: a soft dark "open mouth" sits
+    // exactly on her lips (49%/72.5% of the circle) and opens/closes only while she speaks
+    + '.dcv-mouth{position:absolute;left:49%;top:72.5%;width:17%;height:7%;pointer-events:none;opacity:0;'
+    +   'border-radius:50%;transform:translate(-50%,-50%) scaleY(.18);'
+    +   'background:radial-gradient(ellipse at center,rgba(62,25,27,.9),rgba(62,25,27,.4) 55%,rgba(62,25,27,0) 78%)}'
+    + '.dcv-speaking .dcv-mouth{animation:dcvTalk .34s ease-in-out infinite}'
+    + '@keyframes dcvTalk{0%,100%{transform:translate(-50%,-50%) scaleY(.18);opacity:.12}50%{transform:translate(-50%,-50%) scaleY(1);opacity:1}}'
     + '.dcv-mic.dcv-live{background:linear-gradient(135deg,#e63946,#f77f8b)}'
     + '.dcv-mic.dcv-live::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:3px solid rgba(230,57,70,.5);animation:dcvPulse 1.3s ease-out infinite}'
     + '.dcv-mic-label{flex:1;min-width:0;font-size:13.5px;color:#3a5c6b;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
@@ -882,8 +895,9 @@
   var STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   var MIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/></svg>';
   // Female avatar shown IN PLACE of the mic while the assistant is speaking.
-  // The mouth is its own element (.dcv-mouth) so CSS can animate it "talking".
-  var LADY_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M4.5 20.5C3.6 13 4.2 3 12 3S20.4 13 19.5 20.5Z" fill="currentColor"/><circle cx="12" cy="9.5" r="4.7" fill="currentColor"/><circle cx="10.1" cy="9.2" r=".95" fill="#08334a"/><circle cx="13.9" cy="9.2" r=".95" fill="#08334a"/><ellipse class="dcv-mouth" cx="12" cy="12.1" rx="1.7" ry=".95" fill="#08334a"/></svg>';
+  // It is a real photo (LADY_IMG) painted as a background so CSS can crop it to
+  // the face and give it a gentle "talking" pulse.
+  var LADY_AV = '<span class="dcv-lady"><i class="dcv-mouth"></i></span>';
 
   var styleEl = document.createElement('style');
   styleEl.textContent = CSS;
@@ -892,7 +906,7 @@
   var fab = document.createElement('button');
   fab.className = 'dcv-fab';
   fab.setAttribute('aria-label', 'Voice assistant');
-  fab.innerHTML = '<span class="dcv-ring"></span><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_SVG + '</span><span class="dcv-hint"></span>';
+  fab.innerHTML = '<span class="dcv-ring"></span><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_AV + '</span><span class="dcv-hint"></span>';
 
   var panel = document.createElement('div');
   panel.className = 'dcv-panel';
@@ -911,7 +925,7 @@
     + '<div class="dcv-status"></div>'
     + '<div class="dcv-chips"></div>'
     + '<div class="dcv-foot">'
-    +   '<button class="dcv-mic" aria-label="Speak"><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_SVG + '</span></button>'
+    +   '<button class="dcv-mic" aria-label="Speak"><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_AV + '</span></button>'
     +   '<span class="dcv-mic-label"></span>'
     +   '<button class="dcv-stop" aria-label="Stop">' + STOP_SVG + '</button>'
     + '</div>';
@@ -919,6 +933,10 @@
   function mount() {
     document.body.appendChild(fab);
     document.body.appendChild(panel);
+    // she is hidden until she speaks, so fetch her photo up front to avoid a
+    // blank circle on the first reply
+    var pre = new Image();
+    pre.src = LADY_IMG;
   }
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);
