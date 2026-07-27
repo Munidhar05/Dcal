@@ -1396,8 +1396,13 @@
     { id: 'cod',     label: 'Cash on Delivery', note: 'Pay when your order arrives' }
   ];
 
-  /* ---------- COUPONS (none — DCAL200 removed) ---------- */
-  var COUPONS = {};
+  /* ---------- COUPONS ---------- */
+  // Display + offline-fallback rules only. The SERVER is the source of truth for the
+  // actual discount and once-per-user eligibility (see /api/coupon/validate).
+  var COUPONS = {
+    LX500: { type: 'flat', value: 500, min: 2000, oncePerUser: true, desc: '₹500 off orders over ₹2,000' },
+    LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' }
+  };
   // Ask the server whether this user may use the coupon (validity + once-per-user).
   // Falls back to local rules if the server is unreachable (no per-user check offline).
   function validateCouponServer(code, subtotal) {
@@ -1421,8 +1426,15 @@
   }
   function cartTotal() { return computeTotals(cartSubtotal()).total; }
 
-  // No app-level coupons anymore — the coupon box is removed entirely.
-  function couponBoxHTML(t) { return ''; }
+  function couponBoxHTML(t) {
+    if (t.code && t.discount > 0) {
+      return '<div class="dcal-coupon"><div class="dcal-coupon-ok"><span>✓ <b>' + esc(t.code) + '</b> applied</span>' +
+        '<button type="button" data-coupon-remove>Remove</button></div></div>';
+    }
+    return '<div class="dcal-coupon">' +
+      '<div class="dcal-coupon-row"><input class="dcal-input" data-coupon-input placeholder="Coupon code" maxlength="20" style="margin-bottom:0"><button type="button" class="dcal-coupon-apply" data-coupon-apply>Apply</button></div>' +
+      '<div class="dcal-coupon-msg" data-coupon-msg></div></div>';
+  }
   function summaryBodyHTML(subtotal) {
     var t = computeTotals(subtotal), n = cartCount();
     return '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +

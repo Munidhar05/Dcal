@@ -931,8 +931,8 @@ app.put('/api/users/:mobile/addresses', authCustomer, async (req, res) => {
    a coupon as "already used" if the customer has a prior, non-cancelled order
    that carries that code. */
 const COUPONS = {
-  // No app-level coupons. (DCAL200 removed — any Magic Checkout offers live in the
-  // Razorpay Dashboard.) An empty map = every code is rejected, discount is always 0.
+  LX500: { type: 'flat', value: 500, min: 2000, oncePerUser: true, desc: '₹500 off orders over ₹2,000' },
+  LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' }
 };
 function couponDiscount(c, subtotal) {
   if (!c) return 0;
