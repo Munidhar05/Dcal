@@ -767,7 +767,9 @@
    *  4. STYLES                                                          *
    * ------------------------------------------------------------------ */
   // Photo of the assistant, shown in place of the mic while she is speaking.
-  var LADY_IMG = '/images/Ai_lady.jpg';
+  // Inlined as a data URI so it resolves from any page depth (root, /html/, /hotel-*),
+  // over file:// or any hosting sub-path. ~2.5KB, shown at ~60px so 160px is plenty.
+  var LADY_IMG = 'data:image/jpeg;base64,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';
 
   var CSS = ''
     + '.dcv-fab{position:fixed;right:24px;bottom:24px;z-index:9998;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;'
@@ -866,7 +868,7 @@
     + '.dcv-speaking .dcv-ic-mic{display:none}'
     + '.dcv-speaking .dcv-ic-lady{display:block}'
     // crop the portrait to head + shoulders so the face still reads at 52-60px
-    + '.dcv-lady{position:relative;width:100%;height:100%;background:#fff url(' + LADY_IMG + ') no-repeat 49% 30%/200% auto}'
+    + '.dcv-lady{position:relative;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat 49% 30%/200% auto}'
     // her photo is closed-mouth, so we fake talking: a soft dark "open mouth" sits
     // exactly on her lips (49%/72.5% of the circle) and opens/closes only while she speaks
     + '.dcv-mouth{position:absolute;left:49%;top:72.5%;width:17%;height:7%;pointer-events:none;opacity:0;'
@@ -933,10 +935,6 @@
   function mount() {
     document.body.appendChild(fab);
     document.body.appendChild(panel);
-    // she is hidden until she speaks, so fetch her photo up front to avoid a
-    // blank circle on the first reply
-    var pre = new Image();
-    pre.src = LADY_IMG;
   }
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);
