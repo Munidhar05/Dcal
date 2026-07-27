@@ -868,7 +868,7 @@
     + '.dcv-speaking .dcv-ic-mic{display:none}'
     + '.dcv-speaking .dcv-ic-lady{display:block}'
     // crop the portrait to head + shoulders so the face still reads at 52-60px
-    + '.dcv-lady{position:relative;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat 49% 30%/200% auto}'
+    + '.dcv-lady{position:relative;display:block;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat 49% 30%/200% auto}'
     // her photo is closed-mouth, so we fake talking: a soft dark "open mouth" sits
     // exactly on her lips (49%/72.5% of the circle) and opens/closes only while she speaks
     + '.dcv-mouth{position:absolute;left:49%;top:72.5%;width:17%;height:7%;pointer-events:none;opacity:0;'
