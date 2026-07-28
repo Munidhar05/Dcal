@@ -5,9 +5,12 @@
    voice (Telugu / Hindi / English) and hear the answer in a FEMALE voice.
    It can also NAVIGATE the site by voice ("take me to products", "open cart").
 
-   Uses only the browser's free Web Speech API — no server, no API key, no cost:
+   Listens with the browser's free Web Speech API and SPEAKS the reply in a
+   natural Indian female voice via ElevenLabs (proxied by our server so the key
+   stays secret). If ElevenLabs is unavailable it stays silent — the old robotic
+   browser voice is no longer used.
      - window.SpeechRecognition / webkitSpeechRecognition  (listen)
-     - window.speechSynthesis                              (female voice reply)
+     - POST /api/tts  ->  ElevenLabs                       (female voice reply)
 
    Loaded on every page via  <script defer src="/js/voice-assistant.js"></script>
    Self-contained: injects its own CSS + DOM, so no other file needs changing.
@@ -769,7 +772,7 @@
   // Photo of the assistant, shown in place of the mic while she is speaking.
   // Inlined as a data URI so it resolves from any page depth (root, /html/, /hotel-*),
   // over file:// or any hosting sub-path. ~2.5KB, shown at ~60px so 160px is plenty.
-  var LADY_IMG = 'data:image/jpeg;base64,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';
+  var LADY_IMG = 'data:image/jpeg;base64,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';
 
   var CSS = ''
     + '.dcv-fab{position:fixed;right:24px;bottom:24px;z-index:9998;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;'
@@ -868,10 +871,10 @@
     + '.dcv-speaking .dcv-ic-mic{display:none}'
     + '.dcv-speaking .dcv-ic-lady{display:block}'
     // crop the portrait to head + shoulders so the face still reads at 52-60px
-    + '.dcv-lady{position:relative;display:block;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat 49% 30%/200% auto}'
+    + '.dcv-lady{position:relative;display:block;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat center/cover}'
     // her photo is closed-mouth, so we fake talking: a soft dark "open mouth" sits
     // exactly on her lips (49%/72.5% of the circle) and opens/closes only while she speaks
-    + '.dcv-mouth{position:absolute;left:49%;top:72.5%;width:17%;height:7%;pointer-events:none;opacity:0;'
+    + '.dcv-mouth{position:absolute;left:50%;top:54%;width:15%;height:6%;pointer-events:none;opacity:0;'
     +   'border-radius:50%;transform:translate(-50%,-50%) scaleY(.18);'
     +   'background:radial-gradient(ellipse at center,rgba(62,25,27,.9),rgba(62,25,27,.4) 55%,rgba(62,25,27,0) 78%)}'
     + '.dcv-speaking .dcv-mouth{animation:dcvTalk .34s ease-in-out infinite}'
@@ -955,98 +958,48 @@
   };
 
   /* ------------------------------------------------------------------ *
-   *  6. SPEECH SYNTHESIS  (female voice)                                *
+   *  6. VOICE  (ElevenLabs — natural Indian female voice)               *
    * ------------------------------------------------------------------ */
-  var synth = window.speechSynthesis || null;
-  var voices = [];
-  function loadVoices() { if (synth) voices = synth.getVoices() || []; }
-  loadVoices();
-  if (synth && typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
-
-  // Pick the best FEMALE, INDIAN-accent voice for a language.
-  //  - Telugu -> te-IN (Telugu text can only be read by a Telugu engine).
-  //  - Hindi  -> hi-IN.
-  //  - English-> Indian English (en-IN) FIRST, so it "talks like an Indian",
-  //             not American; then en-GB, then any English.
-  var FEMALE_HINT = /(female|woman|zira|susan|heera|kalpana|swara|neerja|aditi|raveena|lekha|priya|geeta|sunita|deepa|shruti|veena|sangeeta|ananya|isha|pooja|kajal|meera|google\s?(हिन्दी|हिंदी|தமிழ்|తెలుగు|english\s?\(india\)))/i;
-  var INDIAN_HINT = /(india|hindi|telugu|-in\b|_in\b|\bin\b)/i;
-  function voiceLang(v) { return (v.lang || '').toLowerCase().replace(/_/g, '-'); }
-  // best FEMALE, Indian-sounding voice whose lang starts with one of `prefixes`
-  function bestVoice(prefixes) {
-    for (var i = 0; i < prefixes.length; i++) {
-      var pref = prefixes[i];
-      var pool = voices.filter(function (v) { return voiceLang(v).indexOf(pref) === 0; });
-      if (!pool.length) continue;
-      var femIndian = pool.filter(function (v) { return FEMALE_HINT.test(v.name) && INDIAN_HINT.test(v.name + ' ' + v.lang); });
-      var fem = pool.filter(function (v) { return FEMALE_HINT.test(v.name); });
-      var indian = pool.filter(function (v) { return INDIAN_HINT.test(v.name + ' ' + v.lang); });
-      return femIndian[0] || fem[0] || indian[0] || pool[0];
-    }
-    return null;
-  }
-  // Choose a voice for the language. For Telugu, if the phone has NO Telugu voice,
-  // fall back to the Hindi female voice and mark the text to be transliterated to
-  // Devanagari — so a lady voice still speaks the Telugu (Hindi-accented).
-  function pickVoice(l) {
-    if (l === 'te') {
-      var te = bestVoice(['te-in', 'te']);
-      if (te) return { voice: te, code: te.lang, xlit: false };
-      var hi = bestVoice(['hi-in', 'hi']);
-      if (hi) return { voice: hi, code: hi.lang, xlit: true };   // read Telugu via Hindi voice
-      return { voice: null, code: 'te-IN', xlit: false };
-    }
-    if (l === 'hi') { var h = bestVoice(['hi-in', 'hi']); return { voice: h, code: h ? h.lang : 'hi-IN', xlit: false }; }
-    var en = bestVoice(['en-in', 'en-gb', 'en']);
-    return { voice: en, code: en ? en.lang : 'en-IN', xlit: false };
+  // The assistant speaks ONLY through ElevenLabs (Telugu / Hindi / English).
+  // The server proxies the call and keeps the API key secret; the widget probes
+  // /api/tts/health once in INIT. If ElevenLabs is not configured or a call
+  // fails, the assistant stays SILENT (no robotic browser voice) — onEnd still
+  // fires so navigation and follow-ups continue normally.
+  var TTS_URL = '/api/tts';
+  var ttsReady = false;        // true once the server reports ElevenLabs is on
+  var ttsAudio = null;         // the currently-playing ElevenLabs <audio>, if any
+  function stopTtsAudio() {
+    if (ttsAudio) { try { ttsAudio.pause(); } catch (e) {} try { ttsAudio.src = ''; } catch (e) {} ttsAudio = null; }
   }
 
-  // Telugu -> Devanagari by Unicode offset (Brahmic scripts are laid out in
-  // parallel, so 0x0C.. maps to 0x09.. by subtracting 0x0300). Non-Telugu
-  // characters (English product names, digits, punctuation) pass through.
-  function teluguToDevanagari(s) {
-    var out = '';
-    for (var i = 0; i < s.length; i++) {
-      var c = s.charCodeAt(i);
-      out += (c >= 0x0C00 && c <= 0x0C7F) ? String.fromCharCode(c - 0x0300) : s[i];
-    }
-    return out;
-  }
-
-  // speak(text[, onEnd]) — onEnd fires when the voice FINISHES (used so we only
-  // navigate after the reply has been fully spoken, never cutting it off).
-  var keepAlive = null, speakingU = null;
-  function stopKeepAlive() { if (keepAlive) { clearInterval(keepAlive); keepAlive = null; } }
+  // speak(text[, onEnd]) — play the reply in the ElevenLabs voice. onEnd fires
+  // exactly once, when the voice truly finishes (or immediately when there is no
+  // voice to play), so callers can navigate only after the reply is spoken.
   function speak(text, onEnd) {
-    if (!synth) return;                       // no TTS: caller's fallback timer handles onEnd
-    try { synth.cancel(); } catch (e) {}
-    stopKeepAlive();
-    var sel = pickVoice(lang);
-    var spoken = sel.xlit ? teluguToDevanagari(text) : text;   // Telugu-via-Hindi if needed
-    var u = new SpeechSynthesisUtterance(spoken);
-    if (sel.voice) { u.voice = sel.voice; u.lang = sel.voice.lang; }
-    else u.lang = sel.code;
-    u.rate = lang === 'en' ? 0.96 : lang === 'te' ? 0.84 : 0.9;   // Telugu slowest for clarity
-    u.pitch = 1.05;                          // slightly higher -> warmer female tone
-    u.volume = 1;
-    function done() { stopKeepAlive(); if (speakingU === u) { setSpeaking(false); speakingU = null; } if (onEnd) onEnd(); }   // fire onEnd only when TRULY done
-    u.onend = done;
-    u.onerror = done;
-    try {
-      // (single utterance — a queued silent warm-up could hang Chrome's
-      // speech queue and block the real reply from ever playing. The greeting
-      // starts with a throwaway "నమస్తే!/नमस्ते!/Hi!" so any first-syllable
-      // clip eats that word, not the brand name.
-      // ("డీ" in "డిక్యాల్ కు స్వాగతం" ->       was clipped before this fix).' ');
-      speakingU = u; setSpeaking(true);   // show the talking-lady avatar
-      synth.speak(u);
-      // Chrome silently STOPS speech after ~15s on long text; nudging resume()
-      // keeps a long reply going so it finishes before we navigate.
-      keepAlive = setInterval(function () {
-        try { if (synth.speaking) { synth.pause(); synth.resume(); } else stopKeepAlive(); } catch (e) { stopKeepAlive(); }
-      }, 9000);
-    } catch (e) { done(); }
+    stopTtsAudio();
+    var handled = false;
+    function finish() { if (handled) return; handled = true; setSpeaking(false); if (onEnd) onEnd(); }
+    if (!ttsReady) { finish(); return; }          // ElevenLabs off -> stay silent, but still fire onEnd
+    fetch(TTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: String(text || ''), lang: lang })
+    }).then(function (r) {
+      if (!r.ok) { if (r.status === 503) ttsReady = false; throw new Error('tts ' + r.status); }
+      return r.blob();
+    }).then(function (blob) {
+      if (handled) return;                          // stopped while the request was in flight
+      var url = URL.createObjectURL(blob);
+      var a = new Audio(url); ttsAudio = a;
+      function cleanup() { try { URL.revokeObjectURL(url); } catch (e) {} if (ttsAudio === a) ttsAudio = null; }
+      a.onended = function () { cleanup(); finish(); };
+      a.onerror = function () { cleanup(); finish(); };
+      setSpeaking(true);                            // talking-lady avatar on
+      var p = a.play();
+      if (p && p.catch) p.catch(function () { cleanup(); finish(); });   // autoplay blocked -> stay silent
+    }).catch(function () { finish(); });            // API down / offline -> stay silent
   }
-  function stopSpeaking() { stopKeepAlive(); setSpeaking(false); speakingU = null; if (synth) { try { synth.cancel(); } catch (e) {} } }
+  function stopSpeaking() { stopTtsAudio(); setSpeaking(false); }
 
   /* ------------------------------------------------------------------ *
    *  7. SPEECH RECOGNITION  (listen)                                    *
@@ -1199,7 +1152,7 @@
     // the voice off. With TTS present, speech is the trigger; here we just guard
     // against a device where the 'end' event never fires. Scale with length.
     var len = reply ? reply.length : 0;
-    var hasTTS = !!(window.speechSynthesis);
+    var hasTTS = ttsReady;
     var fallback = hasTTS
       ? Math.max(6000, Math.min(60000, len * 130 + 5000))   // TTS: long guard (~speaking time + buffer)
       : Math.max(3500, Math.min(12000, len * 70 + 2500));   // no TTS: reading-time delay
@@ -1238,6 +1191,16 @@
         panel.classList.toggle('dcv-ai-on', aiState === 'on');
       }).catch(function () { aiState = 'off'; });
     } catch (e) { aiState = 'off'; }
+  }
+
+  // Ask the server whether the ElevenLabs natural voice is configured. If yes,
+  // speak() plays it; if not, the assistant simply stays silent.
+  function checkTTS() {
+    try {
+      fetch(TTS_URL + '/health').then(function (r) { return r.json(); }).then(function (d) {
+        ttsReady = !!(d && d.enabled);
+      }).catch(function () { ttsReady = false; });
+    } catch (e) { ttsReady = false; }
   }
 
   function askAI(text, priorHistory) {
@@ -1465,7 +1428,7 @@
   function autoWelcome() {
     if (opened) return;
     openPanel(false, true);             // open + show welcome (no immediate speak)
-    if (!synth) return;
+    if (!ttsReady) return;              // no ElevenLabs voice -> nothing to speak, skip the welcome
     var fire = function (e) {
       document.removeEventListener('pointerdown', fire, true);
       document.removeEventListener('keydown', fire, true);
@@ -1543,6 +1506,7 @@
    * ------------------------------------------------------------------ */
   renderChrome();
   checkAI();      // ask the server whether the OpenRouter AI brain is available
+  checkTTS();     // ask the server whether the ElevenLabs natural voice is available
   // bring back the conversation from before this page change (same browser tab)
   if (restoreChat()) greeted = true;
   // Decide how the assistant starts on this page:

@@ -80,6 +80,13 @@ app.get('/api/assistant/health', assistant.health);
 app.post('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, tag: 'assistant' }), assistant.handle);
 console.log(assistant.ENABLED ? ('✓ AI voice assistant enabled via OpenRouter (' + assistant.MODEL + ')') : 'ℹ AI voice assistant off (set OPENROUTER_API_KEY) — widget uses free offline engine');
 
+// ElevenLabs natural Indian voice (Telugu / Hindi / English). Key stays server-side.
+// If unset or a call fails, the widget falls back to the free browser voice.
+const tts = require('./tts');
+app.get('/api/tts/health', tts.health);
+app.post('/api/tts', rateLimit({ windowMs: 60 * 1000, max: 40, tag: 'tts' }), tts.handle);
+console.log(tts.ENABLED ? ('✓ ElevenLabs voice enabled (' + tts.MODEL + ')') : 'ℹ ElevenLabs voice off (set ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID) — widget uses free browser voice');
+
 const ROOT = path.join(__dirname, '..');                 // project root (where index.html lives)
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'dcal-admin-2026';
