@@ -5,9 +5,12 @@
    voice (Telugu / Hindi / English) and hear the answer in a FEMALE voice.
    It can also NAVIGATE the site by voice ("take me to products", "open cart").
 
-   Uses only the browser's free Web Speech API — no server, no API key, no cost:
+   Listens with the browser's free Web Speech API and SPEAKS the reply in a
+   natural Indian female voice via ElevenLabs (proxied by our server so the key
+   stays secret). If ElevenLabs is unavailable it stays silent — the old robotic
+   browser voice is no longer used.
      - window.SpeechRecognition / webkitSpeechRecognition  (listen)
-     - window.speechSynthesis                              (female voice reply)
+     - POST /api/tts  ->  ElevenLabs                       (female voice reply)
 
    Loaded on every page via  <script defer src="/js/voice-assistant.js"></script>
    Self-contained: injects its own CSS + DOM, so no other file needs changing.
@@ -20,12 +23,29 @@
   /* ------------------------------------------------------------------ *
    *  1. LANGUAGES                                                       *
    * ------------------------------------------------------------------ */
+  // Every language the assistant can be spoken to in. `code` is only used by the
+  // browser's own recogniser (the fallback path); the normal path is server-side
+  // speech-to-text, which DETECTS the language instead of being told it.
   var LANGS = {
-    te: { code: 'te-IN', label: 'తెలుగు',  short: 'తెలుగు' },
-    hi: { code: 'hi-IN', label: 'हिंदी',    short: 'हिंदी'  },
-    en: { code: 'en-IN', label: 'English',  short: 'EN'    }
+    te: { code: 'te-IN', label: 'తెలుగు',    name: 'Telugu'    },
+    hi: { code: 'hi-IN', label: 'हिंदी',      name: 'Hindi'     },
+    en: { code: 'en-IN', label: 'English',   name: 'English'   },
+    ta: { code: 'ta-IN', label: 'தமிழ்',     name: 'Tamil'     },
+    kn: { code: 'kn-IN', label: 'ಕನ್ನಡ',      name: 'Kannada'   },
+    ml: { code: 'ml-IN', label: 'മലയാളം',   name: 'Malayalam' },
+    mr: { code: 'mr-IN', label: 'मराठी',      name: 'Marathi'   },
+    bn: { code: 'bn-IN', label: 'বাংলা',      name: 'Bengali'   },
+    gu: { code: 'gu-IN', label: 'ગુજરાતી',    name: 'Gujarati'  },
+    pa: { code: 'pa-IN', label: 'ਪੰਜਾਬੀ',      name: 'Punjabi'   },
+    or: { code: 'or-IN', label: 'ଓଡ଼ିଆ',       name: 'Odia'      },
+    as: { code: 'as-IN', label: 'অসমীয়া',    name: 'Assamese'  },
+    ur: { code: 'ur-IN', label: 'اردو',       name: 'Urdu'      }
   };
-  // remembered choice, default Telugu (primary local language for Hyderabad/Telangana)
+  // The languages the OFFLINE keyword engine has canned answers for. Anything else
+  // is answered by the AI brain, which speaks all of them.
+  var KB_LANGS = { te: 1, hi: 1, en: 1 };
+  // remembered choice, default Telugu (primary local language for Hyderabad/Telangana).
+  // From the second turn onward this is whatever the customer actually spoke.
   var lang = localStorage.getItem('dcal_voice_lang') || 'te';
   if (!LANGS[lang]) lang = 'te';
 
@@ -35,9 +55,9 @@
   var UI = {
     te: {
       title: 'డీకాల్ సహాయకురాలు',
-      tagline: 'మైక్ నొక్కి మాట్లాడండి',
+      tagline: 'మీ భాషలో మాట్లాడండి',
       listening: 'వింటున్నాను…',
-      tapToSpeak: 'మాట్లాడటానికి మైక్ నొక్కండి',
+      tapToSpeak: 'మా ప్రొడక్ట్స్ గురించి ఏదైనా అడగండి',
       thinking: 'ఆలోచిస్తున్నాను…',
       greeting: 'నమస్తే! డిక్యాల్ కు స్వాగతము! నేను మీ వాయిస్ సహాయకు రాలిని. కొన డానికి, ధరలు, ఆర్డర్ ట్రాక్, లేదా ఏదైనా అడ గండి — మై కు నొ క్కి మాట్లాడండి.',
       noMic: 'క్షమించండి, మీ బ్రౌజర్‌లో మైక్ పని చేయడం లేదు. దయచేసి కింద ఉన్న బటన్లను నొక్కండి, లేదా Chrome ఉపయోగించండి.',
@@ -52,9 +72,9 @@
     },
     hi: {
       title: 'डीकाल सहायक',
-      tagline: 'माइक दबाकर बोलें',
+      tagline: 'अपनी भाषा में बोलें',
       listening: 'सुन रही हूँ…',
-      tapToSpeak: 'बोलने के लिए माइक दबाएँ',
+      tapToSpeak: 'हमारे प्रोडक्ट्स के बारे में कुछ भी पूछें',
       thinking: 'सोच रही हूँ…',
       greeting: 'नमस्ते! डीकाल में आपका स्वागत है! मैं आपकी वॉइस सहायक हूँ। खरीदना, दाम, ऑर्डर ट्रैक, या कुछ भी पूछें — माइक दबाकर बोलें।',
       noMic: 'माफ़ कीजिए, आपके ब्राउज़र में माइक काम नहीं कर रहा। कृपया नीचे दिए बटन दबाएँ, या Chrome इस्तेमाल करें।',
@@ -69,9 +89,9 @@
     },
     en: {
       title: "D'Cal Assistant",
-      tagline: 'Tap the mic and speak',
+      tagline: 'Talk in your language',
       listening: 'Listening…',
-      tapToSpeak: 'Tap the mic to speak',
+      tapToSpeak: 'Ask anything about our products',
       thinking: 'Thinking…',
       greeting: "Hi! Welcome to D'Cal! I am your voice assistant. Ask me how to buy, prices, track your order, or anything about our products — just tap the mic and speak.",
       noMic: 'Sorry, the microphone is not working in your browser. Please tap the buttons below, or use Chrome.',
@@ -83,8 +103,133 @@
         ['Track order',   'track order'],
         ['Contact us',    'contact']
       ]
+    },
+
+    /* ---- The other Indian languages the customer may speak. Only the few
+       strings that are actually shown or spoken are translated; anything not
+       listed here falls back to English via the fill pass below. ---- */
+    ta: {
+      title: "டி'கால் உதவியாளர்",
+      tagline: 'உங்கள் மொழியில் பேசுங்கள்',
+      listening: 'கேட்கிறேன்…',
+      tapToSpeak: 'எங்கள் products பற்றி எதுவும் கேளுங்கள்',
+      thinking: 'யோசிக்கிறேன்…',
+      greeting: "வணக்கம்! டி'கால் வரவேற்கிறது! நான் உங்கள் குரல் உதவியாளர். வாங்குவது, விலை, ஆர்டர் டிராக் — எதுவும் கேளுங்கள்.",
+      noMic: 'மன்னிக்கவும், உங்கள் browser-ல் மைக் வேலை செய்யவில்லை. தயவுசெய்து Chrome பயன்படுத்துங்கள்.',
+      micDenied: 'மைக் அனுமதி கிடைக்கவில்லை. தயவுசெய்து மைக் அனுமதி கொடுங்கள்.'
+    },
+    kn: {
+      title: "ಡಿ'ಕಾಲ್ ಸಹಾಯಕಿ",
+      tagline: 'ನಿಮ್ಮ ಭಾಷೆಯಲ್ಲಿ ಮಾತನಾಡಿ',
+      listening: 'ಕೇಳುತ್ತಿದ್ದೇನೆ…',
+      tapToSpeak: 'ನಮ್ಮ products ಬಗ್ಗೆ ಏನು ಬೇಕಾದರೂ ಕೇಳಿ',
+      thinking: 'ಯೋಚಿಸುತ್ತಿದ್ದೇನೆ…',
+      greeting: "ನಮಸ್ಕಾರ! ಡಿ'ಕಾಲ್‌ಗೆ ಸ್ವಾಗತ! ನಾನು ನಿಮ್ಮ ಧ್ವನಿ ಸಹಾಯಕಿ. ಖರೀದಿ, ಬೆಲೆ, ಆರ್ಡರ್ ಟ್ರ್ಯಾಕ್ — ಏನು ಬೇಕಾದರೂ ಕೇಳಿ.",
+      noMic: 'ಕ್ಷಮಿಸಿ, ನಿಮ್ಮ browser ನಲ್ಲಿ ಮೈಕ್ ಕೆಲಸ ಮಾಡುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು Chrome ಬಳಸಿ.',
+      micDenied: 'ಮೈಕ್ ಅನುಮತಿ ಸಿಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮೈಕ್ ಅನುಮತಿ ಕೊಡಿ.'
+    },
+    ml: {
+      title: "ഡി'കാൽ സഹായി",
+      tagline: 'നിങ്ങളുടെ ഭാഷയിൽ സംസാരിക്കൂ',
+      listening: 'കേൾക്കുന്നു…',
+      tapToSpeak: 'ഞങ്ങളുടെ products നെക്കുറിച്ച് എന്തും ചോദിക്കൂ',
+      thinking: 'ആലോചിക്കുന്നു…',
+      greeting: "നമസ്കാരം! ഡി'കാലിലേക്ക് സ്വാഗതം! ഞാൻ നിങ്ങളുടെ വോയ്സ് അസിസ്റ്റന്റ്. വാങ്ങൽ, വില, ഓർഡർ ട്രാക്ക് — എന്തും ചോദിക്കൂ.",
+      noMic: 'ക്ഷമിക്കണം, നിങ്ങളുടെ browser-ൽ മൈക്ക് പ്രവർത്തിക്കുന്നില്ല. ദയവായി Chrome ഉപയോഗിക്കുക.',
+      micDenied: 'മൈക്ക് അനുമതി ലഭിച്ചില്ല. ദയവായി മൈക്ക് അനുമതി നൽകുക.'
+    },
+    mr: {
+      title: "डी'कॅल सहाय्यक",
+      tagline: 'तुमच्या भाषेत बोला',
+      listening: 'ऐकत आहे…',
+      tapToSpeak: 'आमच्या products बद्दल काहीही विचारा',
+      thinking: 'विचार करत आहे…',
+      greeting: "नमस्कार! डी'कॅलमध्ये आपले स्वागत आहे! मी तुमची व्हॉइस सहाय्यक. खरेदी, किंमत, ऑर्डर ट्रॅक — काहीही विचारा.",
+      noMic: 'माफ करा, तुमच्या browser मध्ये माइक काम करत नाही. कृपया Chrome वापरा.',
+      micDenied: 'माइकची परवानगी मिळाली नाही. कृपया माइकला परवानगी द्या.'
+    },
+    bn: {
+      title: "ডি'ক্যাল সহায়িকা",
+      tagline: 'আপনার ভাষায় বলুন',
+      listening: 'শুনছি…',
+      tapToSpeak: 'আমাদের products সম্পর্কে যা খুশি জিজ্ঞাসা করুন',
+      thinking: 'ভাবছি…',
+      greeting: "নমস্কার! ডি'ক্যাল-এ স্বাগতম! আমি আপনার ভয়েস সহায়িকা। কেনা, দাম, অর্ডার ট্র্যাক — যা খুশি জিজ্ঞাসা করুন।",
+      noMic: 'দুঃখিত, আপনার browser-এ মাইক কাজ করছে না। অনুগ্রহ করে Chrome ব্যবহার করুন।',
+      micDenied: 'মাইকের অনুমতি পাওয়া যায়নি। অনুগ্রহ করে মাইকের অনুমতি দিন।'
+    },
+    gu: {
+      title: "ડી'કાલ સહાયક",
+      tagline: 'તમારી ભાષામાં બોલો',
+      listening: 'સાંભળી રહી છું…',
+      tapToSpeak: 'અમારા products વિશે કંઈ પણ પૂછો',
+      thinking: 'વિચારી રહી છું…',
+      greeting: "નમસ્તે! ડી'કાલમાં આપનું સ્વાગત છે! હું તમારી વોઇસ સહાયક છું. ખરીદી, ભાવ, ઓર્ડર ટ્રેક — કંઈ પણ પૂછો.",
+      noMic: 'માફ કરશો, તમારા browser માં માઇક કામ કરતું નથી. કૃપા કરીને Chrome વાપરો.',
+      micDenied: 'માઇકની પરવાનગી મળી નથી. કૃપા કરીને માઇકની પરવાનગી આપો.'
+    },
+    pa: {
+      title: "ਡੀ'ਕਾਲ ਸਹਾਇਕ",
+      tagline: 'ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ ਬੋਲੋ',
+      listening: 'ਸੁਣ ਰਹੀ ਹਾਂ…',
+      tapToSpeak: 'ਸਾਡੇ products ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ',
+      thinking: 'ਸੋਚ ਰਹੀ ਹਾਂ…',
+      greeting: "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਡੀ'ਕਾਲ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ! ਮੈਂ ਤੁਹਾਡੀ ਵੌਇਸ ਸਹਾਇਕ ਹਾਂ। ਖਰੀਦ, ਕੀਮਤ, ਆਰਡਰ ਟ੍ਰੈਕ — ਕੁਝ ਵੀ ਪੁੱਛੋ।",
+      noMic: 'ਮਾਫ਼ ਕਰਨਾ, ਤੁਹਾਡੇ browser ਵਿੱਚ ਮਾਈਕ ਕੰਮ ਨਹੀਂ ਕਰ ਰਿਹਾ। ਕਿਰਪਾ ਕਰਕੇ Chrome ਵਰਤੋ।',
+      micDenied: 'ਮਾਈਕ ਦੀ ਇਜਾਜ਼ਤ ਨਹੀਂ ਮਿਲੀ। ਕਿਰਪਾ ਕਰਕੇ ਮਾਈਕ ਦੀ ਇਜਾਜ਼ਤ ਦਿਓ।'
+    },
+    or: {
+      title: "ଡି'କାଲ ସହାୟିକା",
+      tagline: 'ଆପଣଙ୍କ ଭାଷାରେ କୁହନ୍ତୁ',
+      listening: 'ଶୁଣୁଛି…',
+      tapToSpeak: 'ଆମର products ବିଷୟରେ ଯାହା ବି ପଚାରନ୍ତୁ',
+      thinking: 'ଭାବୁଛି…',
+      greeting: "ନମସ୍କାର! ଡି'କାଲକୁ ସ୍ୱାଗତ! ମୁଁ ଆପଣଙ୍କ ଭଏସ ସହାୟିକା। କିଣିବା, ଦାମ, ଅର୍ଡର ଟ୍ରାକ — ଯାହା ବି ପଚାରନ୍ତୁ।",
+      noMic: 'କ୍ଷମା କରନ୍ତୁ, ଆପଣଙ୍କ browser ରେ ମାଇକ କାମ କରୁନାହିଁ। ଦୟାକରି Chrome ବ୍ୟବହାର କରନ୍ତୁ।',
+      micDenied: 'ମାଇକ ଅନୁମତି ମିଳିଲା ନାହିଁ। ଦୟାକରି ମାଇକ ଅନୁମତି ଦିଅନ୍ତୁ।'
+    },
+    as: {
+      title: "ডি'কেল সহায়িকা",
+      tagline: 'আপোনাৰ ভাষাত কওক',
+      listening: 'শুনি আছোঁ…',
+      tapToSpeak: 'আমাৰ products সম্পৰ্কে যিকোনো সোধক',
+      thinking: 'ভাবি আছোঁ…',
+      greeting: "নমস্কাৰ! ডি'কেললৈ স্বাগতম! মই আপোনাৰ ভইচ সহায়িকা। কিনা, দাম, অৰ্ডাৰ ট্ৰেক — যিকোনো সোধক।",
+      noMic: 'ক্ষমা কৰিব, আপোনাৰ browser ত মাইক কাম কৰা নাই। অনুগ্ৰহ কৰি Chrome ব্যৱহাৰ কৰক।',
+      micDenied: 'মাইকৰ অনুমতি পোৱা নাযায়। অনুগ্ৰহ কৰি মাইকৰ অনুমতি দিয়ক।'
+    },
+    ur: {
+      title: 'ڈی کال اسسٹنٹ',
+      tagline: 'اپنی زبان میں بولیں',
+      listening: 'سن رہی ہوں…',
+      tapToSpeak: 'ہمارے products کے بارے میں کچھ بھی پوچھیں',
+      thinking: 'سوچ رہی ہوں…',
+      greeting: 'السلام علیکم! ڈی کال میں خوش آمدید! میں آپ کی وائس اسسٹنٹ ہوں۔ خریداری، قیمت، آرڈر ٹریک — کچھ بھی پوچھیں۔',
+      noMic: 'معذرت، آپ کے browser میں مائیک کام نہیں کر رہا۔ براہ کرم Chrome استعمال کریں۔',
+      micDenied: 'مائیک کی اجازت نہیں ملی۔ براہ کرم مائیک کی اجازت دیں۔'
     }
   };
+
+  /* ---- THE FIRST HELLO ---------------------------------------------------
+     The very first thing she says, before anyone has told us anything. It
+     cannot come out of the UI table above, because every entry in there is
+     already ONE language — and at this moment we do not yet know which one the
+     customer speaks. So she greets in all of them at once and invites a reply.
+
+     The customer answering "Namaste" / "Vanakkam" / "Kem Cho" is what tells us:
+     the speech-to-text hears the language in their voice, and from that word on
+     the whole conversation follows them. She then introduces herself properly
+     in THEIR language (UI[lang].greeting) — see maybeIntroduce(). */
+  var WELCOME = "Hi! Hello! Namaste! Vanakkam! Namaskara! Kem Cho! Nomoshkar! Sat Sri Akal! Your language is our language.";
+
+  // Fill pass: guarantee UI[<any language>] answers every lookup, falling back to
+  // English. Without this a Kannada turn would hit `undefined.tapToSpeak`.
+  (function fillUI() {
+    for (var code in LANGS) {
+      if (!UI[code]) UI[code] = {};
+      for (var key in UI.en) { if (UI[code][key] === undefined) UI[code][key] = UI.en[key]; }
+    }
+  })();
 
   /* ------------------------------------------------------------------ *
    *  3. KNOWLEDGE BASE  (intents)                                      *
@@ -454,7 +599,15 @@
       kw: {
         te: ['నమస్తే', 'నమస్కారం', 'హలో', 'హాయ్', 'ఎలా ఉన్నారు', 'hello', 'hi', 'namaste'],
         hi: ['नमस्ते', 'नमस्कार', 'हैलो', 'हाय', 'कैसे हो', 'hello', 'hi', 'namaste'],
-        en: ['hello', 'hi', 'hey', 'good morning', 'good evening', 'how are you']
+        // Every greeting the opening WELCOME line invites them to say back, in
+        // native script and romanised — this is how "Vanakkam" is understood as
+        // a hello rather than as an unknown word.
+        en: ['hello', 'hi', 'hey', 'good morning', 'good evening', 'how are you',
+             'namaste', 'namaskar', 'namaskara', 'namaskaram', 'vanakkam', 'kem cho',
+             'nomoshkar', 'nomoskar', 'sat sri akal', 'satsriakal', 'adaab', 'salaam',
+             'assalamu alaikum', 'namaskaara',
+             'வணக்கம்', 'ನಮಸ್ಕಾರ', 'നമസ്കാരം', 'नमस्कार', 'নমস্কার', 'કેમ છો',
+             'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', 'ନମସ୍କାର', 'নমস্কাৰ', 'السلام علیکم']
       },
       reply: {
         te: 'నమస్తే! మీకు ఎలా సహాయం చేయగలను? కొనడం, ధరలు, ఆర్డర్ ట్రాక్ — ఏదైనా అడగండి.',
@@ -752,24 +905,70 @@
 
   // A friendly fallback when nothing matches. Escalates: repeated misses add a
   // stronger nudge to switch language or call a human.
+  // These MUST exist in every language the assistant can be spoken to. A customer
+  // who just spoke Kannada and was not understood has to hear "I did not
+  // understand" in Kannada — an English apology is the one reply that guarantees
+  // they give up. (They no longer mention the quick-tap chips or the language
+  // buttons: both were removed from the panel.)
   var FALLBACK = {
-    te: 'క్షమించండి, నాకు అర్థం కాలేదు. మీరు ఇలా అడగవచ్చు: "ఎలా కొనాలి?", "ధరలు", "ఆర్డర్ ట్రాక్", లేదా "మాతో మాట్లాడండి". లేదా ' + PHONE + ' కు కాల్ చేయండి.',
-    hi: 'माफ़ कीजिए, मुझे समझ नहीं आया। आप ऐसे पूछ सकते हैं: "कैसे खरीदें?", "दाम", "ऑर्डर ट्रैक", या "हमसे बात करें"। या ' + PHONE + ' पर कॉल करें।',
-    en: 'Sorry, I did not understand. You can ask: "How to buy?", "Prices", "Track order", or "Contact us". Or call ' + PHONE + '.'
+    te: 'క్షమించండి, నాకు అర్థం కాలేదు. ధరలు, ఎలా కొనాలి, లేదా ఆర్డర్ ట్రాక్ గురించి అడగండి. లేదా ' + PHONE + ' కు కాల్ చేయండి.',
+    hi: 'माफ़ कीजिए, मुझे समझ नहीं आया। आप दाम, कैसे खरीदें, या ऑर्डर ट्रैक के बारे में पूछ सकते हैं। या ' + PHONE + ' पर कॉल करें।',
+    en: 'Sorry, I did not understand. You can ask about prices, how to buy, or tracking your order. Or call ' + PHONE + '.',
+    ta: 'மன்னிக்கவும், எனக்கு புரியவில்லை. விலை, எப்படி வாங்குவது, அல்லது ஆர்டர் டிராக் பற்றி கேளுங்கள். அல்லது ' + PHONE + ' ஐ அழைக்கவும்.',
+    kn: 'ಕ್ಷಮಿಸಿ, ನನಗೆ ಅರ್ಥವಾಗಲಿಲ್ಲ. ಬೆಲೆ, ಹೇಗೆ ಖರೀದಿಸುವುದು, ಅಥವಾ ಆರ್ಡರ್ ಟ್ರ್ಯಾಕ್ ಬಗ್ಗೆ ಕೇಳಿ. ಅಥವಾ ' + PHONE + ' ಗೆ ಕರೆ ಮಾಡಿ.',
+    ml: 'ക്ഷമിക്കണം, എനിക്ക് മനസ്സിലായില്ല. വില, എങ്ങനെ വാങ്ങാം, അല്ലെങ്കിൽ ഓർഡർ ട്രാക്ക് എന്നിവയെക്കുറിച്ച് ചോദിക്കൂ. അല്ലെങ്കിൽ ' + PHONE + ' ൽ വിളിക്കൂ.',
+    mr: 'माफ करा, मला समजले नाही. किंमत, कसे खरेदी करावे, किंवा ऑर्डर ट्रॅक बद्दल विचारा. किंवा ' + PHONE + ' वर कॉल करा.',
+    bn: 'দুঃখিত, আমি বুঝতে পারিনি। দাম, কীভাবে কিনবেন, বা অর্ডার ট্র্যাক সম্পর্কে জিজ্ঞাসা করুন। অথবা ' + PHONE + ' নম্বরে কল করুন।',
+    gu: 'માફ કરશો, મને સમજાયું નહીં. ભાવ, કેવી રીતે ખરીદવું, અથવા ઓર્ડર ટ્રેક વિશે પૂછો. અથવા ' + PHONE + ' પર કૉલ કરો.',
+    pa: 'ਮਾਫ਼ ਕਰਨਾ, ਮੈਨੂੰ ਸਮਝ ਨਹੀਂ ਆਇਆ। ਕੀਮਤ, ਕਿਵੇਂ ਖਰੀਦਣਾ ਹੈ, ਜਾਂ ਆਰਡਰ ਟ੍ਰੈਕ ਬਾਰੇ ਪੁੱਛੋ। ਜਾਂ ' + PHONE + ' ਤੇ ਕਾਲ ਕਰੋ।',
+    or: 'କ୍ଷମା କରନ୍ତୁ, ମୁଁ ବୁଝି ପାରିଲି ନାହିଁ। ଦାମ, କିପରି କିଣିବେ, କିମ୍ବା ଅର୍ଡର ଟ୍ରାକ ବିଷୟରେ ପଚାରନ୍ତୁ। କିମ୍ବା ' + PHONE + ' କୁ କଲ କରନ୍ତୁ।',
+    as: 'ক্ষমা কৰিব, মই বুজি নাপালোঁ। দাম, কেনেকৈ কিনিব, বা অৰ্ডাৰ ট্ৰেক সম্পৰ্কে সোধক। বা ' + PHONE + ' লৈ কল কৰক।',
+    ur: 'معذرت، مجھے سمجھ نہیں آیا۔ آپ قیمت، کیسے خریدیں، یا آرڈر ٹریک کے بارے میں پوچھ سکتے ہیں۔ یا ' + PHONE + ' پر کال کریں۔'
   };
   var FALLBACK2 = {
-    te: 'ఇంకా అర్థం కావడం లేదు. దయచేసి పైన మీ భాషను ఎంచుకోండి, లేదా నేరుగా ' + PHONE + ' కు కాల్ చేయండి — మా టీమ్ సహాయం చేస్తుంది.',
-    hi: 'अभी भी समझ नहीं पाई। कृपया ऊपर अपनी भाषा चुनें, या सीधे ' + PHONE + ' पर कॉल करें — हमारी टीम मदद करेगी।',
-    en: 'I still did not catch that. Please pick your language above, or call ' + PHONE + ' directly — our team will help you.'
+    te: 'ఇంకా అర్థం కావడం లేదు. దయచేసి మెల్లగా మళ్ళీ చెప్పండి, లేదా ' + PHONE + ' కు కాల్ చేయండి — మా టీమ్ సహాయం చేస్తుంది.',
+    hi: 'अभी भी समझ नहीं पाई। कृपया धीरे से फिर कहिए, या ' + PHONE + ' पर कॉल करें — हमारी टीम मदद करेगी।',
+    en: 'I still did not catch that. Please say it once more slowly, or call ' + PHONE + ' — our team will help you.',
+    ta: 'இன்னும் புரியவில்லை. தயவுசெய்து மெதுவாக மீண்டும் சொல்லுங்கள், அல்லது ' + PHONE + ' ஐ அழைக்கவும் — எங்கள் டீம் உதவும்.',
+    kn: 'ಇನ್ನೂ ಅರ್ಥವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ನಿಧಾನವಾಗಿ ಮತ್ತೆ ಹೇಳಿ, ಅಥವಾ ' + PHONE + ' ಗೆ ಕರೆ ಮಾಡಿ — ನಮ್ಮ ಟೀಮ್ ಸಹಾಯ ಮಾಡುತ್ತದೆ.',
+    ml: 'ഇപ്പോഴും മനസ്സിലായില്ല. ദയവായി പതുക്കെ ഒന്നുകൂടി പറയൂ, അല്ലെങ്കിൽ ' + PHONE + ' ൽ വിളിക്കൂ — ഞങ്ങളുടെ ടീം സഹായിക്കും.',
+    mr: 'अजूनही समजले नाही. कृपया हळू पुन्हा सांगा, किंवा ' + PHONE + ' वर कॉल करा — आमची टीम मदत करेल.',
+    bn: 'এখনও বুঝতে পারিনি। অনুগ্রহ করে ধীরে আবার বলুন, অথবা ' + PHONE + ' নম্বরে কল করুন — আমাদের টিম সাহায্য করবে।',
+    gu: 'હજુ પણ સમજાયું નહીં. કૃપા કરીને ધીમેથી ફરી કહો, અથવા ' + PHONE + ' પર કૉલ કરો — અમારી ટીમ મદદ કરશે.',
+    pa: 'ਹਾਲੇ ਵੀ ਸਮਝ ਨਹੀਂ ਆਇਆ। ਕਿਰਪਾ ਕਰਕੇ ਹੌਲੀ ਦੁਬਾਰਾ ਕਹੋ, ਜਾਂ ' + PHONE + ' ਤੇ ਕਾਲ ਕਰੋ — ਸਾਡੀ ਟੀਮ ਮਦਦ ਕਰੇਗੀ।',
+    or: 'ଏବେ ବି ବୁଝି ପାରିଲି ନାହିଁ। ଦୟାକରି ଧୀରେ ପୁଣି କୁହନ୍ତୁ, କିମ୍ବା ' + PHONE + ' କୁ କଲ କରନ୍ତୁ — ଆମ ଟିମ ସାହାଯ୍ୟ କରିବ।',
+    as: 'এতিয়াও বুজি নাপালোঁ। অনুগ্ৰহ কৰি লাহে লাহে পুনৰ কওক, বা ' + PHONE + ' লৈ কল কৰক — আমাৰ টীমে সহায় কৰিব।',
+    ur: 'اب بھی سمجھ نہیں آیا۔ براہ کرم آہستہ سے دوبارہ کہیں، یا ' + PHONE + ' پر کال کریں — ہماری ٹیم مدد کرے گی۔'
   };
+  // safety net only — every language above is translated, so this should never
+  // actually fire; it exists so a newly added LANGS entry cannot crash a reply.
+  (function fillFallbacks() {
+    for (var code in LANGS) {
+      if (!FALLBACK[code]) FALLBACK[code] = FALLBACK.en;
+      if (!FALLBACK2[code]) FALLBACK2[code] = FALLBACK2.en;
+    }
+  })();
 
   /* ------------------------------------------------------------------ *
    *  4. STYLES                                                          *
    * ------------------------------------------------------------------ */
-  // Photo of the assistant, shown in place of the mic while she is speaking.
-  // Inlined as a data URI so it resolves from any page depth (root, /html/, /hotel-*),
-  // over file:// or any hosting sub-path. ~2.5KB, shown at ~60px so 160px is plenty.
-  var LADY_IMG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHCAkIBgoJCAkMCwoMDxoRDw4ODx8WGBMaJSEnJiQhJCMpLjsyKSw4LCMkM0Y0OD0/QkNCKDFITUhATTtBQj//2wBDAQsMDA8NDx4RER4/KiQqPz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz//wgARCACpAKADASIAAhEBAxEB/8QAGwABAAIDAQEAAAAAAAAAAAAAAAQFAQMGAgf/xAAYAQEBAQEBAAAAAAAAAAAAAAAAAQIDBP/aAAwDAQACEAMQAAAB7MAAAAAAAAAAAAAGPNRzmdd44S8joGM7yAAAAAAxmujjau6iY6V8jdvPoWayz3zCgAAAB4M8P2HBy1mzRbY6V3mbAToO5+Y/Rt4lPHuwAAADELfBNvF9dy8undn1x9PjXuzFL9E4jsu3nkTaudrO8AAAEGFJgm2ms4MVXrHjl6NnnGZZt3Wze3m3Ta2dVkAAACDUdFzR6166k36vEvh6NPrbElutnP23o80u3pelPYAAAFDfYPkHjueJNtrRM6vquJkes9trMroMZAAAAAESWOQrfoI+fWXXiJLAAAAAAAAAAAAAAAAAAAAAAAD/xAAqEAABBAEDAwMDBQAAAAAAAAACAAEDEQQFEjATITEQIiQUI0AgQUJQYP/aAAgBAQABBQL+x3Nf4WZk7GKUUOVSw83qH+BqHUfK2SU0clQtIEreObLyGgj+o3FYgbT9xyFhZHXi5bWrS/KtU7srWlzVk3yE9K1qzs+awrH9qmj9zjSwCrMtC98blb2tTH5oxWttHW43iTDUzeGKn4ZXoLVrUG3ZELo924d2+R1CN5dq1E9hwZDq1anb5Tew/wB/Lk/dw2T2rWO/DlebVqZvfmt8gJqRS2sYbyDa5laxfPBlN9tWi7rJ7zMK2qHtP/O/TFb7fAQ7hKxIjYWmzWZgfcmTsi8xZqCQTQ2RCO0eHU4ZCid3d1FKUaHKjRZUalmeT10uCQIuPUNL6jmJAX6AEjLT9L6b8s+PFkNLoop9HyWTaPkuotFFQY8WO3+r/8QAHhEBAAICAQUAAAAAAAAAAAAAAQACETASICExQFD/2gAIAQMBAT8B3Fczj6RAzEY9ZMTEtoraWdNfEe5pLJGy/D//xAAgEQEAAQMDBQAAAAAAAAAAAAABAAIRMBASISAxQEFQ/9oACAECAQE/AczVabvCY6HWy8vDAnM94anmHfC0jCkPh//EAC4QAAEDAQYEBgEFAAAAAAAAAAEAAhEQAyEwMUFREiJhcQQTIzJAgSBQYGKRof/aAAgBAQAGPwL9Rib/AIZb/qkK4rgf9fBeINJTbjn8D+RyR4zmt5WS2V/uGePw7CnasbjHMbX0gwZXLSz7487gKQgjQgY921AWwpdFGzviCrSiw5hZlZlQrPoKnBbVh6riGrVzBcoTSe6FXYM7VCHaoU9KzvgkHVEHRS4wosrzuuKZms5Qotf7XK4FADMoAaYXmWHuGY3UkzS7LZXyFmT9KMhXzLcniOQOmIbXw9z9W7oteCCND+IawEk6BC18Re/Ru2NFqwOXo2pHRwVxsz9q82Y+161qT0aosmBv7s//xAAnEAEAAgEDBAEEAwEAAAAAAAABABEhMVFhEDBBcYFAobHBIFBgkf/aAAgBAQABPyH+x8Y4S/ohIPdoB1MUvEXGitmZCy6v19DfuBxW0oSicRQpGNKzU0O/c9dBKKsdTLzQZF7xb2U8YltVo0nwH7xpGcmD+8owaQxDjpYbYqgHuUuei6toT2jOrU1qiK3YCNoR9TJmjpUue04JmOgrDyGEMFJK1Sm4myQ8XVE+BEVA2JmIZOz85jqPWLSBrM2bbzO120OsREjCH31PiOzQnqZrpgfxC4alQs8HiI/kZgHLoG8qu11LE9nBuHqW7ikUOBBlSkuV8lx89qKv8y+jJuDs3Del9GTg3MftJ+SI2jOcJ1i5Ut7slpoVBqGqlWZ5YsDkmI1Wn5ME8kxy+S9oeQXYn5g9+pYNQiiFpoV2rqJoxkcS9Jbr0V8vJRxrfVyjj0Iww4d+g02YZfAHfHuAREzonpszVYsFP8dFiwWwCIGdU9t3vcNY+T5jlfYj7x7/AIrP1HsLy39QyPClfectY+X5/wBZ/9oADAMBAAIAAwAAABAAAAAAAAAAAAAACB4gAAAAABfaYsAAAAACSqNEAAAACBySuVAAAABg9mvuQAAAABSxwAAAAAATQJiggAAAAACBAAAAAAAAAAAAAAAAAAAAAAAAD//EABwRAQACAwEBAQAAAAAAAAAAAAEAESEwMSBBUP/aAAgBAwEBPxDcgigvQFtEqoFxKa99RlATL33AdiHKRfPZMWZSXFvQKBDYaeBBK/D/AP/EABsRAQACAwEBAAAAAAAAAAAAAAEAESEwMSBQ/9oACAECAQE/ENwQBa0KBbLuLBsv3kRAQRgr3xFcuWMDosqwgXlArRYo6Dp6EyHw/wD/xAAqEAEAAgEDAgYCAQUAAAAAAAABABEhMVFhQXEQMIGRobHB0eEgQFBg8f/aAAgBAQABPxD/ACC1Ba++ZlbpYN/2JNyymyB2N4ryrIcq6yjskVZkIZBvrfd3MMnnuktTXtTladzrKcAxZz7QErsOfaJYLqnWyolR1TPn1jWB+Sb+GGKbCdQgYJaph0dpYqtSx0TRmsDAG+z5xa9dodxVBzqgi1zGBORTpGZVmBCzFaTXeTOTJNJ128wOdoRa2uZhJDVobx7JKJAvVl04PWssPMHaPSZwHrbSBmyBVoNYMpHSBxNfKQi4DLEd6OhxGAgV3U6fgjlKIROkGoILo19JUQo2WfiU1mlAM55lA8OB3l3ugexEPpNTciARsSzycEOX4hNQdOwX+4wmzEzQk6fOZoPgAeCFlMU8TCLl15PaJfqPgC5p0txy+4gSk/TR9SmB9vuVsuhW6qphZl0sWp0lkZbKb6PywuWQjtOP35NugIfUY7pzQL4T6jS2Vyln4JhG3BYzGK3JQRibN4YMfNTgos8GfwQ+eYcpboAH35Kjc/Zx+o46+AF+SoWWt9ViOpD4IJ3FJ3r+IGfY+fAYxVuPsY/fk61wXENqmKcuNqjhlwUh2HL6wEMBdZg4amBpMMXYOLrDIkOOtOB9ntD4zbIdzWCndAmlcBz5T453dH68j5OxHSL1S+74UGjt6D02YdD1g0e5Bu56CH3CG1vVb3MI5IhojSQuUXvSutu3Q7vluYwjFTb3/wCB4i1WpgPR/pWK1MJ6EqEYJt7r+A587HZFKV2xkhJTpW+yn4ZUQN/sIqO4PoIJIGtf7rfgmeyMJffWX/bP/9k=';
+  // Her photo and her video both live in /images. We resolve them from THIS
+  // script's own URL (/js/voice-assistant.js) rather than hard-coding "/images/...",
+  // so they keep working from any page depth (root, /html/, /hotel-*) and under any
+  // hosting sub-path.
+  function asset(name) {
+    var s = document.currentScript, src = s && s.src;
+    return src ? src.replace(/js\/[^\/]*$/, 'images/' + name) : '/images/' + name;
+  }
+  // AI_Lady-head.jpg is a head-and-shoulders crop of images/AI_Lady.jpeg. The full
+  // photo is a standing namaste shot, so its centre is her hands — cropping to the
+  // face is what makes her readable in the 52-60px avatar circles.
+  var LADY_IMG   = asset('AI_Lady-head.jpg');
+  // The full standing namaste photo. This is her resting pose: once the customer
+  // taps the mic she stops bowing and simply STANDS here for the rest of the chat.
+  var LADY_STAND = asset('AI_Lady.jpeg');
+  var LADY_VIDEO = asset('Lady.mp4');                        // namaskaram — the welcome
+  var LADY_TALK  = asset('AI_Lady_conversation.mp4');        // 6s of her talking, upright throughout
 
   var CSS = ''
     + '.dcv-fab{position:fixed;right:24px;bottom:24px;z-index:9998;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;'
@@ -806,19 +1005,14 @@
     + '.dcv-panel.dcv-open{opacity:1;transform:none;pointer-events:auto;animation:dcvPop .5s ease both}'
     + '@keyframes dcvPop{0%{opacity:0;transform:translateY(34px) scale(.4)}55%{opacity:1;transform:translateY(-8px) scale(1.05)}75%{transform:translateY(2px) scale(.985)}100%{opacity:1;transform:translateY(0) scale(1)}}'
     // inner sections cascade in one after another (the "magic reveal")
-    + '.dcv-langs,.dcv-body,.dcv-chips,.dcv-foot{opacity:0;transform:translateY(9px);transition:opacity .3s ease,transform .35s ease}'
-    + '.dcv-panel.dcv-open .dcv-langs{opacity:1;transform:none;transition-delay:.14s}'
-    + '.dcv-panel.dcv-open .dcv-body{opacity:1;transform:none;transition-delay:.20s}'
-    + '.dcv-panel.dcv-open .dcv-chips{opacity:1;transform:none;transition-delay:.26s}'
+    + '.dcv-stage,.dcv-foot{opacity:0;transform:translateY(9px);transition:opacity .3s ease,transform .35s ease}'
+    + '.dcv-panel.dcv-open .dcv-stage{opacity:1;transform:none;transition-delay:.14s}'
     + '.dcv-panel.dcv-open .dcv-foot{opacity:1;transform:none;transition-delay:.30s}'
     + '@media(max-width:600px){'
     +   '.dcv-panel{left:auto;right:12px;width:min(82vw,296px);max-width:none;box-sizing:border-box;bottom:78px;border-radius:16px}'
     +   '.dcv-head{padding:12px 12px;gap:9px}'
     +   '.dcv-h-title{font-size:14.5px}'
-    +   '.dcv-langs{padding:8px 12px 4px}'
-    +   '.dcv-body{padding:10px 12px 6px}'
-    +   '.dcv-chips{padding:6px 12px 10px;gap:6px}'
-    +   '.dcv-chip{padding:7px 11px;font-size:12.5px}'
+    +   '.dcv-chat .dcv-body{padding:8px 12px 24px}'
     +   '.dcv-foot{padding:9px 12px}'
     +   '.dcv-min,.dcv-close{width:28px;height:28px}'
     + '}'
@@ -837,21 +1031,66 @@
     + '.dcv-min:hover{background:rgba(255,255,255,.32)}'
     + '.dcv-min svg{width:16px;height:16px}'
 
-    + '.dcv-langs{display:flex;gap:6px;padding:10px 14px 4px;background:#f2f9fc;flex:0 0 auto}'
-    + '.dcv-lang{flex:1;border:1px solid #cfe6ef;background:#fff;color:#025a86;border-radius:9px;padding:7px 4px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}'
-    + '.dcv-lang.on{background:#0077B6;border-color:#0077B6;color:#fff}'
+    // The stage is split in two and nothing overlaps: SHE gets the top half, the
+    // conversation gets the bottom half. Bubbles can never climb onto her face
+    // however long the chat runs, because they are not on the same layer at all.
+    + '.dcv-stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;'
+    +   'display:flex;flex-direction:column;background:#fff}'
+    // Top half — her. The standing photo sits UNDER the video, framed identically
+    // (object-position 50% 15% == "center 15%"), so when the video is taken away
+    // she does not jump or resize — she simply stops moving. The clip is square
+    // (960x960) in a wide box, so the crop is chosen to hold her FACE.
+    // Before anyone has spoken to her she gets the WHOLE stage — a full standing
+    // welcome, with no empty white box under her. She shrinks to the top half
+    // only once the conversation actually starts and there is text to show.
+    + '.dcv-face{position:relative;flex:0 0 100%;min-height:0;overflow:hidden;'
+    +   'background:#fff url("' + LADY_STAND + '") no-repeat center 15%/cover;'
+    +   'transition:flex-basis .35s ease}'
+    + '.dcv-chat .dcv-face{flex-basis:50%}'
+    // In the split view her box is about twice as wide as it is tall, but she is
+    // a SQUARE 960x960 — filling that box means slicing her off at the chest.
+    // So while chatting she is fitted whole instead of cropped. Her own
+    // background is white and so is the panel, so the fit is invisible: she
+    // simply stands there complete, rather than being cut in half.
+    + '.dcv-chat .dcv-face{background-size:contain;background-position:center}'
+    + '.dcv-chat .dcv-face .dcv-vid{object-fit:contain;object-position:center}'
+    + '.dcv-face .dcv-vid{position:absolute;inset:0;width:100%;height:100%;'
+    +   'object-fit:cover;object-position:50% 15%;background:#fff;display:none}'
+    // Exactly one of the three faces is on at a time, set by setFace():
+    //   is-greet -> the namaskaram clip   (waiting to be spoken to)
+    //   is-talk  -> the conversation clip (she is saying a reply, lips moving)
+    //   neither  -> the standing photo    (engaged, but silent)
+    + '.dcv-face.is-greet .dcv-vid-greet{display:block}'
+    + '.dcv-face.is-talk .dcv-vid-talk{display:block}'
 
-    + '.dcv-body{padding:12px 14px 6px;flex:1 1 auto;min-height:0;overflow-y:auto}'
+    // Bottom half — the conversation. A real area of its own, on white, so the
+    // text is always readable and never sits over her sari.
+    // Hidden entirely until the conversation starts, so the waiting screen is
+    // all her rather than her plus an empty white panel.
+    + '.dcv-body{display:none}'
+    + '.dcv-chat .dcv-body{flex:1 1 auto;min-height:0;padding:10px 14px 26px;overflow-y:auto;'
+    +   'display:flex;flex-direction:column;background:#fff;'
+    // Fade the top edge, so a message scrolling up under her does not leave a
+    // hard-sliced sliver of a bubble sitting on the join. Fades to white, which
+    // is what is behind it, so it simply disappears.
+    +   '-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12px);'
+    +   'mask-image:linear-gradient(to bottom,transparent 0,#000 12px)}'
+    + '.dcv-body>.dcv-msg{flex:0 0 auto}'
+    // Sit the conversation on the BOTTOM of its half while it is still short.
+    // Done with margin-top:auto, not justify-content:flex-end — the latter pushes
+    // overflow off the top where no browser will let you scroll back to it.
+    + '.dcv-body>.dcv-msg:first-child{margin-top:auto}'
     + '.dcv-msg{margin:8px 0;display:flex}'
     + '.dcv-msg.dcv-you{justify-content:flex-end}'
     + '.dcv-bub{max-width:85%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}'
     + '.dcv-bot .dcv-bub{background:#eef6fa;color:#08334a;border-bottom-left-radius:4px}'
     + '.dcv-you .dcv-bub{background:#0077B6;color:#fff;border-bottom-right-radius:4px}'
-    + '.dcv-status{text-align:center;font-size:12.5px;color:#5a7d8c;padding:2px 0 6px;min-height:18px;flex:0 0 auto}'
+    // status ("Listening…") sits along the bottom of the video on a soft white fade
+    // so it reads over her; when there is nothing to say it disappears entirely.
+    + '.dcv-status{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:12.5px;font-weight:600;color:#08334a;padding:14px 10px 7px;'
+    +   'background:linear-gradient(to top,rgba(255,255,255,.95),rgba(255,255,255,0));pointer-events:none}'
+    + '.dcv-status:empty{display:none}'
 
-    + '.dcv-chips{display:flex;flex-wrap:wrap;gap:7px;padding:6px 14px 12px;flex:0 0 auto}'
-    + '.dcv-chip{border:1px solid #cfe6ef;background:#fff;color:#025a86;border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap;flex:0 0 auto}'
-    + '.dcv-chip:hover{background:#e6f4fa;border-color:#0077B6}'
 
     + '.dcv-foot{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid #eef2f4;background:#fafcfd;flex:0 0 auto}'
     + '.dcv-mic{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#0077B6,#00B4D8);'
@@ -867,19 +1106,23 @@
     // the footer button stays a mic ("press to speak"), swapping to her face only while she speaks
     + '.dcv-speaking .dcv-ic-mic{display:none}'
     + '.dcv-speaking .dcv-ic-lady{display:block}'
-    // crop the portrait to head + shoulders so the face still reads at 52-60px
-    + '.dcv-lady{position:relative;display:block;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat 49% 30%/200% auto}'
-    // her photo is closed-mouth, so we fake talking: a soft dark "open mouth" sits
-    // exactly on her lips (49%/72.5% of the circle) and opens/closes only while she speaks
-    + '.dcv-mouth{position:absolute;left:49%;top:72.5%;width:17%;height:7%;pointer-events:none;opacity:0;'
-    +   'border-radius:50%;transform:translate(-50%,-50%) scaleY(.18);'
-    +   'background:radial-gradient(ellipse at center,rgba(62,25,27,.9),rgba(62,25,27,.4) 55%,rgba(62,25,27,0) 78%)}'
-    + '.dcv-speaking .dcv-mouth{animation:dcvTalk .34s ease-in-out infinite}'
-    + '@keyframes dcvTalk{0%,100%{transform:translate(-50%,-50%) scaleY(.18);opacity:.12}50%{transform:translate(-50%,-50%) scaleY(1);opacity:1}}'
+    // her photo is already cropped to head + shoulders, so it reads at 52-60px
+    + '.dcv-lady{position:relative;display:block;width:100%;height:100%;background:#fff url("' + LADY_IMG + '") no-repeat center/cover}'
+    // the old fake "open mouth" is gone: this photo is a smile with teeth, so a dark
+    // blob over her lips read as a smudge — and the panel video now does the real
+    // talking. While she speaks the small avatar just breathes gently instead.
+    + '.dcv-speaking .dcv-lady{animation:dcvTalk 1s ease-in-out infinite}'
+    + '@keyframes dcvTalk{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}'
     + '.dcv-mic.dcv-live{background:linear-gradient(135deg,#e63946,#f77f8b)}'
     + '.dcv-mic.dcv-live::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:3px solid rgba(230,57,70,.5);animation:dcvPulse 1.3s ease-out infinite}'
-    + '.dcv-mic-label{flex:1;min-width:0;font-size:13.5px;color:#3a5c6b;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
-    + '.dcv-mic-label.dcv-live-txt{color:#08334a;font-weight:700}'   // live transcript style
+    + '.dcv-mic-label{flex:1;min-width:0;font-size:13.5px;color:#3a5c6b;font-weight:600;line-height:1.25;overflow:hidden}'
+    // line 1 — the invitation, up to two lines then ellipsis
+    + '.dcv-mic-label b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:700}'
+    // line 2 — the language scripts, smaller and lighter, always one line
+    + '.dcv-mic-label i{display:block;margin-top:2px;font-style:normal;font-weight:600;font-size:10.5px;letter-spacing:.1px;'
+    +   'color:#6d93a4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    // while listening the label is plain text (transcript), so clamp it there instead
+    + '.dcv-mic-label.dcv-live-txt{color:#08334a;font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}'
     + '.dcv-stop{width:40px;height:40px;border-radius:50%;border:1px solid #d6e3e9;background:#fff;color:#0077B6;cursor:pointer;flex:0 0 auto;display:none;align-items:center;justify-content:center}'
     + '.dcv-stop.on{display:flex}'
     + '.dcv-stop svg{width:18px;height:18px}'
@@ -887,8 +1130,8 @@
     + '.dcv-typing span{display:inline-block;width:6px;height:6px;margin:0 1px;border-radius:50%;background:#8fb4c4;animation:dcvBlink 1s infinite}'
     + '.dcv-typing span:nth-child(2){animation-delay:.2s}.dcv-typing span:nth-child(3){animation-delay:.4s}'
     + '@keyframes dcvBlink{0%,100%{opacity:.3}50%{opacity:1}}'
-    + '@media(prefers-reduced-motion:reduce){.dcv-fab,.dcv-fab .dcv-ring,.dcv-fab.dcv-pop::before,.dcv-fab.dcv-pop svg,.dcv-mic.dcv-live::after,.dcv-speaking .dcv-mouth{animation:none}'
-    +   '.dcv-panel.dcv-open{animation:none}.dcv-panel{transition:opacity .2s ease}.dcv-langs,.dcv-body,.dcv-chips,.dcv-foot{transition:none;transform:none}}';
+    + '@media(prefers-reduced-motion:reduce){.dcv-fab,.dcv-fab .dcv-ring,.dcv-fab.dcv-pop::before,.dcv-fab.dcv-pop svg,.dcv-mic.dcv-live::after,.dcv-speaking .dcv-lady{animation:none}'
+    +   '.dcv-panel.dcv-open{animation:none}.dcv-panel{transition:opacity .2s ease}.dcv-stage,.dcv-foot{transition:none;transform:none}}';
 
   /* ------------------------------------------------------------------ *
    *  5. BUILD DOM                                                       *
@@ -899,7 +1142,7 @@
   // Female avatar shown IN PLACE of the mic while the assistant is speaking.
   // It is a real photo (LADY_IMG) painted as a background so CSS can crop it to
   // the face and give it a gentle "talking" pulse.
-  var LADY_AV = '<span class="dcv-lady"><i class="dcv-mouth"></i></span>';
+  var LADY_AV = '<span class="dcv-lady"></span>';
 
   var styleEl = document.createElement('style');
   styleEl.textContent = CSS;
@@ -922,10 +1165,32 @@
     +   '<button class="dcv-min" aria-label="Minimize" title="Minimize (keep chat)">' + MIN_SVG + '</button>'
     +   '<button class="dcv-close" aria-label="Close" title="Close (end chat)">&times;</button>'
     + '</div>'
-    + '<div class="dcv-langs"></div>'
-    + '<div class="dcv-body"></div>'
-    + '<div class="dcv-status"></div>'
-    + '<div class="dcv-chips"></div>'
+    // her video replaces the language buttons + the welcome bubble. It loops for as
+    // long as the panel is open, so she is always "there" — not only while talking.
+    // muted: the real voice comes from ElevenLabs, so the clip must stay silent
+    //        (it is also what lets browsers autoplay it at all).
+    // poster: her photo, so the box shows her face instead of black while it loads.
+    // preload=none and NO autoplay attribute: with autoplay the browser would fetch
+    //        all 6MB on every page load even while the assistant sits closed. Instead
+    //        openPanel() calls play(), which starts the download only when she is
+    //        actually shown. A muted video is allowed to play without a user gesture.
+    // the stage fills everything between the header and the mic bar: the video IS
+    // the panel. Replies and the status line float on top of her rather than
+    // taking space away from her.
+    + '<div class="dcv-stage">'
+    // Two clips, two elements — NOT one element whose src is swapped. Swapping
+    // src throws away everything the browser had buffered and starts the 5MB
+    // download again, which is exactly the delay we are trying to remove. Kept
+    // apart, each holds its own buffer and resumes instantly.
+    +   '<div class="dcv-face is-greet">'
+    +     '<video class="dcv-vid dcv-vid-greet" playsinline muted loop preload="none" '
+    +            'poster="' + LADY_STAND + '" src="' + LADY_VIDEO + '"></video>'
+    +     '<video class="dcv-vid dcv-vid-talk" playsinline muted loop preload="none" '
+    +            'src="' + LADY_TALK + '"></video>'
+    +   '</div>'
+    +   '<div class="dcv-body"></div>'
+    +   '<div class="dcv-status"></div>'
+    + '</div>'
     + '<div class="dcv-foot">'
     +   '<button class="dcv-mic" aria-label="Speak"><span class="dcv-ic dcv-ic-mic">' + MIC_SVG + '</span><span class="dcv-ic dcv-ic-lady">' + LADY_AV + '</span></button>'
     +   '<span class="dcv-mic-label"></span>'
@@ -943,10 +1208,11 @@
     hintTxt:  fab.querySelector('.dcv-hint'),
     hTitle:   panel.querySelector('.dcv-h-title'),
     hSub:     panel.querySelector('.dcv-h-sub'),
-    langs:    panel.querySelector('.dcv-langs'),
+    face:     panel.querySelector('.dcv-face'),
+    vidGreet: panel.querySelector('.dcv-vid-greet'),
+    vidTalk:  panel.querySelector('.dcv-vid-talk'),
     body:     panel.querySelector('.dcv-body'),
     status:   panel.querySelector('.dcv-status'),
-    chips:    panel.querySelector('.dcv-chips'),
     micBtn:   panel.querySelector('.dcv-mic'),
     micLabel: panel.querySelector('.dcv-mic-label'),
     stopBtn:  panel.querySelector('.dcv-stop'),
@@ -955,98 +1221,151 @@
   };
 
   /* ------------------------------------------------------------------ *
-   *  6. SPEECH SYNTHESIS  (female voice)                                *
+   *  6. VOICE  (ElevenLabs — natural Indian female voice)               *
    * ------------------------------------------------------------------ */
-  var synth = window.speechSynthesis || null;
-  var voices = [];
-  function loadVoices() { if (synth) voices = synth.getVoices() || []; }
-  loadVoices();
-  if (synth && typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = loadVoices;
+  // The assistant speaks ONLY through ElevenLabs (Telugu / Hindi / English).
+  // The server proxies the call and keeps the API key secret; the widget probes
+  // /api/tts/health once in INIT. If ElevenLabs is not configured or a call
+  // fails, the assistant stays SILENT (no robotic browser voice) — onEnd still
+  // fires so navigation and follow-ups continue normally.
+  var TTS_URL = '/api/tts';
+  var ttsReady = false;        // true once the server reports ElevenLabs is on
+  var ttsAudio = null;         // the currently-playing ElevenLabs <audio>, if any
+  var speakSeq = 0;            // bumped whenever we start or stop — cancels older speaks
+  var TTS_URL_MAX = 4000;      // keep the GET comfortably inside every proxy's URL limit
 
-  // Pick the best FEMALE, INDIAN-accent voice for a language.
-  //  - Telugu -> te-IN (Telugu text can only be read by a Telugu engine).
-  //  - Hindi  -> hi-IN.
-  //  - English-> Indian English (en-IN) FIRST, so it "talks like an Indian",
-  //             not American; then en-GB, then any English.
-  var FEMALE_HINT = /(female|woman|zira|susan|heera|kalpana|swara|neerja|aditi|raveena|lekha|priya|geeta|sunita|deepa|shruti|veena|sangeeta|ananya|isha|pooja|kajal|meera|google\s?(हिन्दी|हिंदी|தமிழ்|తెలుగు|english\s?\(india\)))/i;
-  var INDIAN_HINT = /(india|hindi|telugu|-in\b|_in\b|\bin\b)/i;
-  function voiceLang(v) { return (v.lang || '').toLowerCase().replace(/_/g, '-'); }
-  // best FEMALE, Indian-sounding voice whose lang starts with one of `prefixes`
-  function bestVoice(prefixes) {
-    for (var i = 0; i < prefixes.length; i++) {
-      var pref = prefixes[i];
-      var pool = voices.filter(function (v) { return voiceLang(v).indexOf(pref) === 0; });
-      if (!pool.length) continue;
-      var femIndian = pool.filter(function (v) { return FEMALE_HINT.test(v.name) && INDIAN_HINT.test(v.name + ' ' + v.lang); });
-      var fem = pool.filter(function (v) { return FEMALE_HINT.test(v.name); });
-      var indian = pool.filter(function (v) { return INDIAN_HINT.test(v.name + ' ' + v.lang); });
-      return femIndian[0] || fem[0] || indian[0] || pool[0];
-    }
-    return null;
-  }
-  // Choose a voice for the language. For Telugu, if the phone has NO Telugu voice,
-  // fall back to the Hindi female voice and mark the text to be transliterated to
-  // Devanagari — so a lady voice still speaks the Telugu (Hindi-accented).
-  function pickVoice(l) {
-    if (l === 'te') {
-      var te = bestVoice(['te-in', 'te']);
-      if (te) return { voice: te, code: te.lang, xlit: false };
-      var hi = bestVoice(['hi-in', 'hi']);
-      if (hi) return { voice: hi, code: hi.lang, xlit: true };   // read Telugu via Hindi voice
-      return { voice: null, code: 'te-IN', xlit: false };
-    }
-    if (l === 'hi') { var h = bestVoice(['hi-in', 'hi']); return { voice: h, code: h ? h.lang : 'hi-IN', xlit: false }; }
-    var en = bestVoice(['en-in', 'en-gb', 'en']);
-    return { voice: en, code: en ? en.lang : 'en-IN', xlit: false };
+  function stopTtsAudio() {
+    speakSeq++;                                   // anything already in flight is now stale
+    var a = ttsAudio; ttsAudio = null;
+    if (!a) return;
+    a.onended = null; a.onerror = null;           // being interrupted must NOT fire onEnd
+    try { a.pause(); } catch (e) {}
+    if (a.__objUrl) { try { URL.revokeObjectURL(a.__objUrl); } catch (e) {} a.__objUrl = null; }
+    try { a.removeAttribute('src'); a.load(); } catch (e) {}   // also aborts the download
   }
 
-  // Telugu -> Devanagari by Unicode offset (Brahmic scripts are laid out in
-  // parallel, so 0x0C.. maps to 0x09.. by subtracting 0x0300). Non-Telugu
-  // characters (English product names, digits, punctuation) pass through.
-  function teluguToDevanagari(s) {
-    var out = '';
-    for (var i = 0; i < s.length; i++) {
-      var c = s.charCodeAt(i);
-      out += (c >= 0x0C00 && c <= 0x0C7F) ? String.fromCharCode(c - 0x0300) : s[i];
-    }
-    return out;
+  function ttsGetUrl(text) {
+    return TTS_URL + '?lang=' + encodeURIComponent(lang) + '&text=' + encodeURIComponent(text);
   }
 
-  // speak(text[, onEnd]) — onEnd fires when the voice FINISHES (used so we only
-  // navigate after the reply has been fully spoken, never cutting it off).
-  var keepAlive = null, speakingU = null;
-  function stopKeepAlive() { if (keepAlive) { clearInterval(keepAlive); keepAlive = null; } }
+  // speak(text[, onEnd]) — play the reply in the ElevenLabs voice. onEnd fires
+  // exactly once, when the voice truly finishes (or immediately when there is no
+  // voice to play), so callers can navigate only after the reply is spoken.
+  //
+  // The fast path hands the URL straight to an <audio> element: the browser then
+  // streams it and starts playing the first chunk while the server is still
+  // pulling the rest out of ElevenLabs. Fetching a blob instead — what we used to
+  // do — cannot make a sound until the entire clip has been generated AND
+  // downloaded, which is most of the delay before she starts talking.
   function speak(text, onEnd) {
-    if (!synth) return;                       // no TTS: caller's fallback timer handles onEnd
-    try { synth.cancel(); } catch (e) {}
-    stopKeepAlive();
-    var sel = pickVoice(lang);
-    var spoken = sel.xlit ? teluguToDevanagari(text) : text;   // Telugu-via-Hindi if needed
-    var u = new SpeechSynthesisUtterance(spoken);
-    if (sel.voice) { u.voice = sel.voice; u.lang = sel.voice.lang; }
-    else u.lang = sel.code;
-    u.rate = lang === 'en' ? 0.96 : lang === 'te' ? 0.84 : 0.9;   // Telugu slowest for clarity
-    u.pitch = 1.05;                          // slightly higher -> warmer female tone
-    u.volume = 1;
-    function done() { stopKeepAlive(); if (speakingU === u) { setSpeaking(false); speakingU = null; } if (onEnd) onEnd(); }   // fire onEnd only when TRULY done
-    u.onend = done;
-    u.onerror = done;
-    try {
-      // (single utterance — a queued silent warm-up could hang Chrome's
-      // speech queue and block the real reply from ever playing. The greeting
-      // starts with a throwaway "నమస్తే!/नमस्ते!/Hi!" so any first-syllable
-      // clip eats that word, not the brand name.
-      // ("డీ" in "డిక్యాల్ కు స్వాగతం" ->       was clipped before this fix).' ');
-      speakingU = u; setSpeaking(true);   // show the talking-lady avatar
-      synth.speak(u);
-      // Chrome silently STOPS speech after ~15s on long text; nudging resume()
-      // keeps a long reply going so it finishes before we navigate.
-      keepAlive = setInterval(function () {
-        try { if (synth.speaking) { synth.pause(); synth.resume(); } else stopKeepAlive(); } catch (e) { stopKeepAlive(); }
-      }, 9000);
-    } catch (e) { done(); }
+    stopTtsAudio();
+    var mine = speakSeq;                          // stale as soon as anyone speaks/stops again
+    var handled = false;
+    function finish() {
+      if (handled) return; handled = true;
+      if (mine === speakSeq) setSpeaking(false);
+      if (onEnd) onEnd();
+    }
+    if (!ttsReady) { finish(); return; }          // ElevenLabs off -> stay silent, but still fire onEnd
+    var s = String(text || '');
+    if (!s.trim()) { finish(); return; }
+
+    var url = ttsGetUrl(s);
+    if (url.length <= TTS_URL_MAX) {              // stream it
+      playAudio(url, mine, finish, function () { speakViaPost(s, mine, finish); });
+      return;
+    }
+    speakViaPost(s, mine, finish);                // reply too long for a URL
   }
-  function stopSpeaking() { stopKeepAlive(); setSpeaking(false); speakingU = null; if (synth) { try { synth.cancel(); } catch (e) {} } }
+
+  // Play one source and report back. `onFail` runs only when nothing was ever
+  // heard, so the caller can try another route; once a single note has played we
+  // just finish normally.
+  function playAudio(url, mine, finish, onFail, objUrl) {
+    if (mine !== speakSeq) {
+      if (objUrl) { try { URL.revokeObjectURL(objUrl); } catch (e) {} }
+      finish(); return;
+    }
+    var a = new Audio(); ttsAudio = a;
+    a.preload = 'auto';
+    if (objUrl) a.__objUrl = objUrl;
+    var started = false, settled = false, endGuard = null;
+    function release() {
+      if (endGuard) { clearTimeout(endGuard); endGuard = null; }
+      if (a.__objUrl) { try { URL.revokeObjectURL(a.__objUrl); } catch (e) {} a.__objUrl = null; }
+      if (ttsAudio === a) ttsAudio = null;
+    }
+    function ok()  { if (settled) return; settled = true; release(); finish(); }
+    function bad() {
+      if (settled) return; settled = true; release();
+      if (!started && onFail && mine === speakSeq) onFail(); else finish();
+    }
+    a.onplaying = function () { started = true; };
+    a.onended = ok;
+    a.onerror = bad;
+    // A streamed reply has no Content-Length, so the browser only learns how long
+    // it is once the stream closes. Don't stake the end of the turn — which is
+    // what triggers navigation — purely on the 'ended' event firing for such a
+    // clip: as soon as a real duration is known, watch the clock ourselves and
+    // finish on time even if the event never comes.
+    a.ondurationchange = function () {
+      if (settled || !isFinite(a.duration) || a.duration <= 0) return;
+      if (endGuard) clearTimeout(endGuard);
+      (function arm() {
+        var left = (a.duration - (a.currentTime || 0)) * 1000 + 400;
+        endGuard = setTimeout(function () {
+          if (settled) return;
+          // still genuinely playing (buffering made it run late) -> wait some more
+          if (!a.ended && isFinite(a.duration) && a.currentTime < a.duration - 0.25) { arm(); return; }
+          ok();
+        }, Math.max(400, left));
+      })();
+    };
+    a.src = url;
+    setSpeaking(true);                            // talking-lady avatar on
+    var p = a.play();
+    if (p && p.catch) p.catch(function (err) {
+      if (err && err.name === 'NotAllowedError') ok();   // autoplay blocked -> silent, but carry on
+      else bad();                                        // could not load -> let the caller retry
+    });
+  }
+
+  // Fallback: POST the text and play the finished clip. Slower — nothing is heard
+  // until the whole file exists — but it survives a proxy that mangles the GET,
+  // carries replies too long for a URL, and is the only path that can read the
+  // HTTP status, which is how we notice ElevenLabs has been switched off.
+  function speakViaPost(text, mine, finish) {
+    if (mine !== speakSeq) { finish(); return; }
+    fetch(TTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, lang: lang })
+    }).then(function (r) {
+      if (!r.ok) { if (r.status === 503) ttsReady = false; throw new Error('tts ' + r.status); }
+      return r.blob();
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      playAudio(url, mine, finish, null, url);
+    }).catch(function () { finish(); });          // API down / offline -> stay silent
+  }
+
+  // Pull a line she is about to say into the caches ahead of time. The server
+  // keeps the generated audio and answers with `max-age`, so the browser has it
+  // too — the real play then starts instantly instead of waiting on ElevenLabs.
+  function prefetchTts(text) {
+    if (!ttsReady) return;
+    var s = String(text || '');
+    if (!s.trim()) return;
+    var url = ttsGetUrl(s);
+    if (url.length > TTS_URL_MAX) return;
+    try {
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+  function stopSpeaking() { stopTtsAudio(); setSpeaking(false); }
 
   /* ------------------------------------------------------------------ *
    *  7. SPEECH RECOGNITION  (listen)                                    *
@@ -1086,7 +1405,7 @@
       if (!last) return;
       if (!last.isFinal) {                                  // LIVE: show what we hear, corrected
         var itxt = (last[0] && last[0].transcript) || '';
-        el.micLabel.textContent = itxt ? autoCorrect(itxt) : UI[lang].listening;
+        setMicText(itxt ? autoCorrect(itxt) : UI[lang].listening);
         el.micLabel.classList.add('dcv-live-txt');
         return;
       }
@@ -1124,13 +1443,218 @@
     return r;
   }
 
+  /* ------------------------------------------------------------------ *
+   *  7b. RECORD + DETECT LANGUAGE  (server /api/stt via ElevenLabs)      *
+   *      The browser's own recogniser has to be TOLD the language up     *
+   *      front, which is exactly what we don't know — a customer just    *
+   *      presses the mic and talks. So we record the audio instead and   *
+   *      let the server tell us BOTH what they said and which language   *
+   *      they said it in; the whole conversation then follows them.      *
+   *      If this is unavailable we fall back to the browser recogniser.  *
+   * ------------------------------------------------------------------ */
+  var STT_URL = '/api/stt';
+  var ASK_URL = '/api/ask';        // transcribe + answer + start the voice, in one request
+  var MR = window.MediaRecorder || null;
+  var canRecord = !!(MR && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.Blob);
+  var sttReady = false;                      // server has speech-to-text configured
+  var rec = null, recStream = null, recChunks = [], recCapTimer = null, recAudioCtx = null;
+
+  function checkSTT() {
+    if (!canRecord) return;                  // old browser -> browser recogniser only
+    try {
+      fetch(STT_URL + '/health').then(function (r) { return r.json(); }).then(function (d) {
+        sttReady = !!(d && d.enabled);
+      }).catch(function () { sttReady = false; });
+    } catch (e) { sttReady = false; }
+  }
+
+  // pick a container this browser can actually record (Chrome/Firefox: webm,
+  // Safari: mp4). Scribe reads the format from the file itself.
+  function recMime() {
+    var want = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    for (var i = 0; i < want.length; i++) {
+      if (MR.isTypeSupported && MR.isTypeSupported(want[i])) return want[i];
+    }
+    return '';
+  }
+
+  function releaseMic() {
+    if (recStream) { try { recStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} recStream = null; }
+    if (recAudioCtx) { try { recAudioCtx.close(); } catch (e) {} recAudioCtx = null; }
+    if (recCapTimer) { clearTimeout(recCapTimer); recCapTimer = null; }
+  }
+
+  function stopRecording() {
+    if (rec && rec.state === 'recording') { try { rec.stop(); } catch (e) {} }   // -> onstop -> sendRecording
+  }
+
+  // Stop as soon as they finish talking, the same way the browser recogniser
+  // would: watch the live level and end after a short silence. Also gives up if
+  // they never say anything, and hard-caps the clip so nothing runs away.
+  function watchSilence(stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try { recAudioCtx = new AC(); } catch (e) { return; }
+    var an = recAudioCtx.createAnalyser();
+    an.fftSize = 512;
+    recAudioCtx.createMediaStreamSource(stream).connect(an);
+    var buf = new Uint8Array(an.fftSize);
+    var spoke = false, quietAt = 0;
+    // How long we wait after they stop making noise before deciding they are
+    // done. Pure dead time — the customer hears it as "she is slow to answer" —
+    // so it is kept as short as it can be without cutting off a normal pause
+    // mid-sentence. Raise it if customers report being interrupted.
+    var SILENCE_AFTER_SPEECH = 550;    // ms of quiet that means "they finished"
+    var GIVE_UP_IF_SILENT = 7000;      // ms of nothing at all -> stop waiting
+    (function tick() {
+      if (!rec || rec.state !== 'recording') return;
+      an.getByteTimeDomainData(buf);
+      var peak = 0;
+      for (var i = 0; i < buf.length; i++) { var v = Math.abs(buf[i] - 128); if (v > peak) peak = v; }
+      var now = Date.now();
+      if (peak > 8) { spoke = true; quietAt = 0; }                 // ~3% of full scale
+      else if (!quietAt) { quietAt = now; }
+      else if (now - quietAt > (spoke ? SILENCE_AFTER_SPEECH : GIVE_UP_IF_SILENT)) { stopRecording(); return; }
+      setTimeout(tick, 60);            // check twice as often: up to 60ms less lag on the cut-off
+    })();
+  }
+
+  function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then(function (stream) {
+        recStream = stream; recChunks = [];
+        var mime = recMime();
+        // 24 kbps Opus. Speech stays perfectly clear for the recogniser at this
+        // rate, and the clip is a fraction of the default size — which is time
+        // saved twice over: uploading it from the phone, and our server posting
+        // it on to the recogniser.
+        var recOpts = mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
+        try { rec = new MR(stream, recOpts); }
+        catch (e) {
+          try { rec = mime ? new MR(stream, { mimeType: mime }) : new MR(stream); }
+          catch (e2) { rec = new MR(stream); }
+        }
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+        rec.onstop = sendRecording;
+        rec.start();
+        listening = true; setLive(true);
+        recCapTimer = setTimeout(stopRecording, 20000);            // never record forever
+        watchSilence(stream);
+      })
+      .catch(function () {
+        listening = false; setLive(false); releaseMic();
+        addBot(UI[lang].micDenied); speak(UI[lang].micDenied);
+      });
+  }
+
+  function sendRecording() {
+    listening = false; setLive(false);
+    releaseMic();
+    var blob = recChunks.length ? new Blob(recChunks, { type: recChunks[0].type || 'audio/webm' }) : null;
+    recChunks = [];
+    if (userStopped) { setStatus(''); return; }                    // they cancelled
+    if (!blob || blob.size < 600) { setStatus(''); return; }        // nothing was said
+    setStatus(UI[lang].thinking);
+
+    // ONE request for the whole turn: the server transcribes, answers, and
+    // starts making the voice. The old path sent the audio, waited, read the
+    // text, then sent the text back — a full network round trip of silence in
+    // the middle of every question. Falls back to that path if this one fails.
+    var headers = { 'Content-Type': blob.type || 'audio/webm' };
+    try {
+      var ctx = JSON.stringify(aiContext());
+      // base64 so the header is plain ASCII whatever script they spoke in
+      var packed = btoa(unescape(encodeURIComponent(ctx)));
+      if (packed.length < 6000) headers['X-Dcal-History'] = packed;
+    } catch (e) {}
+
+    fetch(ASK_URL, { method: 'POST', headers: headers, body: blob })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) throw new Error('ask failed');
+        setStatus('');
+        var said = d.text ? autoCorrect(d.text) : '';
+        if (!said) { localMiss(); return; }
+        if (d.lang && LANGS[d.lang] && d.lang !== lang) applyLang(d.lang);
+        listenRetry = 0;
+        if (!introduced) {
+          markIntroduced();
+          if (isGreetingBack(said)) {
+            addYou(said);
+            var hello = UI[lang].greeting;
+            addBot(hello);
+            speak(hello, function () { if (opened && !listening) startListening(); });
+            return;
+          }
+        }
+        if (!d.reply) { handleQuery(said); return; }     // AI had nothing -> normal routing
+        addYou(said);
+        missCount = 0;
+        addBot(d.reply);
+        sayReply(d.reply, d.go, false);
+      })
+      .catch(function () { sendViaStt(blob); });         // one-shot path unavailable
+  }
+
+  // The original two-step path, kept as the fallback: transcribe, then ask.
+  function sendViaStt(blob) {
+    fetch(STT_URL, { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        setStatus('');
+        var text = (d && d.text) ? autoCorrect(d.text) : '';
+        if (!text) { localMiss(); return; }                        // heard only noise
+        // FOLLOW THE CUSTOMER: they spoke Tamil -> everything from here is Tamil.
+        if (d.lang && LANGS[d.lang] && d.lang !== lang) applyLang(d.lang);
+        listenRetry = 0;
+        // Their FIRST words back to the opening hello. We now know their
+        // language, so introduce ourselves in it. If all they said was
+        // "Namaste" there is no question to answer — the introduction IS the
+        // answer, and the mic reopens so they can ask what they came for.
+        if (!introduced) {
+          markIntroduced();
+          if (isGreetingBack(text)) {
+            addYou(text);
+            var hello = UI[lang].greeting;
+            addBot(hello);
+            speak(hello, function () { if (opened && !listening) startListening(); });
+            return;
+          }
+        }
+        handleQuery(text);
+      })
+      .catch(function () {
+        setStatus('');
+        sttReady = false;                    // server unhappy -> use the browser recogniser
+        if (SR && opened) startListening();
+      });
+  }
+
+  // nothing intelligible came back — same gentle nudge the recogniser gives,
+  // then listen again so they can simply repeat themselves without tapping
+  function localMiss() {
+    missCount++;
+    var fb = missCount >= 2 ? FALLBACK2[lang] : FALLBACK[lang];
+    addBot(fb); speak(fb, listenAgain);
+  }
+
   // start listening. `isRetry` keeps the retry counter across an auto-restart.
+  // Prefers server-side recording (detects the language); falls back to the
+  // browser's recogniser, which can only hear the currently selected language.
   function startListening(isRetry) {
-    if (!SR) { addBot(UI[lang].noMic); speak(UI[lang].noMic); return; }
     stopSpeaking();
-    userStopped = false;
+    stopBowing();               // they have engaged — the greeting bow is finished
     if (!isRetry) listenRetry = 0;
-    if (listening && recog) { userStopped = true; try { recog.stop(); } catch (e) {} return; }
+    // already live -> this tap means "stop"
+    if (listening) {
+      userStopped = true;
+      if (rec && rec.state === 'recording') { stopRecording(); return; }
+      if (recog) { try { recog.stop(); } catch (e) {} }
+      return;
+    }
+    userStopped = false;
+    if (sttReady && canRecord) { startRecording(); return; }
+    if (!SR) { addBot(UI[lang].noMic); speak(UI[lang].noMic); return; }
     recog = buildRecog();
     try { recog.start(); } catch (e) { /* already started — ignore */ }
   }
@@ -1187,6 +1711,32 @@
   // Speak the reply, THEN navigate — so the voice is never cut off mid-sentence.
   // Navigation fires on speech-end; a generous fallback timer covers devices with
   // no TTS or where the 'end' event doesn't fire. Whichever comes first wins (once).
+  /* ---- HANDS FREE ---------------------------------------------------------
+     Customers were having to tap the mic before every single question, which
+     is exactly the thing a voice assistant is supposed to save them. Now, the
+     moment she finishes answering, she listens again by herself — so it is a
+     conversation, not a series of separate commands.
+
+     It ends on its own: if they say nothing, the recorder gives up after a few
+     seconds of silence and the mic closes with no reply, so nothing reopens it.
+     It also never fires if they closed or minimized the panel, pressed stop, or
+     if the answer is taking them to another page. */
+  function listenAgain() {
+    if (!opened || listening || userStopped) return;
+    // a short beat first: opening the mic the instant her voice stops feels
+    // like being interrupted, and risks catching the tail of her own audio
+    setTimeout(function () {
+      if (opened && !listening && !userStopped) startListening();
+    }, 300);
+  }
+
+  // Say a reply and then do the right thing after it: open the page it points
+  // at, or go back to listening. Every answer goes through here.
+  function sayReply(text, go, external) {
+    if (go) { speakThenGo(text, go, external); return; }   // navigating: the page changes
+    speak(text, listenAgain);
+  }
+
   function speakThenGo(reply, url, external) {
     var isExternal = external || /^https?:/i.test(url);
     var done = false;
@@ -1199,7 +1749,7 @@
     // the voice off. With TTS present, speech is the trigger; here we just guard
     // against a device where the 'end' event never fires. Scale with length.
     var len = reply ? reply.length : 0;
-    var hasTTS = !!(window.speechSynthesis);
+    var hasTTS = ttsReady;
     var fallback = hasTTS
       ? Math.max(6000, Math.min(60000, len * 130 + 5000))   // TTS: long guard (~speaking time + buffer)
       : Math.max(3500, Math.min(12000, len * 70 + 2500));   // no TTS: reading-time delay
@@ -1209,8 +1759,7 @@
   function respondTo(intent) {
     var reply = (intent.reply[lang] || intent.reply.en);
     addBot(reply);
-    if (intent.go) speakThenGo(reply, intent.go, intent.external);   // speak fully, then open
-    else speak(reply);
+    sayReply(reply, intent.go, intent.external);   // speak fully, then open the page or listen again
   }
 
   /* ------------------------------------------------------------------ *
@@ -1240,6 +1789,20 @@
     } catch (e) { aiState = 'off'; }
   }
 
+  // Ask the server whether the ElevenLabs natural voice is configured. If yes,
+  // speak() plays it; if not, the assistant simply stays silent.
+  function checkTTS() {
+    try {
+      fetch(TTS_URL + '/health').then(function (r) { return r.json(); }).then(function (d) {
+        ttsReady = !!(d && d.enabled);
+        // The welcome is the one line we KNOW she will say, and it is the one the
+        // customer judges her speed by. Fetch it now, while they are still
+        // reading the page, so it plays the moment they first tap.
+        if (ttsReady) prefetchTts(introduced ? UI[lang].greeting : WELCOME);
+      }).catch(function () { ttsReady = false; });
+    } catch (e) { ttsReady = false; }
+  }
+
   function askAI(text, priorHistory) {
     return fetch(AI_URL, {
       method: 'POST',
@@ -1253,14 +1816,17 @@
   }
 
   var missCount = 0;   // consecutive not-understood answers -> escalate the hint
+  // "Sorry, I did not understand — ask me about prices / how to buy / your
+  // order." Said instead of guessing. Escalates if it happens twice running.
+  function sayFallback() {
+    missCount++;
+    var fb = missCount >= 2 ? FALLBACK2[lang] : FALLBACK[lang];
+    addBot(fb); speak(fb, listenAgain);      // stay open so they can just try again
+  }
   function localAnswer(text, preMatched) {
     var intent = (preMatched !== undefined && preMatched !== null) ? preMatched : findIntent(text);
     if (intent) { missCount = 0; respondTo(intent); }
-    else {
-      missCount++;
-      var fb = missCount >= 2 ? FALLBACK2[lang] : FALLBACK[lang];
-      addBot(fb); speak(fb);
-    }
+    else sayFallback();
   }
 
   // text = what the customer said; preMatched = offline intent hint;
@@ -1271,7 +1837,66 @@
   function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   // words that are just "open/show/buy/price + product" scaffolding (te/hi/en)
   var ACTION_STOP = /\b(open|show|see|view|display|buy|buying|purchase|order|price|cost|rate|rates|want|need|get|give|go|goto|take|me|us|the|a|an|to|of|for|is|it|this|that|please|my|your|i|we|d|cal|dcal|and|now|about|what|whats|hi|hello)\b/gi;
-  var ACTION_STOP_NATIVE = /(తెరు|చూపించు|చూపు|కావాలి|కొను|కొనాలి|ధర|ఎంత|రూపాయలు|నాకు|ఈ|కావాలి|खोलो|खोलिए|दिखाओ|दिखाइए|चाहिए|खरीद|खरीदना|दाम|कीमत|कितना|मुझे|यह)/g;
+  // ...and the ordinary grammar that carries a request in Telugu / Hindi: verbs
+  // of asking, plus the copulas and particles ("है", "ఉంది", "का", "లో") that
+  // would otherwise be mistaken for a subject we do not sell.
+  var ACTION_STOP_NATIVE = /(తెరు|చూపించు|చూపు|కావాలి|కొను|కొనాలి|ధర|ఎంత|రూపాయలు|నాకు|ఈ|కావాలి|ఉంది|ఉన్నాయి|చెప్పండి|గురించి|లో|కి|ను|నేను|మీ|खोलो|खोलिए|दिखाओ|दिखाइए|चाहिए|खरीद|खरीदना|दाम|कीमत|कितना|मुझे|यह|है|हैं|हूँ|का|की|के|को|में|से|एक|मैं|आप|बताओ|बताइए)/g;
+  /* ---- SENTENCE BOUNDARY -------------------------------------------------
+     The scorer above only ever asks "is a word I know in this sentence?".
+     That is exactly why "I want to buy an apple" used to open the products
+     page: it saw the word "buy" and stopped thinking.
+
+     This asks the opposite and far more useful question — "is there anything
+     in this sentence I do NOT know about?" Everything D'Cal legitimately
+     talks about is taken out (every keyword of every intent, longest phrases
+     first), then the ordinary scaffolding of a request ("i want to…", "నాకు…
+     కావాలి"). Whatever is still standing is a SUBJECT this shop knows nothing
+     about — an apple, a laptop, a cricket score — and no canned answer is
+     safe, no matter how the keywords scored.
+
+     D'Cal's vocabulary is kept in two shapes on purpose:
+       KW_PHRASES — multi-word keywords ("shower head filter"), removed as
+         substrings, because they are specific enough to be unambiguous;
+       KW_WORDS   — every single word, removed only as a WHOLE word. Removing
+         those as substrings is what turns "laptop" into "lap" (via "to") and
+         "gold" into "ld" (via "go"), quietly letting a foreign subject pass. */
+  var KW_PHRASES = [], KW_WORDS = {};
+  (function buildVocabulary() {
+    var seenPhrase = {};
+    for (var i = 0; i < INTENTS.length; i++) {
+      var kws = keywordsOf(INTENTS[i]);
+      for (var k = 0; k < kws.length; k++) {
+        // normalise with the SAME function the scorer uses, so invisible
+        // characters (the ZWNJ inside "సాఫ్ట్‌నర్") cannot cause a silent miss
+        var n = norm(kws[k]).trim();
+        if (!n) continue;
+        var parts = n.split(' ');
+        // every word of a phrase counts as vocabulary on its own: "ఆర్డర్ ఎక్కడ"
+        // teaches us that "ఆర్డర్" is an ordinary D'Cal word, so a customer
+        // saying just "ఆర్డర్ ట్రాక్" is not naming something foreign.
+        for (var w = 0; w < parts.length; w++) if (parts[w]) KW_WORDS[parts[w]] = 1;
+        if (parts.length > 1 && !seenPhrase[n]) { seenPhrase[n] = 1; KW_PHRASES.push(n); }
+      }
+    }
+    KW_PHRASES.sort(function (a, b) { return b.length - a.length; });   // longest first
+  })();
+
+  function leftoverSubject(text) {
+    var t = norm(text);
+    for (var i = 0; i < KW_PHRASES.length; i++) {           // 1) known phrases
+      if (t.indexOf(KW_PHRASES[i]) !== -1) t = t.split(KW_PHRASES[i]).join(' ');
+    }
+    t = t.replace(ACTION_STOP, ' ').replace(ACTION_STOP_NATIVE, ' ');   // 2) scaffolding
+    var toks = t.split(' '), out = [];                     // 3) known words, whole only
+    for (var w = 0; w < toks.length; w++) {
+      if (toks[w] && !KW_WORDS[toks[w]]) out.push(toks[w]);
+    }
+    return out.join(' ').trim();
+  }
+  // 3+ characters of unrecognised subject matter left over = they are talking
+  // about something that is not ours.
+  function hasForeignSubject(text) { return leftoverSubject(text).length >= 3; }
+
   // TRUE when the query is basically just the intent's keywords + open/price
   // scaffolding. If extra meaningful words remain (a real question), we prefer the
   // AI so the answer is relevant instead of the generic canned reply.
@@ -1289,12 +1914,59 @@
   var AI_ROUTE_IDS = { dealer: 1, benefits: 1, about: 1, recommend: 1, warranty: 1, installation: 1, complaint: 1, offers: 1, maintenance: 1, hotel: 1, hospital: 1, campus: 1 };
 
   function handleQuery(text, preMatched, localOnly) {
+    // Once they have said anything at all, the all-languages hello has done its
+    // job. (Also covers the old-browser path, which never reaches the
+    // speech-to-text branch that normally marks this.)
+    markIntroduced();
     addYou(text);
     setStatus(UI[lang].thinking);
     var typing = addTyping();
     var localHit = (preMatched !== undefined && preMatched !== null) ? preMatched : findIntent(text);
     var isProductHit = localHit && typeof localHit.id === 'string' && localHit.id.indexOf('product:') === 0;
     var routable = isProductHit || (localHit && AI_ROUTE_IDS[localHit.id]);
+    // Does the sentence name something D'Cal knows nothing about? A quick-tap
+    // chip (localOnly) is our own wording, so it is trusted without asking.
+    var foreign = !localOnly && hasForeignSubject(text);
+
+    // The offline engine only has canned answers in Telugu/Hindi/English. If the
+    // customer is speaking Tamil, Kannada, Marathi… its reply would come out in
+    // English at them, so hand those turns to the AI, which answers in their
+    // language. (The offline reply is still the safety net if the AI is down.)
+    if (!KB_LANGS[lang] && !localOnly && aiState !== 'off') {
+      askAI(text, aiContext()).then(function (d) {
+        removeEl(typing); setStatus('');
+        if (d) {
+          missCount = 0;
+          addBot(d.reply);
+          sayReply(d.reply, d.go, false);
+        } else if (localHit && !foreign) { missCount = 0; respondTo(localHit); }
+        else if (foreign) { sayFallback(); }        // never guess at a subject we don't sell
+        else { localAnswer(text, preMatched); }
+      });
+      return;
+    }
+
+    // 0a) THE BOUNDARY. The sentence names something outside this shop, so the
+    //     keyword match — if there even was one — is a coincidence and must not
+    //     be acted on. "I want to buy an apple" matched "buy"; opening the
+    //     products page for it is exactly the bug this prevents.
+    //     The AI reads the whole sentence and can answer or politely decline;
+    //     with no AI reachable we say we did not understand rather than guess.
+    if (foreign) {
+      if (aiState !== 'off') {
+        askAI(text, aiContext()).then(function (d) {
+          removeEl(typing); setStatus('');
+          if (d) {
+            missCount = 0;
+            addBot(d.reply);
+            sayReply(d.reply, d.go, false);
+          } else sayFallback();
+        });
+        return;
+      }
+      setTimeout(function () { removeEl(typing); setStatus(''); sayFallback(); }, 250);
+      return;
+    }
 
     // 0) matched a product/info intent, but the customer asked something MORE than
     //    "open/price it" -> let the AI answer relevantly (canned reply is fallback)
@@ -1302,7 +1974,7 @@
       askAI(text, aiContext()).then(function (d) {
         removeEl(typing); setStatus('');
         missCount = 0;
-        if (d) { addBot(d.reply); if (d.go) speakThenGo(d.reply, d.go, false); else speak(d.reply); }
+        if (d) { addBot(d.reply); sayReply(d.reply, d.go, false); }
         else respondTo(localHit);                 // AI failed -> canned reply
       });
       return;
@@ -1320,7 +1992,7 @@
         if (d) {
           missCount = 0;
           addBot(d.reply);
-          if (d.go) speakThenGo(d.reply, d.go, false); else speak(d.reply);
+          sayReply(d.reply, d.go, false);
         } else {
           localAnswer(text, preMatched);          // AI failed -> offline fallback text
         }
@@ -1343,6 +2015,21 @@
   function clearChat() { transcript = []; try { sessionStorage.removeItem(CHAT_KEY); } catch (e) {} }
   function setOpenFlag(v) { try { sessionStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch (e) {} }
 
+  /* Put the newest message in view. Called again on the next frame (and after
+     the open transition) because a restored conversation is filled in while the
+     panel is still closed and .dcv-body is display:none — scrollHeight is 0
+     then, so setting scrollTop does nothing and the last line ends up hidden
+     under the mic bar once it finally opens. */
+  function scrollChatToEnd() {
+    if (!el.body) return;
+    try { el.body.scrollTop = el.body.scrollHeight; } catch (e) {}
+  }
+  function scrollChatToEndSoon() {
+    scrollChatToEnd();
+    if (window.requestAnimationFrame) requestAnimationFrame(scrollChatToEnd);
+    setTimeout(scrollChatToEnd, 420);        // after the half-height transition settles
+  }
+
   // addMsg(who, text[, restoring]) — when restoring from storage, don't re-save
   function addMsg(who, text, restoring) {
     var wrap = document.createElement('div');
@@ -1357,14 +2044,24 @@
     return wrap;
   }
 
+  // The welcome bubble no longer exists in the UI, but a tab that was open BEFORE
+  // it was removed still has it sitting in sessionStorage — and restoreChat() would
+  // paint it back on every page load. Drop it while restoring so old tabs heal.
+  function isWelcomeText(t) {
+    return t === UI.te.greeting || t === UI.hi.greeting || t === UI.en.greeting;
+  }
+
   // rebuild the panel from the saved conversation (called once on page load)
   function restoreChat() {
     var arr;
     try { arr = JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]'); } catch (e) { arr = []; }
     if (!arr || !arr.length) return false;
+    var clean = arr.filter(function (m) { return m && m.text && !isWelcomeText(m.text); });
+    if (!clean.length) { clearChat(); return false; }
     el.body.innerHTML = '';
-    arr.forEach(function (m) { if (m && m.text) addMsg(m.who === 'you' ? 'you' : 'bot', m.text, true); });
-    transcript = arr.slice();   // aiContext() reads this, so restored chats keep AI context too
+    clean.forEach(function (m) { addMsg(m.who === 'you' ? 'you' : 'bot', m.text, true); });
+    transcript = clean.slice();   // aiContext() reads this, so restored chats keep AI context too
+    if (clean.length !== arr.length) saveChat();   // persist the cleanup
     return true;
   }
   function addBot(t) { return addMsg('bot', t); }
@@ -1379,14 +2076,168 @@
   }
   function removeEl(node) { if (node && node.parentNode) node.parentNode.removeChild(node); }
   function setStatus(t) { el.status.textContent = t || ''; }
-  // show the talking-lady avatar (mouth animating) on the mic + FAB while speaking
-  function setSpeaking(on) { fab.classList.toggle('dcv-speaking', on); el.micBtn.classList.toggle('dcv-speaking', on); }
+
+  /* ---- The mic label is also how customers LEARN they can use their own
+     language. Line 1 invites them to ask; line 2 shows real scripts, which a
+     customer recognises even when they cannot read the English line above.
+     The count keeps itself honest if languages are added to LANGS. ---- */
+  var STRIP_SHOW = ['te', 'hi', 'en', 'ta', 'kn'];
+  function langStrip() {
+    var shown = [], total = 0, c;
+    for (c in LANGS) total++;
+    for (var i = 0; i < STRIP_SHOW.length; i++) {
+      if (LANGS[STRIP_SHOW[i]]) shown.push(LANGS[STRIP_SHOW[i]].label);
+    }
+    var rest = total - shown.length;
+    return shown.join(' · ') + (rest > 0 ? ' +' + rest : '');
+  }
+  // idle: the two-line invitation. Built as nodes, never innerHTML.
+  function setMicIdle() {
+    el.micLabel.classList.remove('dcv-live-txt');
+    el.micLabel.innerHTML = '';
+    var line1 = document.createElement('b');
+    line1.textContent = UI[lang].tapToSpeak;
+    var line2 = document.createElement('i');
+    line2.textContent = langStrip();
+    el.micLabel.appendChild(line1);
+    el.micLabel.appendChild(line2);
+  }
+  // busy: plain one-off text ("Listening…", or the live transcript)
+  function setMicText(t) { el.micLabel.textContent = t; }
+  // show the talking-lady avatar on the mic + FAB while speaking
+  function setSpeaking(on) {
+    fab.classList.toggle('dcv-speaking', on);
+    el.micBtn.classList.toggle('dcv-speaking', on);
+    // Move her lips while she talks. Before the customer has engaged she is
+    // still mid-namaskaram, and interrupting that to mouth the welcome would
+    // undo the greeting — so the talking loop only takes over once they have
+    // tapped the mic and the bowing is finished.
+    speakingNow = !!on;
+    if (!bowed) return;
+    if (on) playTalking();
+    // Silent: stand still. PAUSE only — the buffer and the playhead survive, so
+    // her next reply starts moving immediately instead of loading all over again.
+    else { if (el.vidTalk) { try { el.vidTalk.pause(); } catch (e) {} } setFace('still'); }
+  }
+
+  /* ---- Namaskaram, then standing --------------------------------------
+     She greets with the namaskaram ONLY while she is waiting to be spoken to.
+     The moment the customer taps the mic, the greeting is over: she stands for
+     the rest of the conversation instead of bowing again and again behind it.
+     The flag lives in sessionStorage because navigating to a product page
+     reloads this script mid-chat — without it she would start bowing again at
+     every page she opens for them. */
+  /* ---- Second stage of the welcome -------------------------------------
+     WELCOME went out in every language at once. The customer answered — and
+     the speech-to-text told us which language that answer was IN. Now, and only
+     now, can she introduce herself properly, in their own language.
+     Persisted for the same reason the bow is: opening a product page reloads
+     this script, and she must not introduce herself all over again. */
+  var INTRO_KEY = 'dcal_voice_introduced';
+  var introduced = false;
+  try { introduced = sessionStorage.getItem(INTRO_KEY) === '1'; } catch (e) {}
+  function markIntroduced() {
+    introduced = true;
+    try { sessionStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+  }
+  // Was that first utterance simply them greeting back? If so it is not a
+  // question to answer — it is our cue to introduce ourselves in their language.
+  function isGreetingBack(text) {
+    var hit = findIntent(text);
+    return !!(hit && hit.id === 'greeting');
+  }
+
+  var BOW_KEY = 'dcal_voice_greeted';
+  var bowed = false;
+  try { bowed = sessionStorage.getItem(BOW_KEY) === '1'; } catch (e) {}
+
+  /* Which of the three faces is showing: the namaskaram clip, the conversation
+     clip, or the standing photo. Exactly one, always. */
+  function setFace(mode) {
+    if (!el.face) return;
+    el.face.classList.toggle('is-greet', mode === 'greet');
+    el.face.classList.toggle('is-talk', mode === 'talk');
+  }
+  // Full-height welcome vs. the split conversation view. Driven by the same
+  // moment as the bow ending — the customer reaching for the mic — because that
+  // is exactly when there starts being something to read underneath her.
+  function setChatMode(on) {
+    panel.classList.toggle('dcv-chat', !!on);
+  }
+  // Called the first time the customer reaches for the mic — and never undone
+  // until the conversation itself is ended with the ✕.
+  function stopBowing() {
+    if (!bowed) { bowed = true; try { sessionStorage.setItem(BOW_KEY, '1'); } catch (e) {} }
+    setFace('still');
+    setChatMode(true);          // she moves up, the conversation opens beneath her
+    pauseVideo();
+    primeTalkVideo();           // fetch the talking clip NOW, not when she speaks
+  }
+
+  /* ---- Lip movement while she speaks -----------------------------------
+     AI_Lady_conversation.mp4 is 6s of her talking, upright from first frame to
+     last, so it simply loops — no seeking, no clamping to a sub-range.
+
+     LATENCY. The clip is ~5MB, and the gap the customer notices is the wait
+     between her voice starting and her lips moving. Three things close it:
+       1. the download starts the moment they tap the mic, so it runs during
+          speech-to-text + the AI + the voice, instead of after all of them;
+       2. it is never re-fetched — its own element keeps the buffer, and
+          stopping only PAUSES, so the next reply resumes on the same frame;
+       3. we never seek. Setting currentTime forces the decoder to re-sync and
+          shows a frozen frame while it does.
+     If it still is not ready, she stays on the standing photo and switches the
+     instant it can play — a still lady beats a stalled black rectangle. */
+  var talkPrimed = false;
+  var speakingNow = false;
+
+  function primeTalkVideo() {
+    var v = el.vidTalk;
+    if (!v || talkPrimed) return;
+    talkPrimed = true;
+    try { v.muted = true; v.preload = 'auto'; v.load(); } catch (e) {}
+  }
+
+  function playTalking() {
+    var v = el.vidTalk;
+    if (!v) return;
+    primeTalkVideo();
+    v.muted = true;
+    // readyState >= 2 (HAVE_CURRENT_DATA) means there is a frame to show
+    setFace(v.readyState >= 2 ? 'talk' : 'still');
+    var p = v.play();
+    if (p && p.catch) p.catch(function () { setFace('still'); });
+    if (v.readyState < 2) {
+      v.oncanplay = function () {
+        v.oncanplay = null;
+        if (speakingNow) setFace('talk');        // she may have finished by now
+      };
+    }
+  }
+
+  // The namaskaram loops the whole time she is waiting, and stops when the panel
+  // is closed so a minimized assistant costs no battery. muted is set in JS as
+  // well as in the markup because that is what browsers require to autoplay.
+  function playVideo() {
+    var v = el.vidGreet;
+    if (!v) return;
+    if (bowed) { setFace('still'); primeTalkVideo(); return; }   // already engaged -> stand
+    setFace('greet');
+    v.muted = true;
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});   // blocked autoplay -> poster stays, no error
+  }
+  // Pause, never unload: whatever is buffered stays buffered for the next reply.
+  function pauseVideo() {
+    if (el.vidGreet) { try { el.vidGreet.pause(); } catch (e) {} }
+    if (el.vidTalk) { try { el.vidTalk.pause(); } catch (e) {} }
+  }
   function setLive(on) {
     fab.classList.toggle('dcv-live', on);
     el.micBtn.classList.toggle('dcv-live', on);
     el.stopBtn.classList.toggle('on', on);
-    el.micLabel.textContent = on ? UI[lang].listening : UI[lang].tapToSpeak;
-    if (!on) el.micLabel.classList.remove('dcv-live-txt');   // stop showing live transcript
+    if (on) setMicText(UI[lang].listening);
+    else setMicIdle();                                       // back to the invitation
   }
 
   /* ------------------------------------------------------------------ *
@@ -1397,26 +2248,18 @@
     el.hintTxt.textContent = t.tagline;
     el.hTitle.textContent = t.title;
     el.hSub.textContent = t.tagline;
-    el.micLabel.textContent = t.tapToSpeak;
+    setMicIdle();
     fab.setAttribute('aria-label', t.title);
-    // language buttons
-    el.langs.innerHTML = '';
-    ['te', 'hi', 'en'].forEach(function (l) {
-      var b = document.createElement('button');
-      b.className = 'dcv-lang' + (l === lang ? ' on' : '');
-      b.textContent = LANGS[l].label;
-      b.onclick = function () { setLang(l); };
-      el.langs.appendChild(b);
-    });
-    // quick chips
-    el.chips.innerHTML = '';
-    t.chips.forEach(function (pair) {
-      var c = document.createElement('button');
-      c.className = 'dcv-chip';
-      c.textContent = pair[0];
-      c.onclick = function () { handleQuery(pair[1], null, true); };   // instant, offline
-      el.chips.appendChild(c);
-    });
+  }
+
+  // Quiet switch, used when the customer's own speech tells us the language.
+  // It must NOT clear the chat or greet — they are mid-conversation; the only
+  // visible effect is that the assistant answers them in their language now.
+  function applyLang(l) {
+    if (!LANGS[l] || l === lang) return;
+    lang = l;
+    try { localStorage.setItem('dcal_voice_lang', l); } catch (e) {}
+    renderChrome();
   }
 
   function setLang(l) {
@@ -1426,12 +2269,13 @@
     stopSpeaking();
     if (recog && listening) { try { recog.stop(); } catch (e) {} }
     renderChrome();
-    // fresh greeting in the new language (reset the saved conversation too)
+    // fresh start in the new language (reset the saved conversation too). The
+    // welcome is only SPOKEN now — its bubble was removed along with the
+    // language buttons, the video sits there instead.
     el.body.innerHTML = '';
     clearChat();
     greeted = true;
-    var g = UI[lang].greeting;
-    addBot(g); speak(g);
+    speak(UI[lang].greeting);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1445,6 +2289,11 @@
     panel.classList.add('dcv-open');
     fab.classList.add('dcv-open');      // stop the attention blink while open
     opened = true;
+    // A page change mid-conversation reloads this script: come back in the SAME
+    // view they left, split with their chat under her, not the full-height welcome.
+    setChatMode(bowed);
+    scrollChatToEndSoon();              // a restored chat scrolls only once it has a size
+    playVideo();                        // she starts looping as soon as she is on screen
     if (!fromRestore) {                 // fire the magic burst from the mic (not on page-restore)
       setOpenFlag(true);                // remember open state across page changes
       fab.classList.remove('dcv-pop');
@@ -1454,8 +2303,10 @@
     }
     if (!greeted) {
       greeted = true;
-      var g = UI[lang].greeting;
-      addBot(g); if (!fromRestore && !noSpeak) speak(g);   // don't re-speak on restore / auto-welcome
+      // welcome is spoken only — no text bubble (the video greets her visually)
+      // the FIRST hello is the all-languages one; her proper introduction comes
+      // after they answer and we know which language they speak
+      if (!fromRestore && !noSpeak) speak(introduced ? UI[lang].greeting : WELCOME);
     }
   }
 
@@ -1465,7 +2316,7 @@
   function autoWelcome() {
     if (opened) return;
     openPanel(false, true);             // open + show welcome (no immediate speak)
-    if (!synth) return;
+    if (!ttsReady) return;              // no ElevenLabs voice -> nothing to speak, skip the welcome
     var fire = function (e) {
       document.removeEventListener('pointerdown', fire, true);
       document.removeEventListener('keydown', fire, true);
@@ -1477,7 +2328,7 @@
       // speak the welcome, THEN auto-open the mic so the customer can talk
       // right away. Both audio and mic are only allowed off a real user
       // gesture, which this first tap/scroll/key provides.
-      if (opened && !listening) speak(UI[lang].greeting, function () {
+      if (opened && !listening) speak(introduced ? UI[lang].greeting : WELCOME, function () {
         if (opened && !listening) startListening();
       });
     };
@@ -1491,6 +2342,7 @@
     panel.classList.remove('dcv-open');
     fab.classList.remove('dcv-open');   // resume the attention blink
     opened = false;
+    pauseVideo();
     stopSpeaking();
     userStopped = true;
     if (recog && listening) { try { recog.stop(); } catch (e) {} }
@@ -1502,6 +2354,13 @@
     clearChat();
     el.body.innerHTML = '';
     greeted = false;
+    // conversation over: the next person to open her starts from the beginning —
+    // the namaskaram, and the all-languages hello that asks who they are
+    bowed = false;
+    introduced = false;
+    try { sessionStorage.removeItem(BOW_KEY); sessionStorage.removeItem(INTRO_KEY); } catch (e) {}
+    setFace('greet');            // back to the namaskaram for the next customer
+    setChatMode(false);          // ...at full height, with no chat panel under her
   }
 
   fab.addEventListener('click', function () {
@@ -1514,6 +2373,7 @@
   el.micBtn.addEventListener('click', function () { startListening(); });
   el.stopBtn.addEventListener('click', function () {
     userStopped = true;
+    if (rec && rec.state === 'recording') stopRecording();
     if (recog && listening) { try { recog.stop(); } catch (e) {} }
     stopSpeaking();
   });
@@ -1535,7 +2395,9 @@
     // exposed for diagnostics / automated checks
     _match: function (text) { var i = findIntent(text); return i ? i.id : null; },
     _correct: function (text) { return autoCorrect(text); },
-    _bare: function (text) { var i = findIntent(text); return i ? isBareRequest(text, i) : null; }
+    _bare: function (text) { var i = findIntent(text); return i ? isBareRequest(text, i) : null; },
+    // what is left of the sentence once everything D'Cal knows about is removed
+    _foreign: function (text) { return leftoverSubject(text); }
   };
 
   /* ------------------------------------------------------------------ *
@@ -1543,6 +2405,8 @@
    * ------------------------------------------------------------------ */
   renderChrome();
   checkAI();      // ask the server whether the OpenRouter AI brain is available
+  checkTTS();     // ask the server whether the ElevenLabs natural voice is available
+  checkSTT();     // ...and whether it can hear + detect the customer's language
   // bring back the conversation from before this page change (same browser tab)
   if (restoreChat()) greeted = true;
   // Decide how the assistant starts on this page:

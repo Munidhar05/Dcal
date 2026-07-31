@@ -15,11 +15,24 @@
 let OpenAI = null;
 try { OpenAI = require('openai'); } catch (e) { OpenAI = null; }
 
+// The voice proxy. We hand it the reply the instant we have it so ElevenLabs
+// starts generating while the text is still travelling back to the browser —
+// see tts.warm(). Costs nothing extra: the browser's request joins the same
+// in-flight generation.
+let tts = null;
+try { tts = require('./tts'); } catch (e) { tts = null; }
+
 // Accept OPENROUTER_API_KEY (preferred) or a generic OPENAI_API_KEY as fallback.
 const API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || '';
 const MODEL = process.env.ASSISTANT_MODEL || 'openai/gpt-4o-mini';   // cheap, fast, multilingual
 const BASE_URL = process.env.ASSISTANT_BASE_URL || 'https://openrouter.ai/api/v1';
 const ENABLED = !!(OpenAI && API_KEY);
+const IS_OPENROUTER = /openrouter\.ai/i.test(BASE_URL);
+
+// Whether this model/provider accepts response_format:{type:'json_object'}. It
+// starts true and is turned off for the rest of the run the first time a call is
+// rejected for it, so we never pay for that failed round-trip twice.
+let jsonMode = true;
 
 let client = null;
 if (ENABLED) {
@@ -91,9 +104,15 @@ const KNOWLEDGE = [
   '',
   'RULES:',
   '- RELEVANCE IS THE MOST IMPORTANT RULE. Answer ONLY the exact thing the customer asked, using ONLY the facts given above. Do not add extra sales pitch, extra products, or details they did not ask about. Stay on the point of the question.',
+  '- BOUNDARY — THIS WEBSITE ONLY. Read the WHOLE sentence before you answer, not just one word in it. D\'Cal sells exactly five things: Water Softener, Shower Head Filter, Tap Filter, Washing Machine Ball, Tap and Tile Cleaner (plus the commercial systems for hotels / hospitals / campuses). If the customer names ANY other item — food, fruit, a phone, clothes, furniture, medicine, another company\'s product — you do NOT sell it. Say in one short warm line that D\'Cal only sells hard-water products, name what you do sell, and set "go" to null.',
+  '- The words "buy", "order", "price", "how much" are NOT permission to open the products page. What matters is the THING they want. "I want to buy an apple" = we do not sell apples -> say so, "go" MUST be null. "I want to buy a shower filter" = ours -> open it. Judge the object of the sentence, never the verb alone.',
+  '- Never answer general-knowledge questions (news, sport, film, politics, health advice, other shops, other brands) even if you know the answer. You are the assistant of this one shop and nothing else.',
+  '- SAY THE BENEFIT THE RIGHT WAY ROUND. This is the most damaging mistake you can make. When the customer describes a PROBLEM (hair fall, hair loss, dry or itchy skin, dandruff, white scale marks, faded clothes, a damaged geyser or washing machine), the product REDUCES / STOPS / PREVENTS that problem. It never "helps" the problem. Always put the reducing word in: "reduces hair fall", "stops hair fall", "protects from scale".',
+  '- IN TELUGU this goes wrong very easily, so be careful: NEVER write "జుట్టు రాలడానికి సహాయపడుతుంది / సహాయపడతాయి" — that means "it helps the hair TO FALL", the opposite of what you mean. Write "జుట్టు రాలడం తగ్గించడానికి సహాయపడతాయి", or "జుట్టు రాలడం తగ్గుతుంది", or "జుట్టు రాలడం ఆగిపోతుంది". The same trap applies to every problem: say "చుండ్రు తగ్గుతుంది", "చర్మం పొడిబారడం తగ్గుతుంది", "మరకలు రావు" — never "…డానికి సహాయపడుతుంది" attached to the problem itself.',
+  '- IN HINDI likewise: never "बाल झड़ने में मदद करता है" (that means it helps hair fall happen). Write "बाल झड़ना कम करता है" or "बाल झड़ना रोकता है". Same for "दाग-धब्बे कम करता है", "रूसी कम होती है".',
   '- NEVER invent or guess prices, ratings, numbers, features, warranty terms, dates, or policies. If a fact is not in the information above, say briefly that you are not sure and give the phone number ' + PHONE + ' — do not make it up.',
   '- You are a warm, helpful shop assistant. Your DEFAULT is to HELP, not to refuse. Assume the customer is trying to solve a water/home/skin/hair/cleaning/appliance problem or to buy something, and help them — recommend the right product and offer to open its page.',
-  '- The customer may speak Telugu, Hindi or English — understand all three. Reply in the SAME language requested (correct native script). Show prices as digits like 4500, not words.',
+  '- The customer may speak ANY Indian language — Telugu, Hindi, English, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese or Urdu. You will be told which language to answer in. Reply ONLY in that language, in its correct native script, even if the product names inside the question are in English. Never answer in a different language from the one you were asked for. Show prices as digits like 4500, not words.',
   '- TALK LIKE A WARM LOCAL PERSON FROM HYDERABAD, not a formal robot. Use simple, everyday words that common people actually speak — short, friendly, natural. Keep common English words that Indians use every day IN THE SAME SENTENCE (water softener, filter, order, delivery, bathroom, tap, price). Keep product names in English exactly as written above — do NOT translate them.',
   '- FOR TELUGU: use clear, standard, everyday Andhra Telugu that everyone understands easily. Speak in full, clear, complete words — do NOT drop or shorten words or use Telangana slang endings. Use normal polite forms like "చేయండి", "అడగండి", "నొక్కండి", "ఇవ్వండి". Keep it simple and natural (not heavy or over-formal), but every word must be complete and clear so it is easy to hear.',
   '- Sound caring and helpful, like talking to a neighbour. One or two short sentences only.',
@@ -107,7 +126,32 @@ const KNOWLEDGE = [
   '- Answer strictly as JSON only: {"reply": "<spoken answer>", "go": "<path or null>"}. No text outside the JSON.'
 ].join('\n');
 
-const LANG_NAME = { te: 'Telugu', hi: 'Hindi', en: 'English' };
+/* Every language a customer may speak to the mic in. The widget sends whichever
+   one the speech-to-text DETECTED, and the model must answer in that same one —
+   that is what makes "talk to it in your language" actually work. */
+const LANG_NAME = {
+  te: 'Telugu', hi: 'Hindi', en: 'English', ta: 'Tamil', kn: 'Kannada',
+  ml: 'Malayalam', mr: 'Marathi', bn: 'Bengali', gu: 'Gujarati', pa: 'Punjabi',
+  or: 'Odia', as: 'Assamese', ur: 'Urdu', ne: 'Nepali', sa: 'Sanskrit'
+};
+
+/* If the model comes back empty we still have to say something — and it must be
+   in the language the customer just spoke, never English at a Kannada speaker. */
+const ASK_AGAIN = {
+  te: 'క్షమించండి, మళ్ళీ చెప్పగలరా? లేదా ' + PHONE + ' కు కాల్ చేయండి.',
+  hi: 'माफ़ कीजिए, फिर से कहिए? या ' + PHONE + ' पर कॉल करें।',
+  en: 'Sorry, could you say that again? Or call ' + PHONE + '.',
+  ta: 'மன்னிக்கவும், மீண்டும் சொல்ல முடியுமா? அல்லது ' + PHONE + ' ஐ அழைக்கவும்.',
+  kn: 'ಕ್ಷಮಿಸಿ, ಮತ್ತೊಮ್ಮೆ ಹೇಳಬಹುದೇ? ಅಥವಾ ' + PHONE + ' ಗೆ ಕರೆ ಮಾಡಿ.',
+  ml: 'ക്ഷമിക്കണം, ഒന്നുകൂടി പറയാമോ? അല്ലെങ്കിൽ ' + PHONE + ' ൽ വിളിക്കൂ.',
+  mr: 'माफ करा, पुन्हा सांगाल का? किंवा ' + PHONE + ' वर कॉल करा.',
+  bn: 'দুঃখিত, আবার বলবেন? অথবা ' + PHONE + ' নম্বরে কল করুন।',
+  gu: 'માફ કરશો, ફરી કહેશો? અથવા ' + PHONE + ' પર કૉલ કરો.',
+  pa: 'ਮਾਫ਼ ਕਰਨਾ, ਦੁਬਾਰਾ ਕਹੋਗੇ? ਜਾਂ ' + PHONE + ' ਤੇ ਕਾਲ ਕਰੋ।',
+  or: 'କ୍ଷମା କରନ୍ତୁ, ପୁଣି କୁହନ୍ତୁ କି? କିମ୍ବା ' + PHONE + ' କୁ କଲ କରନ୍ତୁ।',
+  as: 'ক্ষমা কৰিব, পুনৰ ক\'ব পাৰিবনে? বা ' + PHONE + ' লৈ কল কৰক।',
+  ur: 'معذرت، دوبارہ کہیں گے؟ یا ' + PHONE + ' پر کال کریں۔'
+};
 
 /* ---- Allow-list of navigation targets the model may return ---- */
 const PRODUCT_SLUGS = ['water-softener', 'shower-filter', 'tap-filter', 'washing-ball', 'tap-tile-cleaner'];
@@ -138,11 +182,25 @@ function parseReply(raw) {
   }
   return { reply: cleanReply(raw.replace(/[{}"]/g, '')), go: null };   // last resort: speak the text
 }
+/* Characters that can NEVER belong in an Indian-language answer: Chinese,
+   Japanese and Korean. Models do slip them in — llama-3.3-70b answered a Hindi
+   question with "यह硬 पानी के कारण", using the Chinese 硬 ("hard") in place of
+   कठोर. On screen it is gibberish; spoken aloud by the voice it is worse. Strip
+   them rather than read them out. */
+const CJK = /[　-〿぀-ゟ゠-ヿ㐀-䶿一-鿿豈-﫿가-힯]/g;
+
 // tidy a reply: drop any leaked "reply:"/"go:" repetition some models emit, cap length
 function cleanReply(s) {
   s = (typeof s === 'string' ? s : '').trim();
   s = s.split(/\s*["']?\b(?:reply|go)\b["']?\s*[:：]/i)[0].trim();   // cut at a leaked key
   s = s.replace(/[{}"]+\s*$/, '').trim();
+  // replace (never test) — a /g regex keeps its lastIndex after .test(), so the
+  // NEXT reply would start scanning from the middle and miss what is at the front
+  const stripped = s.replace(CJK, '');
+  if (stripped !== s) {
+    try { console.warn('assistant: stripped CJK characters from a reply'); } catch (e) {}
+    s = stripped.replace(/\s{2,}/g, ' ').trim();
+  }
   if (s.length > 400) s = s.slice(0, 400).trim();
   return s;
 }
@@ -150,42 +208,77 @@ function cleanReply(s) {
 /* ---- GET /api/assistant/health -> tells the widget whether AI is available ---- */
 function health(_req, res) { res.json({ enabled: ENABLED, model: ENABLED ? MODEL : null }); }
 
-/* ---- POST /api/assistant  { message, lang, history? } -> { reply, go } ---- */
-async function handle(req, res) {
-  if (!ENABLED || !client) return res.status(503).json({ error: 'ai_disabled' });
-  try {
-    const body = req.body || {};
-    let message = typeof body.message === 'string' ? body.message.trim() : '';
-    let lang = LANG_NAME[body.lang] ? body.lang : 'en';
-    if (!message) return res.status(400).json({ error: 'empty' });
-    if (message.length > 500) message = message.slice(0, 500);
-
-    const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
+/* ---- answer(message, lang, history) -> { reply, go } ------------------------
+   The brain on its own, with no HTTP around it, so /api/ask can call it the
+   instant speech-to-text finishes instead of sending the text back to the
+   browser and waiting to be asked again. */
+async function answer(message, lang, history) {
+  message = typeof message === 'string' ? message.trim() : '';
+  lang = LANG_NAME[lang] ? lang : 'en';
+  if (!message) throw new Error('empty');
+  if (message.length > 500) message = message.slice(0, 500);
+  {
+    history = Array.isArray(history) ? history.slice(-6) : [];
     const messages = [{ role: 'system', content: KNOWLEDGE }];
     for (const h of history) {
       if (!h || typeof h.text !== 'string') continue;
       messages.push({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 500) });
     }
-    messages.push({ role: 'user', content: 'Answer in ' + LANG_NAME[lang] + '. Customer says: ' + message });
+    // The language line is repeated on every turn (not just in the system prompt)
+    // because the customer can switch language mid-conversation — the earlier
+    // turns in `history` may well be in a different one.
+    messages.push({
+      role: 'user',
+      content: 'Answer in ' + LANG_NAME[lang] + ' only, using ' + LANG_NAME[lang] +
+               ' script. Customer says: ' + message
+    });
 
     const opts = { model: MODEL, messages: messages, temperature: 0.3, max_tokens: 450 };
-    // ask for a strict JSON object where supported; if the model/provider rejects
-    // it, retry once without so we still get an answer (parseReply cleans it up).
+    // Replies are 1-2 spoken sentences, so prefer whichever provider answers
+    // fastest rather than the cheapest one. OpenRouter-only — harmless to omit
+    // when someone points ASSISTANT_BASE_URL at a plain OpenAI-compatible API.
+    //
+    // Deliberately NOT sending a `reasoning` option here: OpenRouter rejects
+    // reasoning:{enabled:false} for the GPT-5 family with a hard error, and a
+    // model that cannot be talked out of thinking is the wrong brain for a voice
+    // assistant anyway (measured ~9s a turn, half of them empty). Use a
+    // non-reasoning model — see ASSISTANT_MODEL in .env.
+    if (IS_OPENROUTER) opts.provider = { sort: 'throughput' };
+
+    // Ask for a strict JSON object where supported. If the model/provider rejects
+    // it we retry once without — but we REMEMBER that, because paying for a
+    // failed call before every single answer is pure added latency.
     let completion;
-    try {
-      completion = await client.chat.completions.create(Object.assign({ response_format: { type: 'json_object' } }, opts));
-    } catch (e) {
+    if (jsonMode) {
+      try {
+        completion = await client.chat.completions.create(Object.assign({ response_format: { type: 'json_object' } }, opts));
+      } catch (e) {
+        jsonMode = false;                                  // don't try it again this run
+        completion = await client.chat.completions.create(opts);
+      }
+    } else {
       completion = await client.chat.completions.create(opts);
     }
 
     const raw = (completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     let out = parseReply(raw);
-    if (!out.reply) out.reply = (lang === 'te'
-      ? 'క్షమించండి, మళ్ళీ చెప్పగలరా? లేదా ' + PHONE + ' కు కాల్ చేయండి.'
-      : lang === 'hi'
-        ? 'माफ़ कीजिए, फिर से कहिए? या ' + PHONE + ' पर कॉल करें।'
-        : 'Sorry, could you say that again? Or call ' + PHONE + '.');
-    res.json({ reply: out.reply, go: out.go });
+    if (!out.reply) out.reply = (ASK_AGAIN[lang] || ASK_AGAIN.en);
+    // Start making the audio NOW, not after the browser reads this and asks.
+    if (tts && tts.warm) { try { tts.warm(out.reply, lang); } catch (e) {} }
+    return { reply: out.reply, go: out.go };
+  }
+}
+
+/* ---- POST /api/assistant  { message, lang, history? } -> { reply, go } ---- */
+async function handle(req, res) {
+  if (!ENABLED || !client) return res.status(503).json({ error: 'ai_disabled' });
+  try {
+    const body = req.body || {};
+    if (typeof body.message !== 'string' || !body.message.trim()) {
+      return res.status(400).json({ error: 'empty' });
+    }
+    const out = await answer(body.message, body.lang, body.history);
+    res.json(out);
   } catch (e) {
     try { console.error('assistant error:', e && (e.status || ''), e && e.message); } catch (x) {}
     // let the browser widget fall back to its free offline engine
@@ -193,4 +286,4 @@ async function handle(req, res) {
   }
 }
 
-module.exports = { handle, health, ENABLED, MODEL };
+module.exports = { handle, health, answer, ENABLED, MODEL };

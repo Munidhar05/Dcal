@@ -71,14 +71,96 @@ function rateLimit(opts) {
 // (never leak internal exception text / DB / driver details to the browser).
 function serverErr(res, e) { try { console.error('server error:', e && e.message); } catch (x) {} return res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 
+/* ---------- optional voice modules ----------
+   assistant.js / tts.js / stt.js are the AI voice assistant. A plain require()
+   of these at the top of the file means one missing or broken file takes the
+   WHOLE STORE down with it — checkout included — for a feature that is meant to
+   be optional. (That is exactly what a deploy missing server/stt.js would do.)
+   So load them defensively: if one cannot be loaded we stand a disabled stub in
+   its place, which answers 503 / {enabled:false} — the two things the browser
+   widget already treats as "fall back to the free offline engine". */
+function optionalVoiceModule(modulePath, label) {
+  try { return require(modulePath); }
+  catch (e) {
+    try { console.error('⚠ ' + label + ' failed to load (' + modulePath + '):', e && e.message); } catch (x) {}
+    function off(_req, res) { return res.status(503).json({ error: 'unavailable' }); }
+    function dead() { throw new Error(label + ' unavailable'); }
+    return {
+      ENABLED: false, MODEL: null,
+      handle: off,
+      health: function (_req, res) { return res.json({ enabled: false, model: null }); },
+      warm: function () {},              // fire-and-forget TTS warm-up: do nothing
+      answer: dead, transcribe: dead,    // never reached: ENABLED false short-circuits /api/ask
+      normalizeLang: function () { return 'en'; }
+    };
+  }
+}
+
 /* ---------- AI voice assistant (OpenRouter) ----------
    Powers the mic assistant on every page. Rate-limited so a runaway page or
    abuse can't rack up API cost. If no key is set (or a call fails), the browser
    widget automatically falls back to its free offline engine. */
-const assistant = require('./assistant');
+const assistant = optionalVoiceModule('./assistant', 'AI voice assistant');
 app.get('/api/assistant/health', assistant.health);
 app.post('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, tag: 'assistant' }), assistant.handle);
 console.log(assistant.ENABLED ? ('✓ AI voice assistant enabled via OpenRouter (' + assistant.MODEL + ')') : 'ℹ AI voice assistant off (set OPENROUTER_API_KEY) — widget uses free offline engine');
+
+// ElevenLabs natural Indian voice (Telugu / Hindi / English). Key stays server-side.
+// If unset or a call fails, the widget falls back to the free browser voice.
+const tts = optionalVoiceModule('./tts', 'ElevenLabs voice');
+app.get('/api/tts/health', tts.health);
+// GET is the low-latency path: the widget points an <audio> straight at this URL
+// and starts playing while the server is still streaming the voice out of
+// ElevenLabs. POST stays for replies too long to fit in a URL, and as a fallback.
+app.get('/api/tts', rateLimit({ windowMs: 60 * 1000, max: 60, tag: 'tts' }), tts.handle);
+app.post('/api/tts', rateLimit({ windowMs: 60 * 1000, max: 60, tag: 'tts' }), tts.handle);
+console.log(tts.ENABLED ? ('✓ ElevenLabs voice enabled (' + tts.MODEL + ')') : 'ℹ ElevenLabs voice off (set ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID) — widget uses free browser voice');
+
+// ElevenLabs Scribe speech-to-text. This is what DETECTS which language the
+// customer is speaking — the browser's own recogniser cannot. Body is raw audio,
+// so it needs its own parser (the global express.json would reject it).
+const stt = optionalVoiceModule('./stt', 'Speech-to-text');
+app.get('/api/stt/health', stt.health);
+app.post('/api/stt',
+  rateLimit({ windowMs: 60 * 1000, max: 30, tag: 'stt' }),
+  express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '6mb' }),
+  stt.handle);
+console.log(stt.ENABLED ? ('✓ Speech-to-text + language detection enabled (' + stt.MODEL + ')') : 'ℹ Speech-to-text off (set ELEVENLABS_API_KEY) — widget uses the browser recogniser, no auto language detect');
+
+/* ---------- ONE TURN, ONE REQUEST ----------
+   The widget used to make two round trips for every question: send the audio,
+   wait, read the text, send the text back, wait again. On a phone that is a
+   whole network round trip of pure silence in the middle of the turn.
+   This does both here: transcribe, answer, and start making the voice — so the
+   only thing the browser waits for is the finished reply. */
+app.post('/api/ask',
+  rateLimit({ windowMs: 60 * 1000, max: 30, tag: 'ask' }),
+  express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '6mb' }),
+  async (req, res) => {
+    if (!stt.ENABLED || !assistant.ENABLED) return res.status(503).json({ error: 'ask_disabled' });
+    try {
+      const audio = req.body;
+      if (!Buffer.isBuffer(audio) || !audio.length) return res.status(400).json({ error: 'empty' });
+
+      const heard = await stt.transcribe(audio, req.get('Content-Type'));
+      if (!heard.text) return res.json({ text: '', lang: heard.lang, reply: null, go: null });
+
+      // History rides along in a header: the body is the raw audio, and
+      // base64-ing the audio into JSON instead would inflate the upload by a
+      // third on the exact connection we are trying to save time on.
+      let history = [];
+      try {
+        const raw = req.get('X-Dcal-History');
+        if (raw) history = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+      } catch (e) { history = []; }
+
+      const out = await assistant.answer(heard.text, heard.lang, history);
+      res.json({ text: heard.text, lang: heard.lang, reply: out.reply, go: out.go });
+    } catch (e) {
+      try { console.error('ask error:', e && e.message); } catch (x) {}
+      res.status(502).json({ error: 'ask_error' });   // widget falls back to the two-step path
+    }
+  });
 
 const ROOT = path.join(__dirname, '..');                 // project root (where index.html lives)
 const PORT = process.env.PORT || 3000;
