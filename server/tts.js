@@ -51,6 +51,13 @@ const FORMAT = process.env.ELEVENLABS_FORMAT || 'mp3_22050_32';
 // 0 = no latency optimisation … 3 = maximum. 4 also disables ElevenLabs' text
 // normaliser, which we must NOT do — it is what reads "4500" as a price.
 const LATENCY = String(process.env.ELEVENLABS_LATENCY || '3');
+/* How fast she talks. 1.0 is normal; above 1.0 is quicker. Measured on this
+   voice with the same Telugu sentence:
+     eleven_multilingual_v2 — 0.9: 7.1s   1.0: 6.9s   1.1: 6.3s   1.2: 5.5s
+     eleven_v3              — IGNORES IT ENTIRELY (0.9 was not slower than 1.2)
+   So this only shortens the listening time on a model that honours it. With
+   eleven_v3 the only way to make her quicker is to give her less to say. */
+const SPEED = parseFloat(process.env.ELEVENLABS_SPEED || '1.08');
 // eleven_v3 REJECTS this parameter outright ("Providing optimize_streaming_latency
 // is not supported with the 'eleven_v3' model", HTTP 400), so it must only be
 // sent to the models that accept it — otherwise every reply fails and she goes
@@ -128,7 +135,7 @@ function startStream(key, voiceId, model, text) {
     model_id: model,
     // multilingual_v2 auto-detects language from the script (Telugu / Devanagari /
     // Latin) — do NOT send language_code here, this model rejects it.
-    voice_settings: { stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true }
+    voice_settings: { stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true, speed: SPEED }
   });
   const lat = latencyFor(model);
   const opts = {

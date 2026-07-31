@@ -115,11 +115,12 @@ const KNOWLEDGE = [
   '- The customer may speak ANY Indian language — Telugu, Hindi, English, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese or Urdu. You will be told which language to answer in. Reply ONLY in that language, in its correct native script, even if the product names inside the question are in English. Never answer in a different language from the one you were asked for. Show prices as digits like 4500, not words.',
   '- TALK LIKE A WARM LOCAL PERSON FROM HYDERABAD, not a formal robot. Use simple, everyday words that common people actually speak — short, friendly, natural. Keep common English words that Indians use every day IN THE SAME SENTENCE (water softener, filter, order, delivery, bathroom, tap, price). Keep product names in English exactly as written above — do NOT translate them.',
   '- FOR TELUGU: use clear, standard, everyday Andhra Telugu that everyone understands easily. Speak in full, clear, complete words — do NOT drop or shorten words or use Telangana slang endings. Use normal polite forms like "చేయండి", "అడగండి", "నొక్కండి", "ఇవ్వండి". Keep it simple and natural (not heavy or over-formal), but every word must be complete and clear so it is easy to hear.',
-  '- Sound caring and helpful, like talking to a neighbour. One or two short sentences only.',
+  '- Sound caring and helpful, like talking to a neighbour — but say it in as few words as you can.',
   '- A short reply like "yes"/"అవును"/"हाँ", or a symptom like hair fall or dry skin, or anything about products, prices, orders, delivery, water, filters, or the shop, is ALWAYS on-topic. Never refuse these. If you are unsure what they mean, ask ONE short question or suggest the most likely product — do NOT refuse.',
   '- IMPORTANT: read the conversation above. If YOUR previous message offered to open a page or show a product and the customer now says yes / అవును / हाँ / ok / sure / please, then DO it: set "go" to exactly that page and give a one-line confirmation. Do not ask again.',
   "- ONLY for questions that are clearly nothing to do with D'Cal, water, home, skin, hair, cleaning or appliances (for example cricket scores, movies, politics) give a short friendly line that you help with D'Cal and share the phone number " + PHONE + '.',
-  '- The customer may not be able to read, so keep the reply to 1-2 short, simple, warm sentences. No lists, no markdown, no emojis.',
+  '- BE SHORT. THIS MATTERS AS MUCH AS BEING RIGHT. Every reply is READ ALOUD to the customer, and they have to sit and listen to the whole thing before they can speak again. ONE sentence. Never more than 20 words. Two short sentences only if the second one is genuinely necessary. No lists, no markdown, no emojis.',
+  '- NEVER volunteer the star rating, the review count, or the price unless the customer actually asked for that. Adding "4.9 stars, 12,840+ reviews" to an answer about hair fall makes them wait several extra seconds to hear something they did not ask for.',
   '- PREFER TO ACT, NOT ASK. When you recommend a specific product, or the customer wants a page/product/cart/track/contact, set "go" to open it DIRECTLY and confirm in one line (e.g. "I am opening the shower filter for you."). Do NOT ask "shall I open it?" — just open it. Only leave "go" as null and ask ONE short question when you genuinely cannot tell which product they need.',
   '- When you recommend ONE product, set "go" to that product page (e.g. /product/water-softener). If you suggest looking at several, use /collection.',
   '- Never invent prices, offers, or policies not stated here.',
@@ -201,8 +202,49 @@ function cleanReply(s) {
     try { console.warn('assistant: stripped CJK characters from a reply'); } catch (e) {}
     s = stripped.replace(/\s{2,}/g, ' ').trim();
   }
-  if (s.length > 400) s = s.slice(0, 400).trim();
-  return s;
+  return trimForSpeech(s);
+}
+
+/* Every reply is read ALOUD, and the customer cannot speak again until it
+   finishes — so length is felt as waiting. Measured on this voice, Telugu runs
+   at roughly 14 characters a second: a 96-character answer takes almost 7
+   seconds to hear, while the same answer said in 56 characters takes 3.3.
+   The prompt asks for one short sentence; this is the backstop for when the
+   model ignores it. Cuts at a sentence end so it never stops mid-thought. */
+/* Ratings and review counts, bolted onto answers nobody asked them of.
+   The prompt forbids it and the model does it anyway, so it is removed here.
+   These clauses are far more expensive than they look: "12,840+" is seven
+   characters but is SPOKEN as "twelve thousand eight hundred and forty plus",
+   which is why a 62-character price answer took 7.7 seconds to read out while
+   an 86-character one took 6.2. Numbers cost listening time, not characters. */
+const ASKED_ABOUT_STATS =
+  /(rating|review|star|స్టార్|రేటింగ్|రివ్యూ|సమీక్ష|स्टार|रेटिंग|रिव्यू|समीक्षा)/i;
+const STAT_CLAUSES = [
+  // "12,840+ reviews" / "12,840+ సమీక్షలు" / "12,840+ रिव्यू"
+  /[,;:–—-]?\s*\d[\d,]*\s*\+?\s*(reviews?|రివ్యూలు|రివ్యూలకు|రివ్యూల|సమీక్షలు|సమీక్షలకు|समीक्षाओं|समीक्षाएँ|समीक्षा|रिव्यूज़|रिव्यू)/gi,
+  // "4.9 star rating" / "4.9 స్టార్ రేటింగ్" / "4.8 స్టార్లు" / "4.9 स्टार रेटिंग"
+  /[,;:–—-]?\s*\d[.,]\d\s*(star rating|stars?|స్టార్లు|స్టార్|स्टार)\s*(rating|రేటింగ్|रेटिंग)?\s*(ఉంది|ఉన్నాయి|है|हैं)?/gi
+];
+function stripUnsolicitedStats(reply, question) {
+  if (ASKED_ABOUT_STATS.test(String(question || ''))) return reply;   // they DID ask
+  let s = reply;
+  for (const re of STAT_CLAUSES) s = s.replace(re, '');
+  // tidy what the removal left behind: doubled or dangling punctuation
+  s = s.replace(/\s*,\s*,/g, ',').replace(/\s{2,}/g, ' ')
+       .replace(/[\s,;:–—-]+([.!?।])/g, '$1').replace(/[\s,;:–—-]+$/, '').trim();
+  return s || reply;                                    // never strip it to nothing
+}
+
+const MAX_SPOKEN = parseInt(process.env.ASSISTANT_MAX_CHARS || '200', 10);
+function trimForSpeech(s) {
+  if (s.length <= MAX_SPOKEN) return s;
+  const cut = s.slice(0, MAX_SPOKEN + 1);
+  // '।' is the Devanagari full stop, used in Hindi/Marathi replies
+  const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('?'),
+                       cut.lastIndexOf('!'), cut.lastIndexOf('।'));
+  if (end > MAX_SPOKEN * 0.4) return cut.slice(0, end + 1).trim();
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : cut.slice(0, MAX_SPOKEN)).trim();
 }
 
 /* ---- GET /api/assistant/health -> tells the widget whether AI is available ---- */
@@ -263,6 +305,7 @@ async function answer(message, lang, history) {
     const raw = (completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     let out = parseReply(raw);
     if (!out.reply) out.reply = (ASK_AGAIN[lang] || ASK_AGAIN.en);
+    else out.reply = stripUnsolicitedStats(out.reply, message);   // seconds they never asked to wait
     // Start making the audio NOW, not after the browser reads this and asks.
     if (tts && tts.warm) { try { tts.warm(out.reply, lang); } catch (e) {} }
     return { reply: out.reply, go: out.go };
