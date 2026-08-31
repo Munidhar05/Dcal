@@ -56,7 +56,7 @@ const KNOWLEDGE = [
   "You are \"D'Cal Saathi\", the friendly female voice assistant on the D'Cal website. D'Cal is based in Hyderabad, Telangana, India and sells solutions for HARD WATER problems.",
   '',
   'PRODUCTS, PRICES (Indian Rupees) and customer RATINGS:',
-  '- Home Water Softener (for an independent house): 4500, rated 4.9 stars',
+  '- Home Water Softener (for an independent house): 3960, rated 4.9 stars',
   '- Shower Head Filter: 2700, rated 4.8 stars',
   '- Tap Filter: 2700, rated 4.8 stars',
   '- Washing Machine Ball: 500, rated 4.7 stars',

@@ -1401,26 +1401,52 @@
   // actual discount and once-per-user eligibility (see /api/coupon/validate).
   var COUPONS = {
     LX500: { type: 'flat', value: 500, min: 2000, oncePerUser: true, desc: '₹500 off orders over ₹2,000' },
-    LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' }
+    LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' },
+    YASEEN200: { type: 'flat', value: 200, slugs: ['water-softener', 'shower-filter', 'tap-filter'], oncePerUser: true,
+      desc: "₹200 off the Water Softener, Shower Head Filter or Tap Filter",
+      only: "the D'Cal Independent House Water Softener, Shower Head Filter or Tap Filter" }
   };
+  // A coupon carrying `slugs` only discounts those catalog products. A cart line
+  // knows its slug when it was added from /product/<slug>; older lines carry just a
+  // title, so fall back to matching that.
+  var COUPON_TITLE2SLUG = {
+    "d'cal independent house water softener": 'water-softener',
+    "d'cal shower head filter": 'shower-filter',
+    "d'cal tap filter": 'tap-filter'
+  };
+  function lineSlug(it) {
+    if (it && it.slug) return it.slug;
+    var t = String((it && it.title) || '').replace(/[’‘']/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+    return COUPON_TITLE2SLUG[t] || '';
+  }
+  // subtotal of the lines this coupon may discount (whole cart when unrestricted)
+  function eligibleSubtotal(c) {
+    if (!c || !c.slugs) return cartSubtotal();
+    return cartGet().reduce(function (s, it) {
+      return c.slugs.indexOf(lineSlug(it)) > -1 ? s + priceNum(it.price) * (it.qty || 1) : s;
+    }, 0);
+  }
   // Ask the server whether this user may use the coupon (validity + once-per-user).
   // Falls back to local rules if the server is unreachable (no per-user check offline).
   function validateCouponServer(code, subtotal) {
-    return api('POST', '/api/coupon/validate', { mobile: sessionMobile(), code: code, subtotal: subtotal })
+    return api('POST', '/api/coupon/validate', { mobile: sessionMobile(), code: code, subtotal: subtotal, items: cartGet() })
       .catch(function () {
         var c = COUPONS[code];
         if (!c) return { ok: false, reason: 'Invalid or expired coupon code.' };
-        if (c.min && subtotal < c.min) return { ok: false, reason: 'Add items worth ' + money(c.min) + ' to use this code.' };
-        return { ok: true, code: code, discount: c.type === 'percent' ? Math.round(subtotal * c.value / 100) : c.value };
+        var base = eligibleSubtotal(c);
+        if (c.slugs && base <= 0) return { ok: false, reason: 'This code is valid only on ' + c.only + '.' };
+        if (c.min && base < c.min) return { ok: false, reason: 'Add items worth ' + money(c.min) + ' to use this code.' };
+        return { ok: true, code: code, discount: c.type === 'percent' ? Math.round(base * c.value / 100) : c.value };
       });
   }
   function getCouponCode() { try { return (localStorage.getItem('dcal_coupon') || '').toUpperCase(); } catch (e) { return ''; } }
   function setCouponCode(c) { try { if (c) localStorage.setItem('dcal_coupon', c.toUpperCase()); else localStorage.removeItem('dcal_coupon'); } catch (e) {} }
   function computeTotals(subtotal) {
     var code = getCouponCode(), c = COUPONS[code], discount = 0;
-    if (c && (!c.min || subtotal >= c.min)) {
-      discount = c.type === 'percent' ? Math.round(subtotal * c.value / 100) : c.value;
-      if (discount > subtotal) discount = subtotal;
+    var base = c ? eligibleSubtotal(c) : 0;
+    if (c && base > 0 && (!c.min || base >= c.min)) {
+      discount = c.type === 'percent' ? Math.round(base * c.value / 100) : c.value;
+      if (discount > base) discount = base;
     } else { code = ''; }
     return { subtotal: subtotal, code: code, discount: discount, total: subtotal - discount };
   }
@@ -1452,7 +1478,9 @@
       if (!code) { if (msg) { msg.textContent = 'Please enter a coupon code.'; msg.className = 'dcal-coupon-msg err'; } return; }
       var c = COUPONS[code];
       if (!c) { if (msg) { msg.textContent = 'Invalid or expired coupon code.'; msg.className = 'dcal-coupon-msg err'; } return; }
-      if (c.min && cartSubtotal() < c.min) { if (msg) { msg.textContent = 'Add items worth ' + money(c.min) + ' to use this code.'; msg.className = 'dcal-coupon-msg err'; } return; }
+      var base = eligibleSubtotal(c);
+      if (c.slugs && base <= 0) { if (msg) { msg.textContent = 'This code is valid only on ' + c.only + '.'; msg.className = 'dcal-coupon-msg err'; } return; }
+      if (c.min && base < c.min) { if (msg) { msg.textContent = 'Add items worth ' + money(c.min) + ' to use this code.'; msg.className = 'dcal-coupon-msg err'; } return; }
       if (apply) apply.disabled = true;
       if (msg) { msg.textContent = 'Checking…'; msg.className = 'dcal-coupon-msg'; }
       validateCouponServer(code, cartSubtotal()).then(function (r) {
@@ -1930,10 +1958,13 @@
 
   function refreshPayFields() {
     var box = document.querySelector('[data-pay-fields]'); if (!box) return;
-    // Razorpay handles card entry itself, so only show our fields in demo mode
+    // Razorpay collects card/UPI/bank details inside its own modal, so we never ask
+    // for them here. With no gateway configured there is no way to take money online,
+    // so say so plainly rather than collect details we cannot charge.
     if (razorpayOn() || checkout.payment === 'cod') { box.innerHTML = ''; return; }
-    box.innerHTML = payFieldsHTML(checkout.payment);
-    wirePayFields();
+    box.innerHTML = '<div class="dcal-pay-form">' +
+      '<div class="dcal-err show" data-pf-err style="margin:0">Online payment is unavailable right now — ' +
+      'Razorpay is not configured on this server. Please choose Cash on Delivery.</div></div>';
   }
 
   function wirePayFields() {
@@ -2222,11 +2253,15 @@
   function proceedPlaceOrder() {
     if (checkout.payment === 'cod') { placeCartOrder({ paid: false }); return; }
     if (razorpayOn()) { payWithRazorpay(); return; }
-    // demo mode: validate the entered card/UPI/bank details, then place the order
-    var err = validatePayFields(checkout.payment);
+    // RAZORPAY ONLY: with no gateway configured we must never record a paid order,
+    // so refuse instead of simulating a successful payment.
     var errBox = document.querySelector('[data-pf-err]');
-    if (err) { if (errBox) { errBox.textContent = err; errBox.classList.add('show'); } return; }
-    placeCartOrder({ paid: true, demo: true });   // simulated successful payment
+    if (errBox) {
+      errBox.textContent = 'Online payment is unavailable right now — Razorpay is not configured. Please choose Cash on Delivery.';
+      errBox.classList.add('show');
+    }
+    toast('Online payment unavailable — please choose Cash on Delivery.');
+    resetPlaceBtn();
   }
 
   function payWithRazorpay() {
