@@ -1014,12 +1014,22 @@ app.put('/api/users/:mobile/addresses', authCustomer, async (req, res) => {
    that carries that code. */
 const COUPONS = {
   LX500: { type: 'flat', value: 500, min: 2000, oncePerUser: true, desc: '₹500 off orders over ₹2,000' },
-  LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' }
+  LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' },
+  YASEEN200: { type: 'flat', value: 200, slugs: ['water-softener', 'shower-filter', 'tap-filter'], oncePerUser: true,
+    desc: "₹200 off the Water Softener, Shower Head Filter or Tap Filter",
+    only: "the D'Cal Independent House Water Softener, Shower Head Filter or Tap Filter" }
 };
-function couponDiscount(c, subtotal) {
+/* A coupon carrying `slugs` is limited to those catalog products: it discounts only
+   those lines, and is rejected outright when the cart holds none of them. Coupons
+   without `slugs` keep applying to the whole cart. */
+function eligibleSubtotal(c, lines, subtotal) {
+  if (!c || !c.slugs) return subtotal;
+  return (lines || []).reduce((s, l) => (c.slugs.indexOf(l.slug) > -1 ? s + l.price * l.qty : s), 0);
+}
+function couponDiscount(c, base) {
   if (!c) return 0;
-  let d = c.type === 'percent' ? Math.round(subtotal * c.value / 100) : c.value;
-  return d > subtotal ? subtotal : d;
+  let d = c.type === 'percent' ? Math.round(base * c.value / 100) : c.value;
+  return d > base ? base : d;
 }
 async function couponUsedBy(mobile, code) {
   if (!mobile || !code || !dbReady) return false;
@@ -1093,8 +1103,10 @@ async function quoteOrder(items, couponCode, mobile) {
   let code = String(couponCode || '').trim().toUpperCase();
   let discount = 0;
   const c = COUPONS[code];
-  if (c && (!c.min || subtotal >= c.min) && !(c.oncePerUser && await couponUsedBy(mobile, code))) {
-    discount = couponDiscount(c, subtotal);
+  // discount is computed off the ELIGIBLE lines, not the whole cart
+  const base = eligibleSubtotal(c, lines, subtotal);
+  if (c && base > 0 && (!c.min || base >= c.min) && !(c.oncePerUser && await couponUsedBy(mobile, code))) {
+    discount = couponDiscount(c, base);
   } else { code = ''; }
   return { ok, subtotal, discount, total: subtotal - discount, code, lines };
 }
@@ -1107,15 +1119,20 @@ app.post('/api/coupon/validate', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, 
   try {
     const body = req.body || {};
     const code = String(body.code || '').trim().toUpperCase();
-    const subtotal = Number(body.subtotal) || 0;
     const c = COUPONS[code];
     if (!c) return res.json({ ok: false, reason: 'Invalid or expired coupon code.' });
-    if (c.min && subtotal < c.min) return res.json({ ok: false, reason: 'Add items worth ₹' + c.min.toLocaleString('en-IN') + ' to use this code.' });
+    // price the cart here too, so a product-limited coupon is checked against what
+    // is actually in it (the client's subtotal is only a display value)
+    const priced = priceCart(body.items);
+    const subtotal = priced.ok ? priced.subtotal : (Number(body.subtotal) || 0);
+    const base = eligibleSubtotal(c, priced.lines, subtotal);
+    if (c.slugs && base <= 0) return res.json({ ok: false, reason: 'This code is valid only on ' + c.only + '.' });
+    if (c.min && base < c.min) return res.json({ ok: false, reason: 'Add items worth ₹' + c.min.toLocaleString('en-IN') + ' to use this code.' });
     if (c.oncePerUser) {
       if (!body.mobile) return res.json({ ok: false, reason: 'Please sign in to use this coupon.' });
       if (await couponUsedBy(body.mobile, code)) return res.json({ ok: false, reason: 'You’ve already used this coupon — it’s valid one time per customer.' });
     }
-    res.json({ ok: true, code, discount: couponDiscount(c, subtotal), desc: c.desc });
+    res.json({ ok: true, code, discount: couponDiscount(c, base), desc: c.desc });
   } catch (e) { res.status(500).json({ ok: false, reason: 'Could not verify the coupon. Please try again.' }); }
 });
 
@@ -1170,8 +1187,6 @@ app.post('/api/orders', authCustomer, async (req, res) => {
           if (paymentId) { const dupe = await Order.findOne({ paymentId }); if (dupe) return res.json({ order: dupe }); }
         }
       } catch (e) { /* reconciliation failed -> stays unpaid, safer than false-paid */ }
-    } else if (!razorpay && o.demo === true) {
-      paid = !!o.paid;   // demo mode only (no real Razorpay configured): simulated payment
     }
 
     let order;
