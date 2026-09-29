@@ -1404,6 +1404,9 @@
     LX300: { type: 'flat', value: 300, min: 2000, oncePerUser: true, desc: '₹300 off orders over ₹2,000' },
     YASEEN200: { type: 'flat', value: 200, slugs: ['water-softener', 'shower-filter', 'tap-filter'], oncePerUser: true,
       desc: "₹200 off the Water Softener, Shower Head Filter or Tap Filter",
+      only: "the D'Cal Independent House Water Softener, Shower Head Filter or Tap Filter" },
+    VINAY200: { type: 'flat', value: 200, slugs: ['water-softener', 'shower-filter', 'tap-filter'], oncePerUser: true,
+      desc: "₹200 off the Water Softener, Shower Head Filter or Tap Filter",
       only: "the D'Cal Independent House Water Softener, Shower Head Filter or Tap Filter" }
   };
   // A coupon carrying `slugs` only discounts those catalog products. A cart line
