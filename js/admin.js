@@ -207,7 +207,9 @@
           LS.setItem(K_ADMIN, '1'); bootDash();
         }).catch(function () { LS.removeItem(K_ADMIN_PW); renderGate('Incorrect passcode. Try again.'); });
       } else {
-        if (val === ADMIN_PASSCODE) { LS.setItem(K_ADMIN, '1'); renderDash('orders'); }
+        // kept for the server's own admin endpoints even without a database —
+        // the voice-assistant transcripts are read from the server either way
+        if (val === ADMIN_PASSCODE) { LS.setItem(K_ADMIN, '1'); LS.setItem(K_ADMIN_PW, val); renderDash('orders'); }
         else renderGate('Incorrect passcode. Try again.');
       }
     }
@@ -271,6 +273,7 @@
           '<button class="adm-tab' + (tab === 'customers' ? ' active' : '') + '" data-tab="customers">Customers (' + s.customers + ')</button>' +
           '<button class="adm-tab' + (tab === 'dealers' ? ' active' : '') + '" data-tab="dealers">Dealers (' + s.dealers + ')</button>' +
           '<button class="adm-tab' + (tab === 'b2b' ? ' active' : '') + '" data-tab="b2b">B2B Sites (' + s.b2b + ')</button>' +
+          '<button class="adm-tab' + (tab === 'voice' ? ' active' : '') + '" data-tab="voice">Voice assistant</button>' +
         '</div>' +
         '<div class="adm-panel" id="adm-panel"></div>' +
       '</div>';
@@ -287,7 +290,215 @@
     if (tab === 'customers') renderCustomers();
     else if (tab === 'dealers') renderDealers();
     else if (tab === 'b2b') renderB2B();
+    else if (tab === 'voice') renderVoice();
     else renderOrders();
+  }
+
+  /* ---------- voice assistant: every conversation, and what went wrong ----------
+     Recorded by the voice assistant on the store (js/voice-assistant.js), kept
+     on the server (server/voicelog.js) and readable only here. Problems are
+     found by rules on every turn — slow, wrong language, not understood, a
+     task that failed, a customer who had to repeat themselves — and, on
+     request, by an AI review that reads the whole conversation. */
+  var voiceData = null, voiceOpen = {}, voiceFilter = { problem: null, bad: false, q: '' };
+  var LANG_NAME = { te: 'Telugu', hi: 'Hindi', en: 'English', ta: 'Tamil', kn: 'Kannada', ml: 'Malayalam', mr: 'Marathi', bn: 'Bengali', gu: 'Gujarati', pa: 'Punjabi', or: 'Odia', as: 'Assamese', ur: 'Urdu' };
+  var EV_TEXT = {
+    fallback: 'Said she did not understand', heard_nothing: 'Heard nothing (silence or noise)',
+    ai_unreachable: 'AI unreachable', ask_failed: 'Speech + AI request failed, retried in two steps',
+    stt_failed: 'Speech-to-text failed', tts_failed: 'Natural voice failed, robotic voice used',
+    barge: 'Customer talked over her', lang: 'Language', nav: 'Opened', act: 'Did',
+    coupon_asked: 'Asked "did you mean"', coupon_applied: 'Coupon applied', coupon_invalid: 'Coupon invalid',
+    coupon_rejected: 'Coupon not valid on this order', login_needed: 'Asked them to sign in', signin_ok: 'Signed in',
+    otp_wrong: 'Wrong OTP', signin_failed: 'Sign-in failed', form_filled: 'Address form filled', form_error: 'Address form refused',
+    checkout: 'Checkout step', order_place: 'Placed a cash-on-delivery order', payment_handoff: 'Handed over to Razorpay and switched off'
+  };
+  function secs(ms) { return ms == null ? '' : (ms / 1000).toFixed(1) + 's'; }
+  function langs(list) { return (list || []).map(function (l) { return LANG_NAME[l] || l; }).join(', '); }
+  function vChip(code, n) {
+    var p = (voiceData && voiceData.problems[code]) || { label: code, sev: 'amber' };
+    return '<span class="adm-vchip adm-vchip--' + p.sev + '">' + esc(p.label) + (n > 1 ? ' ×' + n : '') + '</span>';
+  }
+  function verdict(r) {
+    if (!r) return '';
+    var t = { yes: '✓ Got what they wanted', partly: '◐ Partly', no: '✗ Did not get it' }[r.achieved] || r.achieved;
+    return '<span class="adm-vverdict adm-vverdict--' + esc(r.achieved) + '">' + t + (r.stale ? ' · new lines since' : '') + '</span>';
+  }
+
+  function renderVoice() {
+    var panel = document.getElementById('adm-panel');
+    panel.innerHTML = '<div class="adm-empty">Loading conversations…</div>';
+    api('GET', '/api/admin/voice').then(function (d) { voiceData = d; drawVoice(); })
+      .catch(function (e) { panel.innerHTML = '<div class="adm-empty">Could not load the transcripts: ' + esc(e.message) + '</div>'; });
+  }
+
+  function voiceRows() {
+    var f = voiceFilter, q = f.q.toLowerCase();
+    return voiceData.sessions.filter(function (s) {
+      if (f.bad && !Object.keys(s.problems).length) return false;
+      if (f.problem && !s.problems[f.problem]) return false;
+      if (q && (s.firstSaid + ' ' + s.sid + ' ' + langs(s.langs) + ' ' + s.pages.join(' ')).toLowerCase().indexOf(q) === -1 &&
+          !(voiceOpen[s.sid] && JSON.stringify(voiceOpen[s.sid].items).toLowerCase().indexOf(q) !== -1)) return false;
+      return true;
+    });
+  }
+
+  function drawVoice() {
+    var panel = document.getElementById('adm-panel'), d = voiceData, st = d.stats;
+    var bad = d.sessions.filter(function (s) { return Object.keys(s.problems).length; }).length;
+    var toReview = d.sessions.filter(function (s) { return Object.keys(s.problems).length && (!s.review || s.review.stale); }).length;
+    var tiles = Object.keys(d.counts).sort(function (a, b) {
+      var A = d.problems[a] || {}, B = d.problems[b] || {};
+      if (A.sev !== B.sev) return A.sev === 'red' ? -1 : 1;
+      return d.counts[b].sessions - d.counts[a].sessions;
+    });
+    var rows = voiceRows();
+    panel.innerHTML =
+      '<div class="adm-vhead">' +
+        '<div><h3 class="adm-vtitle">Voice assistant conversations</h3>' +
+        '<p class="adm-muted">What customers said, what Saathi said back, how long they waited for her voice — and every turn that failed them. ' +
+        'Phone numbers and emails are masked, one-time codes never recorded, kept 30 days.' + (d.db ? '' : ' <b>Stored locally on this server (no database connected).</b>') + '</p></div>' +
+      '</div>' +
+      '<div class="adm-vstats">' +
+        kpiCard('Conversations', st.sessions, st.turns + ' customer turns', '#0077B6') +
+        kpiCard('Typical wait', st.medianMs == null ? '—' : secs(st.medianMs), 'customer stops → her voice', '#0B6E4F') +
+        kpiCard('9 in 10 under', st.p90Ms == null ? '—' : secs(st.p90Ms), Math.round(st.slowShare * 100) + '% over ' + secs(d.slowMs), '#D97706') +
+        kpiCard('With problems', bad, st.withRed + ' with a red one', '#DC2626') +
+        kpiCard('AI-reviewed', st.reviewed, st.achievedNo + ' did not get what they wanted', '#7C3AED') +
+      '</div>' +
+      (tiles.length ? '<div class="adm-vstuck"><div class="adm-vstuck-h">Where customers are getting stuck</div><div class="adm-vtiles">' +
+        tiles.map(function (code) {
+          var p = d.problems[code] || { label: code, sev: 'amber' }, c = d.counts[code];
+          return '<button class="adm-vtile adm-vtile--' + p.sev + (voiceFilter.problem === code ? ' active' : '') + '" data-vproblem="' + esc(code) + '">' +
+            '<b>' + esc(p.label) + '</b><span>' + c.turns + ' turn' + (c.turns === 1 ? '' : 's') + ' · ' + c.sessions + ' conversation' + (c.sessions === 1 ? '' : 's') + '</span></button>';
+        }).join('') + '</div></div>' : '') +
+      '<div class="adm-toolbar adm-vtools">' +
+        '<button class="adm-vpill' + (!voiceFilter.bad && !voiceFilter.problem ? ' active' : '') + '" data-vall>All (' + d.sessions.length + ')</button>' +
+        '<button class="adm-vpill' + (voiceFilter.bad ? ' active' : '') + '" data-vbad>Only the ones that went wrong (' + bad + ')</button>' +
+        (voiceFilter.problem ? '<button class="adm-vpill active" data-vclear>' + esc((d.problems[voiceFilter.problem] || {}).label || voiceFilter.problem) + ' ✕</button>' : '') +
+        '<input class="adm-input adm-search" id="adm-vsearch" placeholder="Search what was said, a page, a language…" value="' + esc(voiceFilter.q) + '">' +
+        '<button class="adm-btn" id="adm-vreviewall"' + (toReview ? '' : ' disabled') + '>✨ Review ' + (toReview ? toReview + ' with problems' : 'all') + ' with AI</button>' +
+      '</div>' +
+      '<div class="adm-vlist">' + (rows.length ? rows.slice(0, 150).map(voiceCard).join('') :
+        '<div class="adm-empty">' + (d.sessions.length ? 'Nothing matches that filter.' : 'No conversations recorded yet — talk to the voice assistant on the store and they appear here.') + '</div>') + '</div>';
+
+    panel.querySelectorAll('[data-vproblem]').forEach(function (b) {
+      b.addEventListener('click', function () { var c = b.getAttribute('data-vproblem'); voiceFilter.problem = voiceFilter.problem === c ? null : c; voiceFilter.bad = false; drawVoice(); });
+    });
+    var all = panel.querySelector('[data-vall]'); if (all) all.addEventListener('click', function () { voiceFilter = { problem: null, bad: false, q: voiceFilter.q }; drawVoice(); });
+    var badb = panel.querySelector('[data-vbad]'); if (badb) badb.addEventListener('click', function () { voiceFilter.bad = !voiceFilter.bad; voiceFilter.problem = null; drawVoice(); });
+    var clr = panel.querySelector('[data-vclear]'); if (clr) clr.addEventListener('click', function () { voiceFilter.problem = null; drawVoice(); });
+    var search = document.getElementById('adm-vsearch');
+    search.addEventListener('input', function () {
+      voiceFilter.q = search.value;
+      var list = panel.querySelector('.adm-vlist'), r = voiceRows();
+      list.innerHTML = r.length ? r.slice(0, 150).map(voiceCard).join('') : '<div class="adm-empty">Nothing matches that filter.</div>';
+      wireVoiceCards();
+    });
+    document.getElementById('adm-vreviewall').addEventListener('click', reviewAll);
+    wireVoiceCards();
+  }
+
+  function voiceCard(s) {
+    var dur = Math.max(0, Math.round((s.lastAt - s.startedAt) / 1000));
+    var open = voiceOpen[s.sid];
+    return '<div class="adm-vcard' + (s.red ? ' adm-vcard--red' : Object.keys(s.problems).length ? ' adm-vcard--amber' : '') + '" data-vsid="' + esc(s.sid) + '">' +
+      '<button class="adm-vcard-h" data-vtoggle="' + esc(s.sid) + '">' +
+        '<div class="adm-vcard-meta"><b>' + esc(fmtDate(s.startedAt)) + '</b>' +
+          '<span>' + s.turns + ' turn' + (s.turns === 1 ? '' : 's') + ' · ' + (dur >= 60 ? Math.round(dur / 60) + ' min' : dur + 's') + ' · ' + esc(langs(s.langs) || '—') + ' · ' + esc(s.device || '') + (s.signedIn ? ' · signed in' : '') + '</span>' +
+          '<i>“' + esc(s.firstSaid || '…') + '”</i></div>' +
+        '<div class="adm-vcard-chips">' + verdict(s.review) + Object.keys(s.problems).map(function (p) { return vChip(p, s.problems[p]); }).join('') +
+          (Object.keys(s.problems).length ? '' : '<span class="adm-vchip adm-vchip--ok">No problems found</span>') + '</div>' +
+      '</button>' +
+      (open ? '<div class="adm-vbody">' + voiceBody(s, open) + '</div>' : '') +
+    '</div>';
+  }
+
+  function voiceBody(s, o) {
+    var r = o.review, n = 0;
+    var lines = o.items.map(function (it) {
+      var chips = (it.problems || []).map(function (p) { return vChip(p, 1); }).join('');
+      var bad = (it.problems || []).length ? ' adm-vline--bad' : '';
+      var time = '<span class="adm-vtime">' + esc(new Date(it.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })) + '</span>';
+      n++;
+      if (it.t === 'ev') {
+        var label = EV_TEXT[it.kind] || it.kind, det = it.detail || '';
+        if (it.kind === 'barge') det = 'heard ' + Math.round(parseFloat(det) * 100) + '% of her line';
+        return '<div class="adm-vline adm-vline--ev' + bad + '" data-vline="' + n + '"><span class="adm-vno">' + n + '</span>' + time + '<span>· ' + esc(label) + (det ? ': ' + esc(det) : '') + '</span>' + chips + '</div>';
+      }
+      var who = it.t === 'you' ? 'Customer' : 'Saathi';
+      var meta = it.t === 'you'
+        ? esc((LANG_NAME[it.lang] || it.lang || '') + (it.via && it.via !== 'voice' ? ' · ' + it.via : ''))
+        : (it.voiceMs != null ? '<span class="adm-vwait adm-vwait--' + (it.voiceMs > voiceData.slowMs ? 'slow' : it.voiceMs > 2000 ? 'mid' : 'fast') + '">waited ' + secs(it.voiceMs) + '</span>'
+           : it.ms != null ? '<span class="adm-vwait">reply ' + secs(it.ms) + ' · no voice</span>' : '');
+      return '<div class="adm-vline adm-vline--' + it.t + bad + '" data-vline="' + n + '"><span class="adm-vno">' + n + '</span>' + time +
+        '<div class="adm-vsay"><div class="adm-vwho">' + who + ' <small>' + meta + '</small>' + chips + '</div><div>' + esc(it.text) + '</div></div></div>';
+    }).join('');
+    var rev = r ? '<div class="adm-vreview">' +
+        '<div class="adm-vreview-h">AI review ' + verdict(r) + '<span class="adm-muted"> · ' + esc(fmtDate(r.at)) + '</span></div>' +
+        (r.wanted ? '<p><b>They wanted:</b> ' + esc(r.wanted) + '</p>' : '') +
+        (r.summary ? '<p>' + esc(r.summary) + '</p>' : '') +
+        (r.issues && r.issues.length ? '<ol class="adm-vissues">' + r.issues.map(function (x) {
+          return '<li><b>' + esc(x.type.replace(/_/g, ' ')) + (x.line ? ' · line ' + x.line : '') + ':</b> ' + esc(x.what) +
+            (x.fix ? '<br><span class="adm-vfix">Fix: ' + esc(x.fix) + '</span>' : '') + '</li>';
+        }).join('') + '</ol>' : '<p class="adm-muted">No problems found by the review.</p>') +
+      '</div>' : '';
+    return rev + '<div class="adm-vlines">' + lines + '</div>' +
+      '<div class="adm-vactions"><button class="adm-btn" data-vreview="' + esc(s.sid) + '">✨ ' + (r ? 'Review again' : 'Analyze with AI') + '</button>' +
+      '<button class="adm-btn adm-btn--danger" data-vdelete="' + esc(s.sid) + '">Delete transcript</button>' +
+      '<span class="adm-muted">Conversation ' + esc(s.sid) + '</span></div>';
+  }
+
+  function wireVoiceCards() {
+    var panel = document.getElementById('adm-panel');
+    panel.querySelectorAll('[data-vtoggle]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var sid = b.getAttribute('data-vtoggle');
+        if (voiceOpen[sid]) { delete voiceOpen[sid]; redrawCard(sid); return; }
+        api('GET', '/api/admin/voice/' + encodeURIComponent(sid)).then(function (o) { voiceOpen[sid] = o; redrawCard(sid); })
+          .catch(function (e) { toast('Could not open: ' + e.message); });
+      });
+    });
+    panel.querySelectorAll('[data-vreview]').forEach(function (b) {
+      b.addEventListener('click', function () { reviewOne(b.getAttribute('data-vreview'), b); });
+    });
+    panel.querySelectorAll('[data-vdelete]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var sid = b.getAttribute('data-vdelete');
+        if (!window.confirm('Delete this conversation for good?')) return;
+        api('DELETE', '/api/admin/voice/' + encodeURIComponent(sid)).then(function () {
+          voiceData.sessions = voiceData.sessions.filter(function (s) { return s.sid !== sid; });
+          delete voiceOpen[sid]; drawVoice(); toast('Transcript deleted');
+        }).catch(function (e) { toast('Could not delete: ' + e.message); });
+      });
+    });
+  }
+  function redrawCard(sid) {
+    var el = document.querySelector('[data-vsid="' + sid + '"]'), s = voiceData.sessions.filter(function (x) { return x.sid === sid; })[0];
+    if (!el || !s) return;
+    var tmp = document.createElement('div'); tmp.innerHTML = voiceCard(s);
+    el.parentNode.replaceChild(tmp.firstChild, el);
+    wireVoiceCards();
+  }
+  function reviewOne(sid, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Reading the conversation…'; }
+    return api('POST', '/api/admin/voice/' + encodeURIComponent(sid) + '/review').then(function (d) {
+      var s = voiceData.sessions.filter(function (x) { return x.sid === sid; })[0];
+      if (s) s.review = { achieved: d.review.achieved, summary: d.review.summary, stale: false };
+      return api('GET', '/api/admin/voice/' + encodeURIComponent(sid)).then(function (o) { voiceOpen[sid] = o; redrawCard(sid); });
+    }).catch(function (e) { toast('Review failed: ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '✨ Analyze with AI'; } });
+  }
+  // every conversation with problems that has no (fresh) review yet, one by one
+  function reviewAll() {
+    var btn = document.getElementById('adm-vreviewall');
+    var todo = voiceData.sessions.filter(function (s) { return Object.keys(s.problems).length && (!s.review || s.review.stale); }).slice(0, 25);
+    var done = 0;
+    btn.disabled = true;
+    (function next() {
+      if (!todo.length) { toast('Reviewed ' + done + ' conversation' + (done === 1 ? '' : 's')); renderVoice(); return; }
+      btn.textContent = 'Reviewing ' + (done + 1) + ' of ' + (done + todo.length) + '…';
+      var s = todo.shift();
+      api('POST', '/api/admin/voice/' + encodeURIComponent(s.sid) + '/review').then(function () { done++; next(); }).catch(function () { next(); });
+    })();
   }
 
   /* ---------- orders panel ---------- */
@@ -729,6 +940,14 @@
         return [r.vertical, r.businessName, r.fullName, r.mobile, r.email, r.pincode, r.city, r.state, r.subType, r.currentProducts, r.message, fmtDate(r.appliedAt)];
       });
       download('dcal-b2b-enquiries.csv', toCSV(['Site', 'Place', 'Contact', 'Mobile', 'Email', 'Pincode', 'City', 'State', 'Type', 'Size', 'Message', 'ReceivedAt'], brows));
+    } else if (tab === 'voice') {
+      if (!voiceData) return;
+      var vrows = voiceRows().map(function (s) {
+        return [s.sid, fmtDate(s.startedAt), s.turns, langs(s.langs), s.device, s.signedIn ? 'yes' : 'no', s.firstSaid,
+          Object.keys(s.problems).map(function (p) { return ((voiceData.problems[p] || {}).label || p) + (s.problems[p] > 1 ? ' x' + s.problems[p] : ''); }).join(' | '),
+          s.review ? s.review.achieved : '', s.review ? s.review.summary : ''];
+      });
+      download('dcal-voice-conversations.csv', toCSV(['Conversation', 'Started', 'Turns', 'Languages', 'Device', 'SignedIn', 'FirstSaid', 'Problems', 'AIVerdict', 'AISummary'], vrows));
     } else {
       var orows = allOrders().map(function (r) {
         var o = r.o, a = o.address || {};

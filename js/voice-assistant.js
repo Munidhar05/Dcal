@@ -1447,7 +1447,7 @@
     }
     u.onend = end;
     u.onerror = end;
-    u.onstart = function () { voiceStartedAt = Date.now(); };
+    u.onstart = function () { voiceStartedAt = Date.now(); vlogVoice(); };
     u.onboundary = function (ev) { if (ev && typeof ev.charIndex === 'number') utterCharIndex = ev.charIndex; };
     ttsUtter = u;
     setSpeaking(true);                            // talking-lady avatar on
@@ -1530,7 +1530,7 @@
       if (settled) return; settled = true; release();
       if (!started && onFail && mine === speakSeq) onFail(); else finish();
     }
-    a.onplaying = function () { started = true; if (!voiceStartedAt) voiceStartedAt = Date.now(); };
+    a.onplaying = function () { started = true; if (!voiceStartedAt) voiceStartedAt = Date.now(); vlogVoice(); };
     a.onended = ok;
     a.onerror = bad;
     // A streamed reply has no Content-Length, so the browser only learns how long
@@ -1579,7 +1579,7 @@
     }).then(function (blob) {
       var url = URL.createObjectURL(blob);
       playAudio(url, mine, finish, null, url);
-    }).catch(function () { speakBrowser(text, mine, finish); });   // API down -> browser voice
+    }).catch(function () { if (!vlogLeaving && mine === speakSeq) vlogEv('tts_failed'); speakBrowser(text, mine, finish); });   // API down -> browser voice
   }
 
   // Pull a line she is about to say into the caches ahead of time. The server
@@ -1708,6 +1708,7 @@
         hearLang = heard;
         if (heard !== lang) { applyLang(heard); chosenIntent = null; }   // re-match in the right language
       }
+      vlogTurn('recogniser', Date.now());
       handleQuery(chosenText, chosenIntent);
     };
     r.onerror = function (ev) {
@@ -1901,6 +1902,7 @@
     silentSince = 0;                                               // someone is talking
     setStatus(UI[lang].thinking);
     var myAsk = ++askSeq;            // this turn — superseded if they speak again before it is answered
+    vlogTurn('voice', Date.now() - 550);   // they stopped speaking 550ms ago: the silence that ended the clip
     armThinking();                   // keep watching the mic while the server thinks
     // The sign-in box is open, so this is a number, a code or a name for it:
     // only the words are needed. Speech-to-text alone — no brain to pay for
@@ -1951,6 +1953,7 @@
         var said = d.text ? autoCorrect(d.text) : '';
         if (!said) { localMiss(); return; }
         followLang(d.spoke || d.lang, d.asked, d.lang);
+        vlogYouLang = d.spoke || d.lang;
         listenRetry = 0;
         if (!introduced) {
           markIntroduced();
@@ -1975,7 +1978,7 @@
         addYou(said);
         deliverAI(d, said);
       })
-      .catch(function () { if (myAsk === askSeq) sendViaStt(blob, myAsk); });   // one-shot path unavailable
+      .catch(function () { if (myAsk === askSeq) { vlogEv('ask_failed'); sendViaStt(blob, myAsk); } });   // one-shot path unavailable
   }
 
   // /api/ask's answer: one JSON object, or — when the server can — two lines,
@@ -2036,6 +2039,7 @@
         if (!text) { localMiss(); return; }                        // heard only noise
         // FOLLOW THE CUSTOMER: they spoke Tamil -> everything from here is Tamil.
         followLang(spokeIn(d.lang, text));
+        vlogYouLang = spokeIn(d.lang, text);
         listenRetry = 0;
         // Their FIRST words back to the opening hello. We now know their
         // language, so introduce ourselves in it. If all they said was
@@ -2056,6 +2060,7 @@
       })
       .catch(function () {
         setStatus('');
+        vlogEv('stt_failed');
         sttReady = false;                    // server unhappy -> use the browser recogniser
         recheck(checkSTT, 0);                // ...until it is back
         if (SR && opened) startListening();
@@ -2065,6 +2070,7 @@
   // nothing intelligible came back — same gentle nudge the recogniser gives,
   // then listen again so they can simply repeat themselves without tapping
   function localMiss() {
+    vlogEv('heard_nothing');
     missCount++;
     var fb = missCount >= 2 ? FALLBACK2[lang] : FALLBACK[lang];
     addBot(fb); speak(fb, listenAgain);
@@ -2485,6 +2491,7 @@
   // with their first word already on tape.
   function bargeCommit() {
     var said = spokenSoFar();
+    vlogEv('barge', speakingText ? (said.length / speakingText.length).toFixed(2) : '0');   // how much of her line they heard
     var thr = vadSt ? vadSt.probeMinPeak * 1.5 : 0;     // the background under their voice
     vadStop();
     voicePaused = false;
@@ -2588,6 +2595,7 @@
     var done = false;
     function nav() {
       if (done) return; done = true;
+      vlogEv('nav', url);
       if (!isExternal) closeMic();             // the page is going away; let the mic go cleanly
       // Opening a product she was showing: light it again when it arrives (INIT).
       var ps = /^\/product\/([a-z0-9-]+)$/.exec(url);
@@ -2696,6 +2704,7 @@
   // -> a URL to open once she has spoken, or null
   function runAction(act) {
     if (!act || !act.do) return null;
+    vlogEv('act', act.do + (act.product ? ' ' + act.product : '') + (act.code ? ' ' + act.code : ''));
     var S = window.DcalStore;
     try {
       switch (act.do) {
@@ -2844,6 +2853,7 @@
     say = say.replace('{p}', p).replace('{n}', String(cmd.qty || '')).replace('{c}', cmd.code || '');
     missCount = 0;
     addBot(say);
+    vlogEv('act', cmd.do + (cmd.product ? ' ' + cmd.product : ''));
     sayReply(say, nav, false, cmd.product);
     return true;
   }
@@ -2951,6 +2961,7 @@
   function signWaiting() { var A = window.DcalAuth; return (A && A.waiting && A.waiting()) || null; }
   // What to say as the box opens: ask for whatever it is actually showing.
   function signInAsk() {
+    vlogEv('login_needed');
     var k = signWaiting(), T = signSay();
     signConfirm = null; signPartial = '';
     return k === 'phone' ? T.ask : k === 'email' ? T.askEmail : (CMD_SAY[lang] || CMD_SAY.en).login;
@@ -3066,6 +3077,7 @@
     (function check() {
       var now = signWaiting(), err = A.error ? A.error() : '';
       if (A.isLoggedIn()) {
+        vlogEv('signin_ok');
         setStatus('');
         var line = T.done + (signThen ? ' ' + signThen : ''), nav = null;
         if (signThenCheckout && S) nav = S.checkout();
@@ -3073,7 +3085,7 @@
         addBot(line); sayReply(line, nav, false);
         return;
       }
-      if (err) { setStatus(''); signAnswer(prev === 'code' ? T.wrongCode : T.failed); return; }
+      if (err) { vlogEv(prev === 'code' ? 'otp_wrong' : 'signin_failed', err); setStatus(''); signAnswer(prev === 'code' ? T.wrongCode : T.failed); return; }
       if (now && now !== prev) {
         setStatus('');
         signAnswer(now === 'code' ? (prev === 'email' ? T.codeEmail : T.code) : now === 'name' ? T.name : T.askEmail);
@@ -3218,7 +3230,7 @@
     if (!heard) return false;                                       // "do you have any coupons?" — the brain answers that
     var m = couponMatch(heard);
     if (m && m.exact) { couponApply(m.code); return true; }
-    if (m) { couponAsk = m.code; couponLast = transcript.length + 1; return signAnswer(cpSay().ask.replace('{c}', m.code)); }
+    if (m) { couponAsk = m.code; couponLast = transcript.length + 1; vlogEv('coupon_asked', heard + ' -> ' + m.code); return signAnswer(cpSay().ask.replace('{c}', m.code)); }
     couponApply(String(heard).toUpperCase());                       // nothing like it exists: try it as heard
     return true;
   }
@@ -3230,6 +3242,7 @@
       var T = cpSay();
       setStatus('');
       couponLast = transcript.length + 1;
+      vlogEv(r.ok ? 'coupon_applied' : r.reason === 'invalid' ? 'coupon_invalid' : 'coupon_rejected', code);
       signAnswer(r.ok ? T.applied.replace('{c}', code).replace('{t}', String(S.total()))
                : (r.reason === 'invalid' ? T.invalid : T.cannot).replace('{c}', code));
     });
@@ -3370,6 +3383,7 @@
         if (!r || mine !== coSeq) return;
         var T = coSay();
         coAsk = null;
+        vlogEv('form_filled', Object.keys(f).join(',') + (r.missing.length ? ' / missing ' + r.missing.join(',') : ' / complete'));
         if (r.missing.length) { signAnswer(T.got + ' ' + T.ask.replace('{f}', fieldName(r.missing[0]))); return; }
         coAsk = 'save';
         signAnswer(T.confirm.replace('{a}', readBack(r.values)));
@@ -3388,7 +3402,7 @@
       if (r && r.missing.length) { signAnswer(T.ask.replace('{f}', fieldName(r.missing[0]))); return; }   // not complete yet
       if (!S.checkoutNext()) return;
       var now = coStep();
-      if (before === 'form' && now === 'form') { var e = S.checkoutError(); signAnswer(e ? T.cant.replace('{e}', e) : T.fix); return; }
+      if (before === 'form' && now === 'form') { var e = S.checkoutError(); vlogEv('form_error', e); signAnswer(e ? T.cant.replace('{e}', e) : T.fix); return; }
       if (before === 'form' && now === 'pick') S.checkoutNext();   // saved and selected: "continue" means deliver there
       coAnnounce(before);
     });
@@ -3400,6 +3414,7 @@
     (function wait() {
       var now = coStep(), T = coSay();
       if (now === before && Date.now() - t0 < 4000) { setTimeout(wait, 100); return; }   // starting checkout is not instant
+      if (now && now !== before) vlogEv('checkout', now);
       if (now === 'form') { if (!coPrompted) { coPrompted = true; coAsk = null; signAnswer(T.start); } return; }
       if (now === 'pick') { coAsk = 'deliver'; signAnswer(T.pick); return; }
       if (now === 'summary') { coAsk = 'pay'; signAnswer(T.summary.replace('{t}', String(S.total()))); return; }
@@ -3427,9 +3442,10 @@
     var S = window.DcalStore, T = coSay();
     if (S.paymentMethod() === 'cod') {
       if (!confirmed) { coAsk = 'place'; return signAnswer(T.place.replace('{t}', String(S.total())).replace('{m}', T.cod)); }
-      if (S.checkoutNext()) signAnswer(T.placing);
+      if (S.checkoutNext()) { vlogEv('order_place', 'cod ' + S.total()); signAnswer(T.placing); }
       return true;
     }
+    vlogEv('payment_handoff', S.paymentMethod() + ' ' + S.total());
     goQuiet();
     var line = T.razorpay;
     addBot(line);
@@ -3515,13 +3531,14 @@
       if (!d || !d.reply) return null;
       if (d.asked || (d.lang && d.lang !== lang)) followLang(spoke, d.asked, d.lang);   // "explain it in Telugu"
       return d;
-    }).catch(function () { return null; });     // network error -> offline fallback
+    }).catch(function () { vlogEv('ai_unreachable', 'network'); return null; });     // network error -> offline fallback
   }
 
   var missCount = 0;   // consecutive not-understood answers -> escalate the hint
   // "Sorry, I did not understand — ask me about prices / how to buy / your
   // order." Said instead of guessing. Escalates if it happens twice running.
   function sayFallback() {
+    vlogEv('fallback');
     missCount++;
     var fb = missCount >= 2 ? FALLBACK2[lang] : FALLBACK[lang];
     addBot(fb); speak(fb, listenAgain);      // stay open so they can just try again
@@ -4058,6 +4075,69 @@
     setTimeout(scrollChatToEnd, 420);        // after the half-height transition settles
   }
 
+  /* ---- THE CONVERSATION, FOR THE ADMIN --------------------------------------
+     Every line of the conversation goes to the server (/api/voice/log) for
+     the admin dashboard's "Voice assistant" tab, which works out what went
+     wrong in it (server/voicelog.js): with how long the customer waited for
+     her VOICE after they stopped speaking, and what happened around it — a
+     fallback, the brain unreachable, a coupon checked, a page opened.
+     Sent after the fact, batched, never waited on: it adds nothing to a
+     reply. A one-time code said aloud is never sent; phone numbers and emails
+     are masked again on the server. */
+  var VLOG_URL = '/api/voice/log', VLOG_SID_KEY = 'dcal_voice_sid';
+  var vlogQueue = [], vlogTimer = null;
+  var vlogEnd = 0;          // when the customer stopped speaking, this turn
+  var vlogVia = 'voice';    // how this turn reached her: voice / typed / recogniser
+  var vlogYouLang = null;   // the language speech-to-text heard them speak
+  var vlogBot = null;       // her line whose voice has not started yet
+  var vlogLeaving = false;  // the page is going away: what stops now is not a failure
+  function vlogSid(fresh) {
+    var s = null;
+    try { s = fresh ? null : sessionStorage.getItem(VLOG_SID_KEY); } catch (e) {}
+    if (!s) {
+      s = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      try { sessionStorage.setItem(VLOG_SID_KEY, s); } catch (e) {}
+    }
+    return s;
+  }
+  // A turn begins: the customer stopped speaking at `endedAt`.
+  function vlogTurn(via, endedAt) { vlogVia = via; vlogEnd = endedAt || Date.now(); }
+  function vlogPush(item) {
+    item.at = Date.now(); item.page = location.pathname;
+    vlogQueue.push(item);
+    if (vlogQueue.length > 80) vlogQueue.shift();
+    vlogSchedule(1500);
+  }
+  function vlogEv(kind, detail) { vlogPush({ t: 'ev', kind: kind, detail: detail == null ? undefined : String(detail) }); }
+  // Her voice has just started: that is how long the customer waited.
+  function vlogVoice() {
+    var b = vlogBot;
+    if (!b || speakingText !== b.text) return;
+    vlogBot = null;
+    if (vlogEnd) b.voiceMs = Date.now() - vlogEnd;
+    vlogSchedule(300);
+  }
+  function vlogSchedule(ms) { if (!vlogTimer) vlogTimer = setTimeout(function () { vlogTimer = null; vlogFlush(false); }, ms); }
+  function vlogFlush(leaving) {
+    if (!vlogQueue.length) return;
+    // a line whose voice has not started yet waits for it (up to 6s)
+    if (!leaving && vlogBot && Date.now() - vlogBot.at < 6000) { vlogSchedule(800); return; }
+    vlogBot = null;
+    var S = window.DcalStore, signedIn = false;
+    try { signedIn = !!(S && S.loggedIn && S.loggedIn()); } catch (e) {}
+    while (vlogQueue.length) {
+      var body;
+      try { body = JSON.stringify({ sid: vlogSid(), signedIn: signedIn, items: vlogQueue.splice(0, 25) }); } catch (e) { return; }
+      try {
+        if (leaving && navigator.sendBeacon) navigator.sendBeacon(VLOG_URL, new Blob([body], { type: 'application/json' }));
+        else fetch(VLOG_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: true }).catch(function () {});
+      } catch (e) {}
+    }
+  }
+  window.addEventListener('pagehide', function () { vlogLeaving = true; vlogFlush(true); });
+  window.addEventListener('beforeunload', function () { vlogLeaving = true; });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') vlogFlush(true); });
+
   // addMsg(who, text[, restoring]) — when restoring from storage, don't re-save
   function addMsg(who, text, restoring) {
     var wrap = document.createElement('div');
@@ -4068,7 +4148,19 @@
     wrap.appendChild(b);
     el.body.appendChild(wrap);
     el.body.scrollTop = el.body.scrollHeight;
-    if (!restoring) { transcript.push({ who: who, text: text }); saveChat(); }
+    if (!restoring) {
+      transcript.push({ who: who, text: text }); saveChat();
+      if (who === 'you') {
+        // a one-time code said aloud is never recorded
+        var heard = (signWaiting() === 'code' && spokenDigits(text).length >= 4) ? '[one-time code]' : text;
+        vlogPush({ t: 'you', text: heard, lang: vlogYouLang || lang, via: vlogVia });
+        vlogYouLang = null;
+      } else {
+        var bl = { t: 'bot', text: text, lang: lang, ms: vlogEnd ? Date.now() - vlogEnd : undefined };
+        vlogPush(bl);
+        vlogBot = bl;                    // how long they wait for its voice is filled in when it starts
+      }
+    }
     return wrap;
   }
   // The customer talked over her. The reply stays on screen in full, but the
@@ -4360,10 +4452,14 @@
 
   // spoke: heard this turn (may be unknown); asked: a language they named; reply: the answer's language
   function followLang(spoke, asked, reply) {
-    if (asked && LANGS[asked]) { setAsked({ want: asked, spoke: (spoke && LANGS[spoke]) ? spoke : lang }); applyLang(asked); return; }
+    if (asked && LANGS[asked]) {
+      if (!askedLang || askedLang.want !== asked) vlogEv('lang', asked + ' asked');
+      setAsked({ want: asked, spoke: (spoke && LANGS[spoke]) ? spoke : lang }); applyLang(asked); return;
+    }
     if (!spoke || !LANGS[spoke]) { if (reply && LANGS[reply]) applyLang(reply); return; }
     if (askedLang && askedLang.spoke === spoke) { applyLang(askedLang.want); return; }
     if (askedLang) setAsked(null);              // a different language now: follow it
+    if (spoke !== lang) vlogEv('lang', spoke + ' spoken');
     applyLang(spoke);
   }
 
@@ -4475,6 +4571,7 @@
   function closePanel() {
     minimizePanel();
     // user closed the assistant -> end the conversation (clear it)
+    vlogFlush(true); vlogSid(true);     // ...and its transcript: the next one starts afresh
     clearChat();
     el.body.innerHTML = '';
     greeted = false;
@@ -4518,7 +4615,7 @@
     open: openPanel,
     close: closePanel,
     listen: startListening,
-    ask: function (text) { openPanel(); turnSpoke = null; handleQuery(text); },
+    ask: function (text) { openPanel(); turnSpoke = null; vlogTurn('typed', Date.now()); handleQuery(text); },
     setLanguage: setLang,
     speak: speak,
     // exposed for diagnostics / automated checks
