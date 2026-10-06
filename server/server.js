@@ -1463,6 +1463,61 @@ app.post('/api/admin/customers/restore', adminAuth, async (req, res) => {
   try { res.json({ user: await restoreDoc(User, req.body) }); }
   catch (e) { serverErr(res, e); }
 });
+/* ---------- voice assistant transcripts (admin "Voice assistant" tab) ----------
+   The widget posts each conversation as it happens; the admin reads them,
+   with what went wrong in each found by server/voicelog.js. Nothing here is
+   readable without the admin password. Works without MongoDB too (a local
+   file under server/, which is never served). */
+const voicelog = require('./voicelog');
+voicelog.setDbReady(() => dbReady);
+app.post('/api/voice/log', rateLimit({ windowMs: 60 * 1000, max: 90, tag: 'voicelog' }), async (req, res) => {
+  try { await voicelog.append(req.body || {}, req.get('user-agent')); } catch (e) { try { console.error('voicelog:', e && e.message); } catch (x) {} }
+  res.status(204).end();                     // never make the page wait on this, never tell it why
+});
+app.get('/api/admin/voice', adminAuth, async (req, res) => {
+  try {
+    const list = (await voicelog.all(Math.min(2000, parseInt(req.query.limit, 10) || 500))).map(voicelog.summaryOf);
+    const counts = {};
+    list.forEach((s) => Object.keys(s.problems).forEach((p) => {
+      const c = counts[p] || (counts[p] = { turns: 0, sessions: 0 });
+      c.turns += s.problems[p]; c.sessions += 1;
+    }));
+    const waits = [].concat.apply([], list.map((s) => s.voiceMs)).sort((a, b) => a - b);
+    const pct = (q) => (waits.length ? waits[Math.min(waits.length - 1, Math.floor(q * waits.length))] : null);
+    res.json({
+      sessions: list.map((s) => Object.assign({}, s, { voiceMs: undefined })),
+      counts, problems: voicelog.PROBLEMS,
+      stats: {
+        sessions: list.length, turns: list.reduce((n, s) => n + s.turns, 0),
+        withRed: list.filter((s) => s.red > 0).length,
+        medianMs: pct(0.5), p90Ms: pct(0.9), slowShare: waits.length ? waits.filter((w) => w > voicelog.SLOW_MS).length / waits.length : 0,
+        reviewed: list.filter((s) => s.review).length, achievedNo: list.filter((s) => s.review && s.review.achieved === 'no').length
+      },
+      slowMs: voicelog.SLOW_MS, db: dbReady
+    });
+  } catch (e) { serverErr(res, e); }
+});
+app.get('/api/admin/voice/:sid', adminAuth, async (req, res) => {
+  try {
+    const s = await voicelog.one(req.params.sid);
+    if (!s) return res.status(404).json({ error: 'not found' });
+    const a = voicelog.analyze(s);
+    res.json({ session: Object.assign({}, voicelog.summaryOf(s), { voiceMs: undefined }), items: a.items, review: s.review || null });
+  } catch (e) { serverErr(res, e); }
+});
+app.post('/api/admin/voice/:sid/review', adminAuth, rateLimit({ windowMs: 60 * 1000, max: 30, tag: 'voicereview' }), async (req, res) => {
+  if (!assistant.ENABLED || !assistant.completeWith) return res.status(503).json({ error: 'AI is not configured' });
+  try {
+    const r = await voicelog.review(req.params.sid, assistant.completeWith);
+    if (!r) return res.status(404).json({ error: 'not found' });
+    res.json({ review: r });
+  } catch (e) { serverErr(res, e); }
+});
+app.delete('/api/admin/voice/:sid', adminAuth, async (req, res) => {
+  try { await voicelog.remove(req.params.sid); res.json({ ok: true }); }
+  catch (e) { serverErr(res, e); }
+});
+
 app.post('/api/admin/dealers/restore', adminAuth, async (req, res) => {
   if (!requireDB(res)) return;
   try { res.json({ dealer: await restoreDoc(Dealer, req.body) }); }

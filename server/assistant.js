@@ -659,4 +659,13 @@ async function handleAddress(req, res) {
   }
 }
 
-module.exports = { handle, handleAddress, health, answer, extractAddress, askedLanguage, langOfScript, ENABLED, MODEL };
+// One JSON-answering model call with this assistant's model — for the admin's
+// transcript review (server/voicelog.js), which brings its own messages.
+function completeWith(opts) {
+  if (!ENABLED || !client) return Promise.reject(new Error('ai_disabled'));
+  const o = Object.assign({ model: MODEL }, opts);
+  if (IS_OPENROUTER) o.provider = { sort: 'throughput' };
+  return completeJson(o);
+}
+
+module.exports = { handle, handleAddress, health, answer, extractAddress, askedLanguage, langOfScript, completeWith, ENABLED, MODEL };
