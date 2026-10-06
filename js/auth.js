@@ -1643,14 +1643,25 @@
     var id = get('id'); if (id) addr.id = id;
     return addr;
   }
+  // what is still missing or wrong, in the order the form asks for it
+  var ADDR_MSG = {
+    name: 'Please enter your full name.', phone: 'Mobile number must be exactly 10 digits.',
+    line: 'Please enter your full address.', pincode: 'Pincode must be exactly 6 digits.',
+    state: 'Please select your state.', city: 'Please enter your city / district.'
+  };
+  function addressMissing(addr) {
+    var miss = [];
+    if (addr.name.length < 2) miss.push('name');
+    if (!/^\d{10}$/.test(addr.phone)) miss.push('phone');
+    if (addr.line.length < 5) miss.push('line');
+    if (!/^\d{6}$/.test(addr.pincode)) miss.push('pincode');
+    if (!addr.state) miss.push('state');
+    if (!addr.city) miss.push('city');
+    return miss;
+  }
   function validateAddress(addr) {
-    if (addr.name.length < 2) return 'Please enter your full name.';
-    if (!/^\d{10}$/.test(addr.phone)) return 'Mobile number must be exactly 10 digits.';
-    if (addr.line.length < 5) return 'Please enter your full address.';
-    if (!/^\d{6}$/.test(addr.pincode)) return 'Pincode must be exactly 6 digits.';
-    if (!addr.state) return 'Please select your state.';
-    if (!addr.city) return 'Please enter your city / district.';
-    return '';
+    var m = addressMissing(addr)[0];
+    return m ? ADDR_MSG[m] : '';
   }
 
   // restrict an input to digits only, with a max length
@@ -1684,7 +1695,7 @@
     var box = document.querySelector('[data-addr-form="' + scope + '"]'); if (!box) return;
     var note = box.querySelector('[data-pin-note]');
     if (note) { note.className = 'dcal-pin-note'; note.textContent = 'Detecting location…'; }
-    fetch('https://api.postalpincode.in/pincode/' + pin)
+    return fetch('https://api.postalpincode.in/pincode/' + pin)
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var rec = data && data[0];
@@ -2377,13 +2388,302 @@
   /* ====================================================
      PUBLIC API + INIT
      ==================================================== */
+  /* ---- Signing in BY VOICE (js/voice-assistant.js) ----
+     A customer who cannot type is stuck at a box that wants a mobile number.
+     These let the voice assistant see what the open box is waiting for, type
+     what the customer SAID into it, and press that step's button — the same
+     button, so every check the box makes still applies. */
+  function shownField(n) { return !!(n && n.offsetWidth > 0 && !n.disabled); }
+  // -> {kind:'phone'|'code'|'name'|'email', input|boxes} for the open box, or null
+  function voiceField() {
+    if (!overlay || !overlay.classList.contains('open')) return null;
+    var step = modal.querySelector('.dcal-step.active');
+    if (!step) return null;
+    function first(sel) {
+      var a = step.querySelectorAll(sel);
+      for (var i = 0; i < a.length; i++) if (shownField(a[i])) return a[i];
+      return null;
+    }
+    var n, boxes = [].slice.call(step.querySelectorAll('[data-otp-boxes] input'));
+    if ((n = first('input[type="tel"]'))) return { kind: 'phone', input: n };     // all three phone steps
+    if (boxes.length && shownField(boxes[0])) return { kind: 'code', boxes: boxes };
+    if ((n = first('[data-em-code]'))) return { kind: 'code', input: n };
+    if ((n = first('[data-pf-name]')) && !n.value.trim()) return { kind: 'name', input: n };   // new account: name, then email
+    if ((n = first('input[type="email"]'))) return { kind: 'email', input: n };    // email step, profile, or under the Google button
+    return null;
+  }
+  // Type `value` into the field the box is waiting for. -> what is now in it, or null
+  function voiceFill(value) {
+    var f = voiceField();
+    if (!f) return null;
+    var v = String(value || '');
+    if (f.kind === 'email') v = v.trim().toLowerCase();
+    else if (f.kind === 'name') v = v.trim().slice(0, 60);
+    else v = v.replace(/\D/g, '').slice(0, f.kind === 'code' ? 6 : 10);
+    if (f.boxes) f.boxes.forEach(function (b, i) { b.value = v.charAt(i); });
+    else f.input.value = v;
+    // a stale "enter a valid number" under the field would contradict what is now in it
+    modal.querySelectorAll('.dcal-err.show').forEach(function (e) { e.textContent = ''; e.classList.remove('show'); });
+    return v;
+  }
+  // Press the button that belongs to that field — the first one after it.
+  function voiceSubmit() {
+    var f = voiceField();
+    if (!f) return false;
+    var field = f.input || f.boxes[0];
+    var btns = modal.querySelectorAll('.dcal-step.active .dcal-btn');
+    for (var i = 0; i < btns.length; i++) {
+      if (shownField(btns[i]) && (field.compareDocumentPosition(btns[i]) & Node.DOCUMENT_POSITION_FOLLOWING)) { btns[i].click(); return true; }
+    }
+    return false;
+  }
+  // The new-account step asks for a name AND an email. Said in one breath
+  // ("my name is … and my email is …"), each goes into its own box.
+  function voiceProfile() {
+    var n = overlay && overlay.classList.contains('open') && modal.querySelector('.dcal-step.active [data-pf-name]');
+    return shownField(n) ? n : null;
+  }
+  function voiceFillProfile(f) {
+    var n = voiceProfile();
+    if (!n) return null;
+    var e = modal.querySelector('.dcal-step.active [data-pf-email]');
+    if (f && f.name) n.value = String(f.name).trim().slice(0, 60);
+    if (f && f.email && e) e.value = String(f.email).trim().toLowerCase();
+    modal.querySelectorAll('.dcal-err.show').forEach(function (x) { x.textContent = ''; x.classList.remove('show'); });
+    return { name: n.value.trim(), email: e ? e.value.trim() : '' };
+  }
+  // The error the box is showing right now, if any (e.g. "Incorrect OTP").
+  function voiceError() {
+    var e = overlay && overlay.classList.contains('open') && modal.querySelector('.dcal-step.active .dcal-err.show');
+    return e ? e.textContent : '';
+  }
+
   window.DcalAuth = {
     open: openAuth,
     openProfile: openProfile,
     isLoggedIn: isLoggedIn,
     user: currentUser,
     logout: logout,
-    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } }
+    require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } },
+    // by voice: what the open box wants, type it in, press its button, read its error
+    waiting: function () { var f = voiceField(); return f ? f.kind : null; },
+    fill: voiceFill,
+    submit: voiceSubmit,
+    error: voiceError,
+    inProfile: function () { return !!voiceProfile(); },
+    fillProfile: voiceFillProfile
+  };
+
+  /* ====================================================
+     THE STORE BY VOICE  (window.DcalStore)
+     Everything a customer can do with a finger — add to the cart, change a
+     quantity, apply a coupon, start checkout, save to the wishlist — as plain
+     functions, so the voice assistant (js/voice-assistant.js) can do it for a
+     customer who cannot read. Each one goes through exactly the same code as
+     the buttons: same cart key, same login gate, same coupon checks, same
+     checkout. Nothing here touches the network except the coupon check the
+     cart page already makes.
+     ==================================================== */
+  var CATALOG = null, catalogWait = null;
+  function loadCatalog() {
+    if (CATALOG) return Promise.resolve(CATALOG);
+    if (catalogWait) return catalogWait;
+    catalogWait = fetch('/data/catalog.json', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (c) { CATALOG = c || {}; return CATALOG; })
+      .catch(function () { CATALOG = {}; return CATALOG; });
+    return catalogWait;
+  }
+  setTimeout(function () { loadCatalog(); }, 4000);          // warm, so the first "add" is instant
+  function slugOnThisPage() {
+    try { var m = location.pathname.match(/\/product\/([^\/?#]+)/i); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; }
+  }
+  // a cart item for a product, from the page when we are on it (exact price
+  // hooks), else from the catalog
+  function itemFor(slug, qty) {
+    if (slugOnThisPage() === slug) { var p = pageProduct(); p.qty = qty; return Promise.resolve(p); }
+    return loadCatalog().then(function (c) {
+      var p = c && c[slug];
+      if (!p) return null;
+      return {
+        id: slug, slug: slug,
+        title: String(p.title || slug).slice(0, 80),
+        price: '₹' + Number(p.price || 0).toLocaleString('en-IN'),
+        image: p.img ? '/images/' + p.img : '',
+        qty: qty
+      };
+    });
+  }
+  function onCartPage() { return !!document.getElementById('dcal-cart-root'); }
+  function repaint() { updateCartBubbles(); if (onCartPage()) renderCartPage(); }
+  function findInCart(cart, slug) { for (var i = 0; i < cart.length; i++) { if (String(cart[i].slug || cart[i].id || '') === slug) return i; } return -1; }
+  function wishList() { try { return JSON.parse(localStorage.getItem('dcal_wishlist') || '[]') || []; } catch (e) { return []; } }
+  function wishSave(a) {
+    try { localStorage.setItem('dcal_wishlist', JSON.stringify(a.slice(0, 200))); } catch (e) {}
+    document.querySelectorAll('[data-wish]').forEach(function (b) { b.classList.toggle('active', a.indexOf(b.getAttribute('data-wish')) > -1); });
+  }
+
+  /* ---- The checkout BY VOICE (js/voice-assistant.js) ----
+     Which step is on screen; the address form typed in from what the customer
+     said (pincode lookup and all); and the step's own button pressed — so every
+     check the page makes (10-digit mobile, 6-digit pincode, state, city) still
+     decides, exactly as if they had typed and tapped. */
+  function coVoiceRoot() { return document.getElementById('dcal-cart-root'); }
+  function coVoiceStep() {
+    var r = coVoiceRoot();
+    if (!r) return null;
+    if (r.querySelector('.dcal-addr-save')) return 'form';                 // Add / Edit address
+    if (r.querySelector('input[name="dcal-addr"]')) return 'pick';         // choose a saved address
+    if (r.querySelector('.dcal-co-place')) return 'payment';
+    if (r.querySelector('.dcal-co-next')) return 'summary';
+    if (r.querySelector('.dcal-cart-checkout')) return 'cart';             // the cart, before checkout
+    return null;
+  }
+  function voiceAddressBox() {
+    var all = document.querySelectorAll('[data-addr-form]');
+    for (var i = 0; i < all.length; i++) if (all[i].offsetWidth > 0) return all[i];
+    return null;
+  }
+  // a <select> option that is, or contains, what they said ("Madhapur" in "Madhapur S.O")
+  function pickOption(sel, val) {
+    var v = String(val || '').toLowerCase().trim(), i, o;
+    if (!v) return false;
+    for (i = 0; i < sel.options.length; i++) if (sel.options[i].value.toLowerCase() === v) { sel.selectedIndex = i; return true; }
+    for (i = 0; i < sel.options.length; i++) {
+      o = sel.options[i].value.toLowerCase();
+      if (o && o !== '__other__' && v.length >= 4 && (o.indexOf(v) !== -1 || v.indexOf(o) !== -1)) { sel.selectedIndex = i; return true; }
+    }
+    return false;
+  }
+  // -> Promise<{values, missing}> once the pincode has filled state & city, or null
+  function voiceFillAddress(f) {
+    var box = voiceAddressBox();
+    if (!box || !f) return Promise.resolve(null);
+    var scope = box.getAttribute('data-addr-form');
+    function field(k) { return box.querySelector('[data-co="' + k + '"]'); }
+    function set(k, v) { var el = field(k); if (el && v) el.value = v; }
+    set('name', f.name); set('phone', f.phone); set('line', f.line); set('landmark', f.landmark);
+    var wait = null;
+    if (f.pincode && f.pincode !== (field('pincode') || {}).value) { set('pincode', f.pincode); wait = lookupPincode(scope, f.pincode); }
+    return Promise.resolve(wait).catch(function () {}).then(function () {
+      var st = field('state');
+      if (f.state && st && !st.value) setSelectValue(st, f.state);           // the pincode's own state wins
+      var city = field('city');
+      if (f.city && city) {
+        if (city.tagName !== 'SELECT') city.value = f.city;
+        else if (!pickOption(city, f.city) && !city.value) cityToText(box, f.city);   // no pincode list to pick from
+      }
+      var err = box.querySelector('[data-addr-err]'); if (err) err.textContent = '';
+      var a = readAddressForm(scope);
+      return { values: a, missing: addressMissing(a) };
+    });
+  }
+  // Press the step's own button: Save & continue / Deliver here / Continue to Payment / Place Order.
+  function voiceCheckoutNext() {
+    var r = coVoiceRoot();
+    var b = r && r.querySelector('.dcal-addr-save, .dcal-co-place, .dcal-co-next');
+    if (!b || b.disabled) return false;
+    b.click();
+    return true;
+  }
+
+  // Same checks as the cart page's Apply button, same server validation.
+  function couponTry(code) {
+    code = String(code || '').trim().toUpperCase();
+    var c = COUPONS[code], msg;
+    function no(reason, text) { toast(text); return Promise.resolve({ ok: false, reason: reason, text: text }); }
+    if (!c) return no('invalid', 'Invalid or expired coupon code');
+    var base = eligibleSubtotal(c);
+    if (c.slugs && base <= 0) return no('only', 'This code is valid only on ' + c.only);
+    if (c.min && base < c.min) return no('min', 'Add items worth ' + money(c.min) + ' to use this code');
+    return validateCouponServer(code, cartSubtotal()).then(function (r) {
+      if (!r || !r.ok) { msg = (r && r.reason) || 'This coupon can’t be applied'; toast(msg); return { ok: false, reason: 'server', text: msg }; }
+      setCouponCode(code); toast('Coupon ' + code + ' applied 🎉'); repaint();
+      return { ok: true };
+    });
+  }
+
+  window.DcalStore = {
+    // the checkout, by voice
+    checkoutStep: coVoiceStep,
+    fillAddress: voiceFillAddress,
+    checkoutNext: voiceCheckoutNext,
+    checkoutError: function () { var e = document.querySelector('#dcal-cart-root [data-addr-err]'); return e ? e.textContent : ''; },
+    payWith: function (id) {
+      var r = coVoiceRoot(), inp = r && r.querySelector('input[name="dcal-pay"][value="' + id + '"]');
+      if (!inp) return false;
+      inp.checked = true;
+      inp.dispatchEvent(new Event('change'));   // the page's own handler: selection, label, total
+      return true;
+    },
+    paymentMethod: function () { return checkout.payment; },
+    total: function () { return Math.round(cartTotal()); },
+    loggedIn: isLoggedIn,
+    login: function () { openAuth(); },
+    product: function (slug) { return CATALOG ? (CATALOG[slug] || null) : null; },
+    cart: function () { return cartGet().map(function (i) { return { id: i.id, slug: i.slug || i.id, title: i.title, price: i.price, qty: i.qty || 1 }; }); },
+    // Add — behind the same sign-in gate as the button. Not signed in: the
+    // sign-in box opens, and the add completes by itself once they are.
+    add: function (slug, qty) {
+      qty = Math.max(1, Math.min(99, parseInt(qty, 10) || 1));
+      var run = function () {
+        itemFor(slug, qty).then(function (p) {
+          if (!p) { toast('Sorry, I could not find that product'); return; }
+          var cart = cartGet(), k = findInCart(cart, slug);
+          if (k > -1) cart[k].qty = Math.min(99, (cart[k].qty || 1) + qty); else cart.push(p);
+          cartSave(cart); repaint();
+          toast('Added to cart ✓');
+        });
+      };
+      if (isLoggedIn()) run(); else { pendingAction = run; openAuth(); }
+      return isLoggedIn();
+    },
+    remove: function (slug) {
+      var cart = cartGet(), k = findInCart(cart, slug);
+      if (k < 0) return false;
+      cart.splice(k, 1); cartSave(cart); repaint(); toast('Removed from cart');
+      return true;
+    },
+    setQty: function (slug, qty) {
+      qty = parseInt(qty, 10);
+      var cart = cartGet(), k = findInCart(cart, slug);
+      if (k < 0) return false;
+      if (!(qty >= 1)) { cart.splice(k, 1); } else cart[k].qty = Math.min(99, qty);
+      cartSave(cart); repaint();
+      return true;
+    },
+    clear: function () { cartSave([]); setCouponCode(''); repaint(); toast('Cart cleared'); return true; },
+    // Same checks as the cart page's Apply button, same server validation.
+    coupon: function (code) { return couponTry(code).then(function (r) { return r.ok; }); },
+    // -> Promise<{ok, reason: 'invalid'|'only'|'min'|'server', text}> — the outcome,
+    // so the voice says what HAPPENED, never "applied" before the check
+    couponTry: couponTry,
+    couponCodes: function () { return Object.keys(COUPONS); },
+    // Start buying. On the cart page it opens right here (behind the sign-in
+    // gate, like the button); anywhere else it says where to go: /cart, which
+    // then opens checkout on arrival — the same route as "Buy now".
+    checkout: function () {
+      if (!cartGet().length) { toast('Your cart is empty'); return null; }
+      if (onCartPage()) {
+        // Already checking out: never start over. "Proceed with payment" said on
+        // the summary used to land here and throw them back to step one — a loop.
+        var st = coVoiceStep();
+        if (st && st !== 'cart') return null;
+        window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
+        return null;
+      }
+      try { sessionStorage.setItem('dcal_buynow', '1'); } catch (e) {}
+      return '/cart';
+    },
+    wish: function (slug, on) {
+      var a = wishList(), i = a.indexOf(slug);
+      if (on && i < 0) a.push(slug);
+      if (!on && i > -1) a.splice(i, 1);
+      wishSave(a);
+      toast(on ? 'Saved to wishlist ♥' : 'Removed from wishlist');
+      return true;
+    },
+    wishlist: wishList
   };
 
   function init() {

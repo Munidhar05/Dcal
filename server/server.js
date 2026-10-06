@@ -87,10 +87,10 @@ function optionalVoiceModule(modulePath, label) {
     function dead() { throw new Error(label + ' unavailable'); }
     return {
       ENABLED: false, MODEL: null,
-      handle: off,
+      handle: off, handleAddress: off,
       health: function (_req, res) { return res.json({ enabled: false, model: null }); },
       warm: function () {},              // fire-and-forget TTS warm-up: do nothing
-      answer: dead, transcribe: dead,    // never reached: ENABLED false short-circuits /api/ask
+      answer: dead, transcribe: dead, extractAddress: dead,   // never reached: ENABLED false short-circuits /api/ask
       normalizeLang: function () { return 'en'; }
     };
   }
@@ -103,6 +103,8 @@ function optionalVoiceModule(modulePath, label) {
 const assistant = optionalVoiceModule('./assistant', 'AI voice assistant');
 app.get('/api/assistant/health', assistant.health);
 app.post('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, tag: 'assistant' }), assistant.handle);
+// The checkout's address form, filled by voice: what they said -> the form's fields.
+app.post('/api/assistant/address', rateLimit({ windowMs: 60 * 1000, max: 20, tag: 'address' }), assistant.handleAddress);
 console.log(assistant.ENABLED ? ('✓ AI voice assistant enabled via OpenRouter (' + assistant.MODEL + ')') : 'ℹ AI voice assistant off (set OPENROUTER_API_KEY) — widget uses free offline engine');
 
 // ElevenLabs natural Indian voice (Telugu / Hindi / English). Key stays server-side.
@@ -144,6 +146,20 @@ app.post('/api/ask',
 
       const heard = await stt.transcribe(audio, req.get('Content-Type'));
       if (!heard.text) return res.json({ text: '', lang: heard.lang, reply: null, go: null });
+      // Telugu letters are Telugu, whatever the detector guessed.
+      if (assistant.langOfScript) heard.lang = assistant.langOfScript(heard.text, heard.lang);
+
+      // The customer's words go back NOW, as the first line of the answer,
+      // while the brain is still thinking: the widget lights up the product
+      // they named a whole model round before she has anything to say about
+      // it. Only when the widget asks for it (Accept: application/x-ndjson) —
+      // anything else still gets the single JSON object below.
+      if (/ndjson/i.test(req.get('Accept') || '')) {
+        res.status(200);
+        res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.write(JSON.stringify({ text: heard.text, lang: heard.lang }) + '\n');
+      }
 
       // History rides along in a header: the body is the raw audio, and
       // base64-ing the audio into JSON instead would inflate the upload by a
@@ -154,10 +170,41 @@ app.post('/api/ask',
         if (raw) history = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
       } catch (e) { history = []; }
 
-      const out = await assistant.answer(heard.text, heard.lang, history);
-      res.json({ text: heard.text, lang: heard.lang, reply: out.reply, go: out.go });
+      // The customer's situation (page, cart, signed in) rides in a second
+      // small header the same way, so "add this" and "what is in my cart"
+      // can be answered in this same single round trip.
+      let state = null;
+      try {
+        const raw = req.get('X-Dcal-State');
+        if (raw) state = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+      } catch (e) { state = null; }
+
+      // The checkout's address form is on their screen: what they said is
+      // their details, so it becomes the form's fields, not a chat answer.
+      if (req.get('X-Dcal-Form') === 'address') {
+        const form = await assistant.extractAddress(heard.text);
+        const fbody = { text: heard.text, lang: heard.lang, reply: null, go: null, form: form };
+        if (res.headersSent) return res.end(JSON.stringify(fbody) + '\n');
+        return res.json(fbody);
+      }
+
+      // A language they asked for earlier ("explain in Telugu", said in
+      // English) and still want while they go on speaking the same way:
+      // "te:en" = answer in Telugu while they speak English.
+      let pref = null;
+      const lp = /^([a-z]{2}):([a-z]{2})$/.exec(req.get('X-Dcal-Lang-Pref') || '');
+      if (lp) pref = { want: lp[1], spoke: lp[2] };
+
+      const out = await assistant.answer(heard.text, heard.lang, history, state, pref);
+      // lang = the language of the ANSWER; spoke = the one they spoke in
+      const body = { text: heard.text, lang: out.lang || heard.lang, spoke: heard.lang, asked: out.asked || null,
+                     reply: out.reply, go: out.go, act: out.act || null };
+      if (res.headersSent) return res.end(JSON.stringify(body) + '\n');   // the second, last line
+      res.json(body);
     } catch (e) {
       try { console.error('ask error:', e && e.message); } catch (x) {}
+      // Already streaming: the status is sent, so the error has to be a line.
+      if (res.headersSent) return res.end(JSON.stringify({ error: 'ask_error' }) + '\n');
       res.status(502).json({ error: 'ask_error' });   // widget falls back to the two-step path
     }
   });
