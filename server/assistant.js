@@ -220,6 +220,18 @@ function safeAct(a) {
   return out;
 }
 
+/* ---- The free Demo Kit, told only when it is asked about ----
+   The kit is not one of the five products, so the BOUNDARY rule would have her
+   say "we do not sell that". Its facts ride on the turn that asks and on no
+   other: every other turn's prompt stays exactly as long as before, because her
+   reply time comes first. Terms match server.js kitProblem. */
+const ASKED_DEMO_KIT = /demo|\bkit\b|sample|trial|free\s*gift|try\s+(it\s+)?(first|before)|before\s+buying|डेमो|किट|सैंपल|ट्रायल|డెమో|కిట్|శాంపిల్|ట్రయల్|டெமோ|கிட்/i;
+const DEMO_KIT_NOTE = "\n(Facts for this answer: the D'Cal Demo Kit is FREE (worth 99 rupees) and is ordered on its own, " +
+  'with nothing to pay and free delivery, one per customer. To order it: the "Order free" button below the products on the home page ' +
+  'or the products page puts it in the cart, then checkout as usual. It is a small sachet: dip it like a tea bag in 1 litre of bore ' +
+  'water, boil it for 10 minutes next to 1 litre of plain bore water, let both cool, and compare the white calcium deposit. ' +
+  'It IS ours: never say we do not sell it. To show it, set "go" to "/collection".)';
+
 /* ---- The customer's situation, in one short line the model can read ----
    Sent by the widget with every message: which page they are on, what is in
    the cart, whether they are signed in. About 25 tokens — this is what lets
@@ -601,6 +613,7 @@ async function answer(message, lang, history, state, pref) {
         said = message + '\n(Give the real answer now, in ' + L + ' — what it is and what it does — not "I will explain".)';
       }
     }
+    if (ASKED_DEMO_KIT.test(message)) said += DEMO_KIT_NOTE;
     messages.push({
       role: 'user',
       content: 'Answer in ' + LANG_NAME[lang] + ' only, using ' + LANG_NAME[lang] +
