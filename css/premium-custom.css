@@ -597,9 +597,15 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 .dcal-kit-strip-go{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0}
 .dcal-kit-strip-go .btn{padding:13px 28px}
 .dcal-kit-strip-go span{font-size:12px;color:#64748B;white-space:nowrap}
+/* the four steps from the printed Demo Kit card */
+.dcal-kit-strip .dcal-kit-steps-h{margin:2px 0 8px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0077B6}
+.dcal-kit-steps{list-style:none;counter-reset:kitstep;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
+.dcal-kit-steps li{counter-increment:kitstep;position:relative;padding-left:30px;font-size:14px;color:#334155;line-height:1.45;text-align:left}
+.dcal-kit-steps li::before{content:counter(kitstep);position:absolute;left:0;top:0;width:21px;height:21px;border-radius:50%;background:#0077B6;color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
 @media(max-width:768px){
   .dcal-kit-strip{flex-direction:column;text-align:center;gap:14px;padding:20px}
   .dcal-kit-strip>img{width:180px}
+  .dcal-kit-steps{grid-template-columns:1fr;max-width:420px;margin:0 auto}
 }
 
 /* ===== Multi-step checkout (Address → Summary → Payment) ===== */
