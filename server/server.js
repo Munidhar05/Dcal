@@ -531,6 +531,8 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     // price with the SAME (verified) identity that /api/orders re-quotes with, so a
     // once-per-user coupon can't make the two disagree and save a paid order as unpaid.
     const q = await quoteOrder(items, coupon, payerMobile);
+    const gone = soldOutIn(q.lines);                     // before any money moves
+    if (gone.length) return res.status(409).json({ error: soldOutError(gone) });
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
     if (!q.total || q.total <= 0) return res.status(400).json({ error: 'empty or invalid cart' });
     // refuse BEFORE money moves: a paid order that /api/orders then rejects
@@ -1186,6 +1188,19 @@ async function quoteOrder(items, couponCode, mobile) {
   return { ok, subtotal, discount, total: subtotal - discount, code, lines };
 }
 
+/* ---------- out of stock ----------
+   A catalog product marked "outOfStock": true stays on the site, so people can
+   still read about it, but it can't be bought. Its page disables the buttons,
+   and these refuse a cart that still holds one (added before it sold out, or
+   by voice). Remove the flag from data/catalog.json to sell it again. */
+function soldOutIn(lines) {
+  return (lines || []).filter((l) => CATALOG[l.slug] && CATALOG[l.slug].outOfStock).map((l) => CATALOG[l.slug].title);
+}
+function soldOutError(titles) {
+  return 'Sorry, ' + titles.join(' and ') + (titles.length > 1 ? ' are' : ' is') +
+         ' out of stock right now. Please remove it from your cart to continue.';
+}
+
 // razorpay order_id -> the server-computed quote, so /verify and /orders can trust it
 const pendingPayments = new Map();
 
@@ -1236,6 +1251,12 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     // once-per-user coupon backstop (defence in depth)
     if (q.code && COUPONS[q.code] && COUPONS[q.code].oncePerUser && await couponUsedBy(mobile, q.code)) {
       return res.status(409).json({ error: 'coupon already used', coupon: q.code });
+    }
+    // out-of-stock backstop. A verified payment is never refused here: create-order
+    // already checked its cart, and refusing now would strand the money.
+    const gone = soldOutIn(q.lines);
+    if (gone.length && !(pendingPayments.get(String(o.razorpayOrderId || '')) || {}).verified) {
+      return res.status(409).json({ error: soldOutError(gone), outOfStock: gone });
     }
 
     // PAYMENT TRUST: only mark an order "paid" when a Razorpay payment was
@@ -1625,7 +1646,7 @@ app.get('/product/:slug', (req, res) => {
       '@context': 'https://schema.org', '@type': 'Product',
       name: p.title, description: desc, image: img, sku: slug,
       brand: { '@type': 'Brand', name: "D'Cal" },
-      offers: { '@type': 'Offer', priceCurrency: 'INR', price: price, availability: 'https://schema.org/InStock', url: url }
+      offers: { '@type': 'Offer', priceCurrency: 'INR', price: price, availability: 'https://schema.org/' + (p.outOfStock ? 'OutOfStock' : 'InStock'), url: url }
     });
     const meta =
       '<meta property="og:type" content="product">\n' +

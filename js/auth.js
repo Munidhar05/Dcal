@@ -1405,16 +1405,29 @@
     var cart = cartGet();
     if (!cart.length) { root.innerHTML = emptyCartHTML(); return; }
     var subtotal = cart.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
+    var blocked = cart.some(soldOut);                     // the server would refuse it anyway
+    if (!CATALOG) loadCatalog().then(function () { if (cartGet().some(soldOut)) renderCartPage(); });
     root.innerHTML =
       '<div class="dcal-cart-grid">' +
         '<div class="dcal-cart-items">' + cart.map(cartItemHTML).join('') + '</div>' +
         '<aside class="dcal-cart-summary">' +
           '<h3>Order Summary</h3>' +
           summaryBodyHTML(subtotal) +
-          '<button class="dcal-btn dcal-cart-checkout">Proceed to Checkout</button>' +
+          (blocked ? '<button class="dcal-btn dcal-cart-checkout" disabled style="opacity:.55;cursor:not-allowed">Remove out-of-stock items to continue</button>'
+                   : '<button class="dcal-btn dcal-cart-checkout">Proceed to Checkout</button>') +
           '<a class="dcal-cart-continue" href="/collection">Continue shopping</a>' +
         '</aside>' +
       '</div>';
+    // out-of-stock lines, flagged in place (rows are drawn in cart order), with
+    // no "+" to buy more of them; − and × stay so they can be taken out
+    var rows = root.querySelectorAll('.dcal-cart-items > .dcal-cart-item');
+    cart.forEach(function (it, i) {
+      if (!rows[i] || !soldOut(it)) return;
+      rows[i].classList.add('is-oos');
+      var plus = rows[i].querySelector('[data-qp]'); if (plus) plus.parentNode.removeChild(plus);
+      var info = rows[i].querySelector('.dcal-ci-info');
+      if (info) info.insertAdjacentHTML('beforeend', '<p class="dcal-ci-oos">Out of stock right now. Please remove it to check out.</p>');
+    });
 
     root.querySelectorAll('[data-qp]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-qp')); if (k < 0) return; c[k].qty = (c[k].qty || 1) + 1; cartSave(c); updateCartBubbles(); renderCartPage(); }; });
     root.querySelectorAll('[data-qm]').forEach(function (b) { b.onclick = function () { var c = cartGet(); var k = cartItemById(c, b.getAttribute('data-qm')); if (k < 0) return; c[k].qty = (c[k].qty || 1) - 1; if (c[k].qty < 1) c.splice(k, 1); cartSave(c); updateCartBubbles(); renderCartPage(); }; });
@@ -2574,6 +2587,18 @@
     return catalogWait;
   }
   setTimeout(function () { loadCatalog(); }, 4000);          // warm, so the first "add" is instant
+  // Out of stock per data/catalog.json ("outOfStock": true), the same flag the
+  // server refuses orders by. False until the catalog has loaded; the cart page
+  // paints again once it has.
+  function soldOut(it) {
+    if (!CATALOG || !it) return false;
+    var slug = CATALOG[it.slug] ? it.slug : (CATALOG[it.id] ? it.id : '');
+    if (!slug) {
+      var t = String(it.title || '').replace(/[’‘']/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+      Object.keys(CATALOG).forEach(function (s) { if (String(CATALOG[s].title || '').toLowerCase() === t) slug = s; });
+    }
+    return !!(slug && CATALOG[slug].outOfStock);
+  }
   function slugOnThisPage() {
     try { var m = location.pathname.match(/\/product\/([^\/?#]+)/i); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; }
   }
@@ -2706,8 +2731,10 @@
     add: function (slug, qty) {
       qty = Math.max(1, Math.min(99, parseInt(qty, 10) || 1));
       var run = function () {
-        itemFor(slug, qty).then(function (p) {
+        // the catalog first: on the product's own page itemFor() never loads it
+        loadCatalog().then(function () { return itemFor(slug, qty); }).then(function (p) {
           if (!p) { toast('Sorry, I could not find that product'); return; }
+          if (soldOut(p)) { toast('Sorry, ' + p.title + ' is out of stock right now'); return; }
           var cart = cartGet(), k = findInCart(cart, slug);
           if (k > -1) cart[k].qty = Math.min(99, (cart[k].qty || 1) + qty); else cart.push(p);
           cartSave(cart); repaint();
@@ -2743,6 +2770,7 @@
     // then opens checkout on arrival — the same route as "Buy now".
     checkout: function () {
       if (!cartGet().length) { toast('Your cart is empty'); return null; }
+      if (cartGet().some(soldOut)) { toast('Please remove the out-of-stock item first'); return null; }
       if (onCartPage()) {
         // Already checking out: never start over. "Proceed with payment" said on
         // the summary used to land here and throw them back to step one — a loop.
