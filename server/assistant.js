@@ -51,6 +51,12 @@ if (ENABLED) {
 
 const PHONE = '+91 86229 09192';
 
+// Stock comes from the same file the cart is priced from: "outOfStock": true
+// there switches both the store and what she says, so restocking is one edit.
+const CATALOG = require('../data/catalog.json');
+const OUT = (slug) => !!(CATALOG[slug] && CATALOG[slug].outOfStock);
+const OUT_LINE = 'OUT OF STOCK right now, so it cannot be ordered or added to the cart. ';
+
 /* ---- The website knowledge the model answers from (factual + current) ---- */
 const KNOWLEDGE = [
   "You are \"D'Cal Saathi\", the friendly female voice assistant on the D'Cal website. D'Cal is based in Hyderabad, Telangana, India and sells solutions for HARD WATER problems.",
@@ -60,7 +66,7 @@ const KNOWLEDGE = [
   '- Shower Head Filter: 2700, rated 4.8 stars. Easy to install, 14-stage filtration: reduces hair fall and dry skin; the cartridge is replaced every 6 months.',
   '- Tap Filter: 2700, rated 4.8 stars. No fitting needed — it simply hangs on the tap: reduces hair fall and skin irritation from hard water.',
   '- Washing Machine Ball: 500, rated 4.7 stars. Just drop it in the washing machine: cuts detergent use and keeps clothes looking new.',
-  '- Tap and Tile Cleaner: 300, rated 4.6 stars. A gentle water-based liquid that brings back the shine of taps and tiles: spray it, scrub it, wash it off.',
+  '- Tap and Tile Cleaner: ' + (OUT('tap-tile-cleaner') ? OUT_LINE : '') + '300, rated 4.6 stars. A gentle water-based liquid that brings back the shine of taps and tiles: spray it, scrub it, wash it off.',
   'When you explain a product, say what its line above says — nothing it does not say (no bacteria, no purifying, no health claims).',
   'Each product page shows "12,840+ reviews" (a combined trust count across the store); the star rating above is per product. If asked how many reviews, say 12,840+ reviews and give the product\'s star rating.',
   '',
@@ -183,6 +189,24 @@ const PRODUCT_NAME = {
   'water-softener': 'Home Water Softener', 'shower-filter': 'Shower Head Filter', 'tap-filter': 'Tap Filter',
   'washing-ball': 'Washing Machine Ball', 'tap-tile-cleaner': 'Tap and Tile Cleaner'
 };
+
+/* ---- Out of stock, said where it is read ----
+   The product's line in KNOWLEDGE says it, and Llama still answered "I want to
+   buy the tap and tile cleaner" with "I am opening the Tap and Tile Cleaner for
+   you", not a word about stock (9 Oct 2026). So a turn that can lead to it also
+   carries it next to the question: their words name it or the problem it
+   solves, or they are on its page. Every other turn stays exactly as long. */
+const SOLD_OUT_WORDS = {
+  'tap-tile-cleaner': /clean|tile|stain|marks?\b|spots?\b|shine|टाइल|क्लीनर|दाग|धब्ब|चमक|టైల్|క్లీనర్|మరక|మచ్చ/i
+};
+function soldOutNote(message, state) {
+  const page = String((state && state.page) || ''), show = String((state && state.show) || '');
+  const hit = PRODUCT_SLUGS.filter((s) => OUT(s) &&
+    (show === s || page.indexOf('/product/' + s) === 0 || (SOLD_OUT_WORDS[s] && SOLD_OUT_WORDS[s].test(message))));
+  if (!hit.length) return '';
+  return '\n(Stock: the ' + hit.map((s) => PRODUCT_NAME[s]).join(' and ') + (hit.length > 1 ? ' are' : ' is') +
+         ' OUT OF STOCK right now. If it comes up, say so plainly first, and never offer to add it to the cart.)';
+}
 const ALLOWED_PATHS = new Set([
   '/', '/collection', '/cart', '/track-order', '/contact', '/faq', '/shipping-returns',
   '/privacy-policy', '/legal', '/wishlist', '/search', '/blog', '/about',
@@ -604,7 +628,7 @@ async function answer(message, lang, history, state, pref) {
     messages.push({
       role: 'user',
       content: 'Answer in ' + LANG_NAME[lang] + ' only, using ' + LANG_NAME[lang] +
-               ' script. Customer says: ' + said + describeState(state)
+               ' script. Customer says: ' + said + soldOutNote(message, state) + describeState(state)
     });
 
     const opts = { model: MODEL, messages: messages, temperature: 0.3, max_tokens: 450 };

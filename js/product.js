@@ -30,6 +30,7 @@
     'tap-tile-cleaner': {
       cat: 'Cleaning', title: "D'Cal Tap & Tile Cleaner", rating: '4.6',
       price: '₹300.00', was: '₹300.00', img: 'tap-tile-cleaner-card.jpg',
+      outOfStock: true,   // same flag as data/catalog.json, which the server refuses orders by
       desc: 'Restores the natural shine of taps & tiles. Gentle water-based formula. Spray it, scrub it, wash it.'
     }
   };
@@ -99,9 +100,27 @@
     var save = document.querySelector('[data-pp-save]');
     if (save) { var s = savePct(p); save.textContent = 'SAVE ' + s + '%'; save.style.display = s > 0 ? '' : 'none'; }
     var desc = document.querySelector('.pp-full-desc'); if (desc) desc.textContent = p.desc;
+    if (p.outOfStock) markPageSoldOut();
     // keep the cart variant data in sync so add-to-cart records the right price
     var vj = document.querySelector('[data-pp-variants]');
     if (vj) { try { var arr = JSON.parse(vj.textContent); if (arr[0]) { arr[0].price = p.price; arr[0].compare_at = p.was; } vj.textContent = JSON.stringify(arr); } catch (e) {} }
+  }
+
+  /* ---- 2b) out of stock: say so, and take the buying away ----
+     The page stays (people still read about it); its buttons go. A disabled
+     button fires no click, so auth.js's cart gate never even runs. */
+  function markPageSoldOut() {
+    var pill = document.querySelector('[data-pp-stock]');
+    if (pill) pill.style.background = '#FEF2F2';
+    var dot = document.querySelector('[data-pp-stock-dot]');
+    if (dot) { dot.style.background = '#EF4444'; dot.style.boxShadow = '0 0 0 4px rgba(239,68,68,.18)'; dot.style.animation = 'none'; }
+    var txt = document.querySelector('[data-pp-stock-text]');
+    if (txt) { txt.textContent = 'Out of stock right now'; txt.style.color = '#991B1B'; }
+    document.querySelectorAll('[data-pp-atc], [data-pp-buynow], [data-pp-qty] button, [data-pp-qty] input').forEach(function (b) { b.disabled = true; });
+    var atc = document.querySelector('[data-pp-atc]');
+    if (atc) { atc.textContent = 'Out of stock'; atc.classList.add('dcal-oos-btn'); }
+    var buy = document.querySelector('[data-pp-buynow]');
+    if (buy) buy.style.display = 'none';                  // one disabled button says it; two is noise
   }
 
   /* ---- 3) point the Share buttons at the REAL page URL ----
@@ -199,7 +218,30 @@
     updateWishUI();
   }
 
-  function init() { renderProduct(); wireLinks(); wireShare(); wireImageActions(); }
+  /* ---- 6) "Out of stock" on every card of a product that is ----
+     Home rows, collection cards and "More from D'Cal". The card still opens its
+     page; a SALE / BESTSELLER badge would contradict it, so that one goes. */
+  function markSoldOutCards() {
+    document.querySelectorAll('.pp-row, .pc, .pp-more-card').forEach(function (card) {
+      var p = CATALOG[TITLE2SLUG[norm(titleOf(card))]];
+      if (!p || !p.outOfStock || card.classList.contains('dcal-oos')) return;
+      card.classList.add('dcal-oos');
+      var media = card.querySelector('.pp-row-media, .pc-media, .pp-more-img');
+      if (media) {
+        var old = media.querySelector('.pp-more-badge, .pp-badge');
+        if (old) old.parentNode.removeChild(old);
+        var badge = document.createElement('span');
+        badge.className = 'dcal-oos-badge';
+        badge.textContent = 'Out of stock';
+        try { if (getComputedStyle(media).position === 'static') media.style.position = 'relative'; } catch (e) {}
+        media.appendChild(badge);
+      }
+      var btn = card.querySelector('.pp-card-btn');        // the home row's "Buy Now"
+      if (btn) btn.textContent = 'Out of stock';
+    });
+  }
+
+  function init() { renderProduct(); wireLinks(); wireShare(); wireImageActions(); markSoldOutCards(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

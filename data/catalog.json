@@ -21,7 +21,7 @@
   },
   "tap-tile-cleaner": {
     "cat": "Cleaning", "title": "D'Cal Tap & Tile Cleaner", "rating": "4.6",
-    "price": 300, "was": 300, "img": "tap-tile-cleaner-card.jpg",
+    "price": 300, "was": 300, "img": "tap-tile-cleaner-card.jpg", "outOfStock": true,
     "desc": "Restores the natural shine of taps & tiles. Gentle water-based formula. Spray it, scrub it, wash it."
   }
 }
