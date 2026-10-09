@@ -1253,6 +1253,41 @@
     else run();
   }, true);
 
+  /* ---------- FREE DEMO KIT ("Order free" under the products) ----------
+     ₹0 in the catalog, ordered on its own like any product, but ONE per customer
+     (server.js kitProblem is the rule). Sign-in comes first, so the claim has a
+     phone number to belong to. This device's own orders are checked too, which is
+     all there is to go on when the server has no order database. */
+  var FREE_KIT = 'demo-kit';
+  var KIT_CLAIMED = 'You have already claimed your free Demo Kit. It is one per customer.';
+  function isFreeKit(it) { return !!it && (it.slug === FREE_KIT || it.id === FREE_KIT); }
+  function kitClaimedHere() {
+    return orders().some(function (o) { return o.status !== 'Cancelled' && (o.items || []).some(isFreeKit); });
+  }
+  function kitCheck() {
+    if (kitClaimedHere()) return Promise.resolve({ ok: false, reason: KIT_CLAIMED });
+    return api('POST', '/api/demo-kit/check', { mobile: sessionMobile() }).catch(function () { return { ok: true }; });
+  }
+  function orderFreeKit() {
+    if (findInCart(cartGet(), FREE_KIT) > -1) { location.href = '/cart'; return; }   // already in: just show it
+    kitCheck().then(function (r) {
+      if (!r || !r.ok) { toast((r && r.reason) || KIT_CLAIMED); return; }
+      itemFor(FREE_KIT, 1).then(function (p) {
+        if (!p) { toast('Sorry, the Demo Kit is not available right now.'); return; }
+        var cart = cartGet(); cart.push(p); cartSave(cart); updateCartBubbles();
+        toast('Free Demo Kit added ✓');
+        setTimeout(function () { location.href = '/cart'; }, 500);
+      });
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-free-kit]');
+    if (!b) return;
+    e.preventDefault();
+    if (!isLoggedIn()) { pendingAction = orderFreeKit; openAuth(); }
+    else orderFreeKit();
+  });
+
   /* ====================================================
      CART + CHECKOUT (client-side, static demo)
      ==================================================== */
@@ -1347,6 +1382,13 @@
 
   function cartItemHTML(item, i) {
     var id = esc(String(item.id || item.title || ''));   // key by stable id, not array index
+    // the free kit is one per order: no stepper, so there is nothing to raise
+    if (isFreeKit(item)) return '<div class="dcal-cart-item">' +
+      (item.image ? '<img src="' + esc(item.image) + '" alt="" style="object-fit:contain;background:#fff">' : '<div class="dcal-ci-noimg">' + CART_ICON + '</div>') +
+      '<div class="dcal-ci-info"><p class="dcal-ci-title">' + esc(item.title) + '</p><p class="dcal-ci-price">Free · one per customer</p></div>' +
+      '<div class="dcal-ci-sub" style="color:#0B6E4F">FREE</div>' +
+      '<button class="dcal-ci-rm" data-rm="' + id + '" aria-label="Remove">×</button>' +
+      '</div>';
     return '<div class="dcal-cart-item">' +
       (item.image ? '<img src="' + esc(item.image) + '" alt="">' : '<div class="dcal-ci-noimg">' + CART_ICON + '</div>') +
       '<div class="dcal-ci-info"><p class="dcal-ci-title">' + esc(item.title) + '</p><p class="dcal-ci-price">' + esc(item.price || '') + ' each</p></div>' +
@@ -1468,7 +1510,7 @@
     var t = computeTotals(subtotal), n = cartCount();
     return '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
       '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
-      couponBoxHTML(t) +
+      (t.subtotal > 0 ? couponBoxHTML(t) : '') +            // nothing to discount on a free order
       (t.discount > 0 ? '<div class="dcal-sum-row"><span>Discount (' + esc(t.code) + ')</span><b style="color:#0B6E4F">−' + money(t.discount) + '</b></div>' : '') +
       '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(t.total) + '</b></div>';
   }
@@ -1882,6 +1924,7 @@
   function coPayment() {
     var cart = cartGet(); if (!cart.length) return;
     var subtotal = cartSubtotal();
+    if (computeTotals(subtotal).total <= 0) return coPaymentFree(subtotal);
     var root = coShell(2,
       '<div class="dcal-co-2col">' +
         '<div class="dcal-co-card">' +
@@ -1923,6 +1966,26 @@
     wireCoupon(root, coPayment);
     // load whether real Razorpay is on; if not, show the demo card/UPI/bank fields
     loadPaymentConfig().then(refreshPayFields);
+  }
+  // A ₹0 order (only the free Demo Kit): no method to choose. Razorpay can't take
+  // a zero amount, and COD would ask them to "pay" nothing at the door.
+  function coPaymentFree(subtotal) {
+    var root = coShell(2,
+      '<div class="dcal-co-2col">' +
+        '<div class="dcal-co-card">' +
+          '<h3 class="dcal-co-h">Nothing to pay</h3>' +
+          '<p class="dcal-co-addr" style="margin:0">Your order is free. Place it and we will ship your D’Cal Demo Kit to the address you chose.</p>' +
+        '</div>' +
+        '<aside class="dcal-cart-summary">' +
+          '<h3>Order Summary</h3>' +
+          summaryBodyHTML(subtotal) +
+          '<button class="dcal-btn dcal-co-place">Place Free Order</button>' +
+          '<button type="button" class="dcal-cart-continue dcal-co-back" style="background:none;border:none;cursor:pointer;width:100%">← Back to summary</button>' +
+        '</aside>' +
+      '</div>');
+    if (!root) return;
+    root.querySelector('.dcal-co-back').addEventListener('click', coSummary);
+    root.querySelector('.dcal-co-place').addEventListener('click', handlePlaceOrder);
   }
 
   /* ---------- payment-detail fields (demo until Razorpay is configured) ---------- */
@@ -2033,7 +2096,21 @@
   // Gate: re-check any applied coupon for THIS user before we charge. This stops a
   // single-use coupon being reused (e.g. from stale localStorage) and guarantees the
   // amount we send to Razorpay reflects a coupon the server still accepts.
+  // The free Demo Kit is checked first, the same way: a second claim is taken out
+  // of the cart here, before anything is placed or paid.
   function handlePlaceOrder() {
+    if (!cartGet().some(isFreeKit)) return checkCouponThenPlace();
+    var btn = document.querySelector('.dcal-co-place');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    kitCheck().then(function (r) {
+      if (r && r.ok) return checkCouponThenPlace();
+      cartSave(cartGet().filter(function (it) { return !isFreeKit(it); }));
+      updateCartBubbles();
+      toast((r && r.reason) || KIT_CLAIMED);
+      renderCartPage();                                   // back to the cart, without it
+    });
+  }
+  function checkCouponThenPlace() {
     var code = getCouponCode();
     if (!code) return proceedPlaceOrder();
     var btn = document.querySelector('.dcal-co-place');
@@ -2265,6 +2342,7 @@
   }
 
   function proceedPlaceOrder() {
+    if (cartTotal() <= 0) { placeCartOrder({ paid: false }); return; }   // free order: no gateway
     if (checkout.payment === 'cod') { placeCartOrder({ paid: false }); return; }
     if (razorpayOn()) { payWithRazorpay(); return; }
     // RAZORPAY ONLY: with no gateway configured we must never record a paid order,
@@ -2330,8 +2408,9 @@
     var cart = cartGet(); if (!cart.length) return;
     var t = computeTotals(cartSubtotal());
     var addr = checkout.address || getDefaultAddress() || {};
-    var payLabel = (PAY_METHODS.filter(function (p) { return p.id === checkout.payment; })[0] || {}).label || 'UPI';
-    var wasCod = checkout.payment === 'cod';
+    var payLabel = t.total <= 0 ? 'Free order'          // same label the server stores
+      : (PAY_METHODS.filter(function (p) { return p.id === checkout.payment; })[0] || {}).label || 'UPI';
+    var wasCod = t.total > 0 && checkout.payment === 'cod';
     var newOrder = {
       id: genOrderId(),   // temporary local id — the SERVER assigns the real number (DC01WS00001…)
       title: cart[0].title + (cart.length > 1 ? ' + ' + (cart.length - 1) + ' more' : ''),

@@ -533,6 +533,10 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     const q = await quoteOrder(items, coupon, payerMobile);
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
     if (!q.total || q.total <= 0) return res.status(400).json({ error: 'empty or invalid cart' });
+    // refuse BEFORE money moves: a paid order that /api/orders then rejects
+    // for a second free kit would leave a payment with no order behind it
+    const kp = await kitProblem(q.lines, payerMobile);
+    if (kp) return res.status(409).json({ error: kp });
     const orderOpts = {
       amount: Math.round(q.total * 100),    // Razorpay works in paise
       currency: 'INR',
@@ -1086,6 +1090,26 @@ async function couponUsedBy(mobile, code) {
   return !!(await Order.exists({ mobile, coupon: code, status: { $ne: 'Cancelled' } }));
 }
 
+/* ---------- the free Demo Kit: one per order, one per customer ----------
+   It sits in the catalog at ₹0 so anyone can order it on its own. A free thing
+   that can be ordered gets ordered again and again, and each one is a courier
+   trip we pay for. So a phone number gets ONE: a cart may carry a single kit,
+   and only while that number has no other kit order still alive (a cancelled
+   one doesn't count). Same rule as a oncePerUser coupon. */
+const FREE_KIT = 'demo-kit';
+const KIT_CLAIMED = 'You have already claimed your free Demo Kit. It is one per customer.';
+async function kitClaimedBy(mobile) {
+  if (!mobile || !dbReady) return false;
+  return !!(await Order.exists({ mobile, status: { $ne: 'Cancelled' }, $or: [{ 'items.slug': FREE_KIT }, { 'items.id': FREE_KIT }] }));
+}
+// -> '' when the cart may go ahead, else the reason to show the customer
+async function kitProblem(lines, mobile) {
+  const kit = (lines || []).find((l) => l.slug === FREE_KIT);
+  if (!kit) return '';
+  if (kit.qty > 1) return 'Only one free Demo Kit per order.';
+  return (await kitClaimedBy(mobile)) ? KIT_CLAIMED : '';
+}
+
 /* ---------- pricing (server is the source of truth for money) ----------
    Prices come from data/catalog.json, never from the browser. Each cart line is
    priced by its catalog slug (or, as a fallback, by matching the product title),
@@ -1108,7 +1132,8 @@ const PRODUCT_CODE = {
   'shower-filter':    { num: '02', code: 'SF' },   // D'Cal Shower Head Filter
   'tap-filter':       { num: '03', code: 'TF' },   // D'Cal Tap Filter
   'washing-ball':     { num: '04', code: 'WM' },   // D'Cal Washing Machine Ball
-  'tap-tile-cleaner': { num: '05', code: 'TC' }    // D'Cal Tap & Tile Cleaner
+  'tap-tile-cleaner': { num: '05', code: 'TC' },   // D'Cal Tap & Tile Cleaner
+  'demo-kit':         { num: '06', code: 'DK' }    // D'Cal Demo Kit (₹0, so any paid line outranks it)
 };
 // pick the order's "main" product = the highest unit-price catalog line
 function mainProductCode(items) {
@@ -1186,6 +1211,16 @@ app.post('/api/coupon/validate', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, 
   } catch (e) { res.status(500).json({ ok: false, reason: 'Could not verify the coupon. Please try again.' }); }
 });
 
+// may this customer still claim the free Demo Kit? Asked when they tap "Order free"
+// and again before the order is placed, so a second claim is turned away up front
+// instead of after checkout. /api/orders re-checks with the session identity.
+app.post('/api/demo-kit/check', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, tag: 'demokit' }), async (req, res) => {
+  try {
+    const mobile = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || String((req.body || {}).mobile || '');
+    res.json((await kitClaimedBy(mobile)) ? { ok: false, reason: KIT_CLAIMED } : { ok: true });
+  } catch (e) { res.json({ ok: true }); }   // can't tell -> let /api/orders decide
+});
+
 /* ---------- orders (customer) ---------- */
 app.post('/api/orders', authCustomer, async (req, res) => {
   if (!requireDB(res)) return;
@@ -1238,6 +1273,13 @@ app.post('/api/orders', authCustomer, async (req, res) => {
         }
       } catch (e) { /* reconciliation failed -> stays unpaid, safer than false-paid */ }
     }
+    // free Demo Kit backstop. A PAID order is never refused here: its kit was
+    // checked at create-order, and refusing now would strand the payment.
+    if (!paid) {
+      const kp = await kitProblem(q.lines, mobile);
+      if (kp) return res.status(409).json({ error: kp, demoKit: true });
+    }
+    if (q.total <= 0) payLabel = 'Free order';           // just the kit: nothing to pay
 
     let order;
     try {
@@ -1568,7 +1610,9 @@ const OG_IMAGE = { 'washing-ball': 'Introducing-the-D_cal-Washing-Ball.jpg' };
 app.get('/product/:slug', (req, res) => {
   const slug = String(req.params.slug || '');
   const p = CATALOG[slug];
-  if (!p) return res.sendFile(PRODUCT_HTML);   // unknown slug -> default page
+  // unknown slug -> default page. The free Demo Kit has no product page of its
+  // own (it is ordered from the strip below the products), so it is "unknown" here.
+  if (!p || p.free) return res.sendFile(PRODUCT_HTML);
   fs.readFile(PRODUCT_HTML, 'utf8', (err, html) => {
     if (err || !html) return res.sendFile(PRODUCT_HTML);
     const base = baseUrlFrom(req) || (req.protocol + '://' + req.get('host'));
