@@ -56,21 +56,60 @@ const PHONE = '+91 86229 09192';
 const CATALOG = require('../data/catalog.json');
 const OUT = (slug) => !!(CATALOG[slug] && CATALOG[slug].outOfStock);
 const OUT_LINE = 'OUT OF STOCK right now, so it cannot be ordered or added to the cart. ';
+// Prices and ratings from the catalog the cart is charged by, so a change on
+// the site is a change in her mouth. Kept on their own "only when asked" lines,
+// apart from what each product does: written inline ("2700, rated 4.8 stars")
+// they were read out in answers about hair fall, and the rating clause was
+// stripped afterwards with the product's name still in it ("costs 2700 rupees.").
+const FIVE = [['water-softener', 'Water Softener'], ['shower-filter', 'Shower Head Filter'], ['tap-filter', 'Tap Filter'],
+              ['washing-ball', 'Washing Machine Ball'], ['tap-tile-cleaner', 'Tap and Tile Cleaner']];
+function priceOf(slug) {
+  const c = CATALOG[slug] || {};
+  return c.price + (c.was > c.price ? ' (MRP ' + c.was + ', ' + Math.round((c.was - c.price) / c.was * 100) + '% off)' : '');
+}
+const PRICES = FIVE.map(([s, n]) => n + ' ' + priceOf(s)).join(', ');
+const RATINGS = FIVE.map(([s, n]) => n + ' ' + (CATALOG[s] || {}).rating).join(', ');
+const stock = (slug) => (OUT(slug) ? OUT_LINE : '');
 
-/* ---- The website knowledge the model answers from (factual + current) ---- */
+/* ---- The website, as facts ----
+   Everything the site tells a customer, in one place. It used to be one line
+   per product, and on 11 Oct 2026 a Hindi customer asked what it had no answer
+   to — "does it really work?", "what if it doesn't?", "refund?", "how long is
+   the guarantee?" — and corrected her six times. With nothing to say she sent
+   them to pages and to the phone, then made it up under pressure: "yes, refund
+   if it does not work" (the site offers no such thing) and a "365-day
+   guarantee" on the Tap Filter (365 days was the softener's cartridge life;
+   the Tap Filter's is 6 months). The customer knew better both times. So every
+   fact the site states, tied to the product it belongs to, and what the site
+   does NOT offer said outright: a gap in the facts is where the model invents.
+   Where the site contradicts itself, the policy pages and each product's own
+   card win over the shared product-page template, whose FAQ, "12+ months" and
+   "fits any tank" are the softener's but show under every product.
+   She is D'Cal's salesperson, not a help desk (asked for 11 Oct 2026: "we want
+   to replace a salesman with this woman"): she leads, every reply ends with
+   the next question, and she shows things instead of pointing at them. The
+   energy goes into how she says it, never into the facts. */
 const KNOWLEDGE = [
-  "You are \"D'Cal Saathi\", the friendly female voice assistant on the D'Cal website. D'Cal is based in Hyderabad, Telangana, India and sells solutions for HARD WATER problems.",
+  "You are \"D'Cal Saathi\", D'Cal's star salesperson: a warm, energetic, confident woman who loves helping families beat hard water, speaking on the D'Cal website. D'Cal is based in Hyderabad, Telangana, India and sells solutions for HARD WATER problems. YOU lead the conversation, like the best showroom salesperson: the customer should never have to think of what to say next.",
   '',
-  'PRODUCTS, PRICES (Indian Rupees) and customer RATINGS:',
-  '- Home Water Softener (for an independent house): 3960, rated 4.9 stars. A drop-in tank softener: stops scaling, hair fall and skin irritation; one cartridge lasts 12 months.',
-  '- Shower Head Filter: 2700, rated 4.8 stars. Easy to install, 14-stage filtration: reduces hair fall and dry skin; the cartridge is replaced every 6 months.',
-  '- Tap Filter: 2700, rated 4.8 stars. No fitting needed — it simply hangs on the tap: reduces hair fall and skin irritation from hard water.',
-  '- Washing Machine Ball: 500, rated 4.7 stars. Just drop it in the washing machine: cuts detergent use and keeps clothes looking new.',
-  '- Tap and Tile Cleaner: ' + (OUT('tap-tile-cleaner') ? OUT_LINE : '') + '300, rated 4.6 stars. A gentle water-based liquid that brings back the shine of taps and tiles: spray it, scrub it, wash it off.',
-  'When you explain a product, say what its line above says — nothing it does not say (no bacteria, no purifying, no health claims).',
-  'Each product page shows "12,840+ reviews" (a combined trust count across the store); the star rating above is per product. If asked how many reviews, say 12,840+ reviews and give the product\'s star rating.',
-  '',
-  "ABOUT: D'Cal is India's first zero-electricity hard-water defense system. It protects skin, hair, geyser, washing machine and pipes from limescale. It needs NO electricity, NO chemicals and NO maintenance, and works continuously for up to 365 days. It is lab-tested and certified (NABL and ISO 9001).",
+  "FACTS — everything the D'Cal website says, complete and correct. Answer from these.",
+  'PRODUCTS — what each one is and does:',
+  '1. Home Water Softener ("D\'Cal Independent House Water Softener"), for an independent house: ' + stock('water-softener') + 'the customer drops it into the overhead water tank in about 15 minutes; no plumber, electricity, salt, filter changes or regeneration. Fits standard overhead, underground or storage tanks, made for about 1,500 litres; for an apartment building, call us. Masks the calcium in hard water so it cannot form scale: stops scaling on taps, tiles, fittings, geyser, washing machine and pipes, and reduces hair fall and skin irritation from hard water. LIFE 10-12 months per cartridge depending on water use (about 50,000 litres for a family of four; repeat the boil test after 10 months). Works on borewell water up to 1200 TDS (a sediment pre-filter is recommended). Keeps the minerals the body needs. Its material is tasteless, odourless, colourless, non-toxic and food-grade.',
+  '2. Shower Head Filter: ' + stock('shower-filter') + 'fits easily on the shower; the one with 14-stage filtration; reduces hair fall and dry skin. Bathing water only. LIFE 6 months, then a new cartridge.',
+  '3. Tap Filter: ' + stock('tap-filter') + 'no fitting, it just hangs on one tap and is portable (it is NOT the 14-stage one). Reduces hair fall, dry skin and skin irritation from hard water. LIFE 6 months, then a new cartridge.',
+  '4. Washing Machine Ball: ' + stock('washing-ball') + 'dropped in the washing machine; cuts detergent use by half and keeps clothes looking new.',
+  '5. Tap and Tile Cleaner: ' + stock('tap-tile-cleaner') + 'a gentle water-based liquid; spray, scrub, wash off; brings back the shine of taps and tiles and removes existing marks.',
+  'PRICES in rupees (say only when asked): ' + PRICES + '. Delivery is free.',
+  'RATINGS in stars (say only when asked): ' + RATINGS + '. The 12,840+ reviews shown on product pages are for the whole store.',
+  'NOT on the website, so never claim them: replacement cartridges as a separate item (for one, call ' + PHONE + '), how long the Washing Machine Ball lasts, cleaning or purifying the water ("पानी साफ करता है"), killing bacteria, treating a disease. What the products do is stop hard-water scale and its effects. It IS safe: food-grade material, heavy metals within WHO drinking-water limits.',
+  'FREE DEMO KIT — OURS, never say we do not sell it: free (worth 99 rupees), free delivery, nothing to pay, one per customer, ordered on its own; it has NO product page. A sachet to test their own water at home: 1 litre of bore water in each of two utensils, hang the kit in one like a tea bag, boil both 10 minutes, let them cool, compare the white calcium deposit. Ordered with the "Order free" button below the products, on the home page and the products page (sign in with the mobile number, then "Place Free Order" in the cart).',
+  'WARRANTY, LIFE and REFUND are three DIFFERENT things. Never mix them up:',
+  '- WARRANTY (guarantee, गारंटी, वारंटी, గ్యారంటీ): 6-month replacement warranty, a defective product is replaced free. No 1-year or 365-day warranty exists.',
+  '- LIFE: Water Softener 10-12 months; Shower Head Filter and Tap Filter 6 months.',
+  '- REFUND: only for an order cancelled before it ships (from "My Orders"); the money is back in 5-7 business days. After delivery a damaged or defective product is replaced free if they tell us within 48 hours of delivery: replaced, not returned or refunded. The website offers no returns, no money-back guarantee, and no refund or replacement just because "it did not work for me" — replacement is for a damaged or defective product; never promise more. Example: "Cancel before it ships and you get a full refund; after delivery a defective product is replaced free, not refunded."',
+  'DOES IT REALLY WORK? (सच में काम करता है? / నిజంగా పనిచేస్తుందా? / can I trust it?) The answer is the PROOF, not "yes, it works": test your own water free with the Demo Kit; lab-tested and certified — NABL-accredited labs verified 99% scale minimization by the D\'Cal softener over 1,200+ hours of heating-coil tests (the softener\'s result: never say it of the filters), ISO 9001, a food-grade test report (Enviro Farmers Labs, Coimbatore), IICT safety data (heavy metals within WHO drinking-water limits), Registered Trade Mark 3927437, Registered Design 317385-001, awarded by the Telangana State Innovation Cell, Made in India; the certificates themselves, which you can SHOW them (below); 8 video stories of real customers and distributors on the home page. The free water TEST at the site is only for hotels, hospitals and campuses; a home customer uses the Demo Kit. Example: "It is tested by NABL labs and ISO 9001 certified — shall I open the lab report for you?"',
+  'CERTIFICATES you can show and open (act "certs" shows all four; act "cert" opens one on screen): "lab" = Food-Grade Test Report, Enviro Farmers Labs, Coimbatore, NABL ISO/IEC 17025 accredited, 21 Sep 2021: fluoride, arsenic, lead and heavy metals below the limits, concluded food grade (1 page). "msds" = Material Safety Data Sheet with IICT test data, 9 Mar 2018: water from a tank dosed with D\'Cal for 15 days, arsenic, cadmium, chromium, lead, silver, selenium and mercury within WHO drinking-water limits (1 page). "trademark" = Trade Mark Registration 3927437, Class 32, Trade Marks Registry Mumbai, 27 Aug 2018, registered to BEFACH 4X (2 pages). "design" = Design Registration 317385-001, Class 23-01, Patent Office Kolkata, 13 Jul 2020, the softener casing with seven drawing sheets (8 pages). "all" = all four in one document (12 pages). ISO 9001 and the Telangana award have no document to open.',
+  "ABOUT: India's first zero-electricity hard-water defense system, a brand of BEFACH 4X Private Limited, Banjara Hills, Hyderabad. 82% of Indian homes get hard water. Protects skin, hair, geyser, washing machine and pipes from limescale with no electricity, chemicals or maintenance. A traditional softener costs 50,000+ rupees and needs regeneration, a plumber and power; repairs of hard-water damage can cost around 5 lakh rupees.",
   '',
   'COMMON PROBLEMS THESE PRODUCTS SOLVE (use to recommend the right item):',
   '- Hair fall, dry/rough hair, dry or itchy skin, dandruff -> caused by hard water. Recommend the Home Water Softener (whole house) or the Shower Head Filter (for bathing only).',
@@ -78,11 +117,10 @@ const KNOWLEDGE = [
   '- Faded clothes, stiff/rough laundry, more soap needed -> Washing Machine Ball (and Home Water Softener).',
   '- Geyser/washing machine getting damaged, low water flow from scale -> Home Water Softener.',
   '- Whole house = Home Water Softener. Only bathroom = Shower Filter. Only kitchen tap = Tap Filter.',
-  'INSTALLATION: Connects to the main water line or a single outlet; a local plumber can fit it quickly, instructions are included.',
-  'DELIVERY: Free delivery all over India, no minimum order. Dispatched in 1-2 business days, reaches the customer in about 3-7 business days. Tracking details are sent once it ships.',
-  'PAYMENT: UPI, PhonePe, Google Pay, cards, net banking, and Cash on Delivery are all available.',
-  'CANCEL / REFUND: An order can be cancelled from "My Orders" before it ships. Paid orders are refunded within 5-7 business days. If an item arrives damaged, contact within 48 hours.',
-  'CONTACT: Phone and WhatsApp ' + PHONE + '. Email sales@befach.com. For a business partnership / dealership there is a partner page.',
+  '- Lives in an APARTMENT / flat -> NOT the Home Water Softener (it is for an independent house\'s own tank). Recommend the Shower Head Filter for the bathroom and the Tap Filter for the kitchen tap: both work in any flat with no fitting. For the whole building\'s tank there is the apartment solution (go "/campus/") — the society can call ' + PHONE + ' for a free water check.',
+  'DELIVERY: free all over India, no minimum order; dispatched in 1-2 business days, arrives in 3-7 business days depending on the location. Tracking details come when it ships; track on the Track Order page with the order number (no sign-in) or in "My Orders". CANCEL: any time before it ships, from "My Orders".',
+  'PAYMENT: UPI (PhonePe, Google Pay and others), credit and debit cards, net banking, and Cash on Delivery; online payment is secured by Razorpay.',
+  'CONTACT: Phone and WhatsApp ' + PHONE + ' (WhatsApp is fastest; the team replies within one business day). Email sales@befach.com. For a business partnership / dealership there is a partner page.',
   'B2B / COMMERCIAL water softeners (bigger systems that treat hard water at the source for a whole building):',
   '- HOTELS & RESORTS: protects every room, bathroom, boiler and laundry; about 72% less scale and tap damage; lower running costs and happier guests. Free water test at the hotel, no electricity. Page: /hotel/.',
   '- HOSPITALS, medical colleges & nursing homes: protects taps, pipes, boilers, laundry and medical machines; about 72% less scale. Free water check at the site, no electricity. Page: /hospital/.',
@@ -110,34 +148,42 @@ const KNOWLEDGE = [
   '  To let them call/chat a human: "https://wa.me/918622909192".',
   '',
   'RULES:',
-  '- RELEVANCE IS THE MOST IMPORTANT RULE. Answer ONLY the exact thing the customer asked, using ONLY the facts given above. Do not add extra sales pitch, extra products, or details they did not ask about. Stay on the point of the question.',
-  '- BOUNDARY — THIS WEBSITE ONLY. Read the WHOLE sentence before you answer, not just one word in it. D\'Cal sells exactly five things: Water Softener, Shower Head Filter, Tap Filter, Washing Machine Ball, Tap and Tile Cleaner (plus the commercial systems for hotels / hospitals / campuses). If the customer names ANY other item — food, fruit, a phone, clothes, furniture, medicine, another company\'s product — you do NOT sell it. Say in one short warm line that D\'Cal only sells hard-water products, name what you do sell, and set "go" to null.',
+  '- RELEVANCE IS THE MOST IMPORTANT RULE. Answer ONLY the exact thing the customer asked, using ONLY the facts given above. Do not add extra sales pitch, extra products, or details they did not ask about. Stay on the point of the question — and then ask your ONE next question (below).',
+  '- YOU ARE THE SALESPERSON — EVERY REPLY ENDS WITH ONE SHORT QUESTION that moves them to the next step. Never end on a plain statement; never leave them wondering what to say. Follow the order a good salesperson does, asking for the next step they have not done yet: 1) their problem (hair fall, dry skin, white marks, faded clothes, a damaged geyser), 2) their home (independent house, apartment, just the bathroom or the kitchen tap), 3) recommend the right product and open it, 4) clear any doubt with proof (certificates, the free Demo Kit), 5) "Shall I add it to your cart?", 6) "Shall I take you to checkout?". Make each question easy to answer with yes / no or one word, and never ask the same question twice in a row.',
+  '- SHOW, DO NOT POINT. When you talk about something you can show — a product, the certificates, the Demo Kit — show it with "go" or an act in the same reply. Never "it is on the home page, go and check".',
+  '- DOUBTS ARE YOUR CHANCE. "Does it work?" -> the proof, then offer to open a certificate or to add the free Demo Kit. "What if it does not work?" / refund -> the exact facts, then the free Demo Kit to check first. "Too costly?" -> what it saves (a traditional softener costs 50,000+ rupees; hard-water damage up to 5 lakh). Enthusiasm goes into HOW you say it, never into the facts: never stretch a fact, never promise what the FACTS do not say.',
+  '- [silence] means the customer has said nothing for a few seconds since your last line. Do not answer anything: say ONE short, friendly line that brings them back with an easy new question about their need or the next step (a different one from your last line, never "are you there?"), and offer to do it for them.',
+  '- ANSWER IN WORDS. When the answer is in the FACTS, SAY it. Never "see the page", "check the website" or "call us" in place of a fact you have; you may open a page as well, never instead of the answer. "Refund?", "guarantee?", "what if it does not work?" are answered from WARRANTY, LIFE and REFUND, every time.',
+  '- NO EMPTY YES. A "yes" or "no" always carries the fact that makes it true: "Yes, the Tap Filter lasts 6 months, then you change the cartridge", never just "yes, it works".',
+  '- STAY CORRECT. Check every claim against the FACTS before you say it. If the customer says something that differs from the FACTS ("so it lasts a year?"), politely tell them the fact; agree only when they are right. Never give in to pushback on a correct answer, and never say something that contradicts what you said earlier. If you said something wrong earlier, say plainly what is right.',
+  '- MISHEARD WORDS. Speech-to-text sometimes writes nonsense ("why did she release racist?"). If a sentence makes no sense, ask them in one short line to say it again; never answer a misheard word as if it were a product they asked for.',
+  '- BOUNDARY — THIS WEBSITE ONLY. Read the WHOLE sentence before you answer, not just one word in it. D\'Cal sells exactly five things: Water Softener, Shower Head Filter, Tap Filter, Washing Machine Ball, Tap and Tile Cleaner (plus the free Demo Kit, and the commercial systems for hotels / hospitals / campuses). If the customer names ANY other item — food, fruit, a phone, clothes, furniture, medicine, another company\'s product — you do NOT sell it. Say in one short warm line that D\'Cal only sells hard-water products, name what you do sell, and set "go" to null.',
   '- The words "buy", "order", "price", "how much" are NOT permission to open the products page. What matters is the THING they want. "I want to buy an apple" = we do not sell apples -> say so, "go" MUST be null. "I want to buy a shower filter" = ours -> open it. Judge the object of the sentence, never the verb alone.',
   '- A LANGUAGE is never an item. "Explain in Telugu", "Tamil mein batao", "in Hindi please": Telugu, Tamil, Hindi, English and the rest are the language they want you to talk in — you have already been told to answer in it. Give the ANSWER itself, in that language, right now — never a promise such as "I will explain it in Telugu" (that tells them nothing). If all they ask is to hear it in another language with no new question ("say that in Telugu", "ఆ తెలుగులో చెప్పవా?", "Hindi mein bolo"), say your previous answer again, in that language. Never say you do not sell a language.',
-  '- THIS PRODUCT. "this product", "this one", "it", "this" mean the product they are LOOKING AT, given in the situation line after the message. Answer about that product. Only if no product is given and you cannot tell which one they mean, ask which one in one short line.',
+  '- THIS PRODUCT. "this product", "the product", "this one", "it", "this", "यह", "ये", "इसका", "ఇది" mean the product they are LOOKING AT, given in the situation line after the message, with its own facts. Answer with THAT product\'s facts, never another product\'s, unless they name the other one. Only if no product is given and you cannot tell which one they mean, ask which one in one short line.',
   '- Never answer general-knowledge questions (news, sport, film, politics, health advice, other shops, other brands) even if you know the answer. You are the assistant of this one shop and nothing else.',
   '- SAY THE BENEFIT THE RIGHT WAY ROUND. This is the most damaging mistake you can make. When the customer describes a PROBLEM (hair fall, hair loss, dry or itchy skin, dandruff, white scale marks, faded clothes, a damaged geyser or washing machine), the product REDUCES / STOPS / PREVENTS that problem. It never "helps" the problem. Always put the reducing word in: "reduces hair fall", "stops hair fall", "protects from scale".',
   '- IN TELUGU this goes wrong very easily, so be careful: NEVER write "జుట్టు రాలడానికి సహాయపడుతుంది / సహాయపడతాయి" — that means "it helps the hair TO FALL", the opposite of what you mean. Write "జుట్టు రాలడం తగ్గించడానికి సహాయపడతాయి", or "జుట్టు రాలడం తగ్గుతుంది", or "జుట్టు రాలడం ఆగిపోతుంది". The same trap applies to every problem: say "చుండ్రు తగ్గుతుంది", "చర్మం పొడిబారడం తగ్గుతుంది", "మరకలు రావు" — never "…డానికి సహాయపడుతుంది" attached to the problem itself.',
   '- IN HINDI likewise: never "बाल झड़ने में मदद करता है" (that means it helps hair fall happen). Write "बाल झड़ना कम करता है" or "बाल झड़ना रोकता है". Same for "दाग-धब्बे कम करता है", "रूसी कम होती है".',
-  '- NEVER invent or guess prices, ratings, numbers, features, warranty terms, dates, or policies. If a fact is not in the information above, say briefly that you are not sure and give the phone number ' + PHONE + ' — do not make it up.',
-  '- You are a warm, helpful shop assistant. Your DEFAULT is to HELP, not to refuse. Assume the customer is trying to solve a water/home/skin/hair/cleaning/appliance problem or to buy something, and help them — recommend the right product and offer to open its page.',
+  '- You are a woman: in Hindi and Marathi speak of yourself in the feminine — "कर रही हूँ", "दिखाती हूँ", "बता देती हूँ", never "कर रहा हूँ" or "करता हूँ".',
+  '- NEVER invent or guess prices, ratings, numbers, features, warranty, refund or delivery terms, dates, or policies. The FACTS are the whole website: if something is not in them, say in one line that the website does not mention it and give the phone number ' + PHONE + ' — do not make it up.',
+  '- Your DEFAULT is to HELP and SELL, not to refuse. Assume the customer is trying to solve a water/home/skin/hair/cleaning/appliance problem or to buy something, and help them — recommend the right product, show it, and ask for the next step.',
   '- The customer may speak ANY Indian language — Telugu, Hindi, English, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese or Urdu. You will be told which language to answer in. Reply ONLY in that language, in its correct native script, even if the product names inside the question are in English. Never answer in a different language from the one you were asked for. Show prices as digits like 4500, not words.',
-  '- TALK LIKE A WARM LOCAL PERSON FROM HYDERABAD, not a formal robot. Use simple, everyday words that common people actually speak — short, friendly, natural. Keep common English words that Indians use every day IN THE SAME SENTENCE (water softener, filter, order, delivery, bathroom, tap, price). Keep product names in English exactly as written above — do NOT translate them.',
+  '- TALK LIKE A WARM LOCAL PERSON FROM HYDERABAD, not a formal robot. Use simple, everyday words that common people actually speak — short, friendly, natural. Keep common English words that Indians use every day IN THE SAME SENTENCE (water softener, filter, order, delivery, bathroom, tap, price). Keep product names in English exactly as written above, the Demo Kit too — do NOT translate them.',
   '- FOR TELUGU: use clear, standard, everyday Andhra Telugu that everyone understands easily. Speak in full, clear, complete words — do NOT drop or shorten words or use Telangana slang endings. Use normal polite forms like "చేయండి", "అడగండి", "నొక్కండి", "ఇవ్వండి". Keep it simple and natural (not heavy or over-formal), but every word must be complete and clear so it is easy to hear.',
   '- Sound caring and helpful, like talking to a neighbour — but say it in as few words as you can.',
   '- A short reply like "yes"/"అవును"/"हाँ", or a symptom like hair fall or dry skin, or anything about products, prices, orders, delivery, water, filters, or the shop, is ALWAYS on-topic. Never refuse these. If you are unsure what they mean, ask ONE short question or suggest the most likely product — do NOT refuse.',
-  '- IMPORTANT: read the conversation above. If YOUR previous message offered to open a page or show a product and the customer now says yes / అవును / हाँ / ok / sure / please, then DO it: set "go" to exactly that page and give a one-line confirmation. Do not ask again.',
+  '- IMPORTANT: read the conversation above. If YOUR previous message offered something — to open a page, show a product, open a certificate, add a product or the Demo Kit to the cart, go to checkout — and the customer now says yes / అవును / हाँ / ok / sure / please / कर दो, then DO exactly that with "go" or the act, say it in one line, and ask the next question. Do not ask again. A "no" means: accept it warmly and offer the next most useful thing.',
   '- MEMORY — USE IT WITH JUDGEMENT. The earlier turns above are context, not a script. USE them when the new message leans on them: a short answer ("yes", "no", "that one", "the second one", "how much", "and for the kitchen?"), a pronoun ("it", "that", "the same"), a question about the product or problem you were just discussing, or anything the customer already told you about themselves (their problem, their home, hotel, shop or city, what they already own). Then answer in that light, and never ask again for something they already said.',
   '- IGNORE the earlier turns when the customer clearly starts a new topic. Answer the new question on its own. Do not drag the previous product, offer or page back in unless they ask for it.',
   '- If the customer corrects you, changes their mind, or says something that contradicts an earlier turn, the LATEST message wins over everything before it.',
   '- Never repeat an earlier reply word for word. If the same question comes again, answer shorter, or add the one detail that was missing the first time.',
   '- INTERRUPTIONS. A reply marked [INTERRUPTED: …] was cut short because the customer spoke over it; they heard only the part quoted. What they said next matters most: (a) a new question, a correction or a "no" -> answer THAT and drop your unfinished point; (b) only a short acknowledgement (hmm, ok, haan, achha, sare, yes) -> finish your point in ONE short line, without starting it over; (c) stop, wait, bas, chup, enough, "one minute" -> reply with a single word of acknowledgement and nothing else, "go" null; (d) "repeat", "again", "what?" -> say the part they did not hear, shorter.',
   "- ONLY for questions that are clearly nothing to do with D'Cal, water, home, skin, hair, cleaning or appliances (for example cricket scores, movies, politics) give a short friendly line that you help with D'Cal and share the phone number " + PHONE + '.',
-  '- BE SHORT. THIS MATTERS AS MUCH AS BEING RIGHT. Every reply is READ ALOUD to the customer, and they have to sit and listen to the whole thing before they can speak again. ONE sentence. Never more than 20 words. Two short sentences only if the second one is genuinely necessary. No lists, no markdown, no emojis.',
+  '- BE SHORT. THIS MATTERS AS MUCH AS BEING RIGHT. Every reply is READ ALOUD to the customer, and they have to sit and listen to the whole thing before they can speak again. The answer is ONE sentence, never more than 20 words (two short sentences only when the facts they asked for need it — a refund or warranty answer, the proof that it works), then your question in under 10 words. No lists, no markdown, no emojis.',
   '- NEVER volunteer the star rating, the review count, or the price unless the customer actually asked for that. Adding "4.9 stars, 12,840+ reviews" to an answer about hair fall makes them wait several extra seconds to hear something they did not ask for.',
-  '- PREFER TO ACT, NOT ASK. When you recommend a specific product, or the customer wants a page/product/cart/track/contact, set "go" to open it DIRECTLY and confirm in one line (e.g. "I am opening the shower filter for you."). Do NOT ask "shall I open it?" — just open it. Only leave "go" as null and ask ONE short question when you genuinely cannot tell which product they need.',
+  '- PREFER TO ACT, NOT ASK. When you recommend a specific product, or the customer wants a page/product/cart/track/contact, set "go" to open it DIRECTLY and say so in one line, then ask the next step ("I am opening the Shower Head Filter for you — shall I add it to your cart?"). Do NOT ask "shall I open it?" — just open it. Only leave "go" as null when you genuinely cannot tell which product they need, and ask which.',
   '- When you recommend ONE product, set "go" to that product page (e.g. /product/water-softener). If you suggest looking at several, use /collection.',
-  '- Never invent prices, offers, or policies not stated here.',
   '',
   'ACTIONS — things you can DO on the site for the customer, given as "act" in the JSON. Use one when they ask you to do the thing, not merely talk about it:',
   '  {"do":"add","product":"<slug>","qty":N} = put a product in the cart (qty 1 unless they say a number). "this" / "it" on a product page means that page\'s product — see the STATE line.',
@@ -146,14 +192,18 @@ const KNOWLEDGE = [
   '  {"do":"wish","product":"<slug>"} / {"do":"unwish","product":"<slug>"} = save to / remove from the wishlist.',
   '  {"do":"search","q":"<words>"} = show search results.  {"do":"track","order":"<order id>"} = track an order by the id they say.',
   '  {"do":"scroll","dir":"up"|"down"} = scroll the page.  {"do":"back"} = go to the previous page.  {"do":"login"} = open the sign-in box.',
+  '  {"do":"showkit"} = show the Demo Kit on screen. Use it whenever they ask how to test, how to trust it, how to get it or where it is: tell them about the free Demo Kit, show it, and ASK "Shall I add the Demo Kit to your cart? It is completely free." "go" null.',
+  '  {"do":"kit"} = put the free Demo Kit in their cart — when they say yes to that offer, or ask you to order it ("order it for me", "मंगा दो", "order कर दो"). Not when they only ask what it is. The website handles sign-in and the one-per-customer check and opens the cart; your reply is one line that you are adding their free Demo Kit, "go" null.',
+  '  {"do":"certs"} = show all four certificates on screen (when they ask about certificates, proof, lab tests). Your reply: "Here are our four certificates — the lab report, safety data, trade mark and design registration. Which one shall I open?"',
+  '  {"do":"cert","which":"lab"|"msds"|"trademark"|"design"|"all"} = open that certificate on screen for them to read, on any page. While one is open (see STATE), "scroll down / up", "next page" are {"do":"scroll"} and move inside it, and "close it" / "band karo" is {"do":"close"}.',
   '  Slugs: water-softener, shower-filter, tap-filter, washing-ball, tap-tile-cleaner.',
   '  A STATE line arrives with every message: the page they are on, what is in the cart, and whether they are signed in. Use it for "what is in my cart", "what is my total", "add this", "remove that one". Give a total as ONE number ("3700 rupees"), never as a sum.',
   '  In every language the verb decides the act: "remove / hata do / తీసేయి the washing ball" -> {"do":"remove","product":"washing-ball"}; "make it three / teen kar do / మూడు చేయి" -> {"do":"qty",...,"qty":3}; "empty my cart / cart khali karo" -> {"do":"clear"}; "add / daal do / add cheyyi" -> {"do":"add",...}. Do not just describe the cart when they asked you to change it.',
-  '  The cart needs a sign-in. If they are NOT signed in and want to add, buy or check out: say in one line that they need to sign in with their mobile number first, and set act {"do":"login"} so the box opens for them.',
+  '  The cart needs a sign-in. If they are NOT signed in and want to add, buy or check out: say in one line that they need to sign in with their mobile number first, and set act {"do":"login"} so the box opens for them. (Not for the Demo Kit: "kit" asks for sign-in itself, and "showkit" needs none.)',
   '  After adding to the cart, confirm in one short line and STAY on the page ("go" null) unless they asked to see the cart or to buy now. Say prices only if asked.',
   '  Include "act" ONLY when there is something to do; otherwise leave it out entirely.',
   '  You can DO only what an "act" above does. Never say you are filling in, typing, entering, saving or submitting anything (their name, address, details, a form, a payment) — you cannot, and saying so while nothing happens on their screen is lying to them. If they tell you their address or details outside the checkout, say they can tell you them on the checkout\'s address form.',
-  '- Answer strictly as JSON only: {"reply": "<spoken answer>", "go": "<path or null>", "act": {…} only when acting}. No text outside the JSON.'
+  '- Answer strictly as JSON only: {"reply": "<spoken answer, no question>", "ask": "<your ONE short question for their next step, in the same language: what comes AFTER what you just did or showed>", "go": "<path or null>", "act": {…} only when acting}. "ask" is never empty, except for a one-word "stop / wait" acknowledgement. Examples of "ask": you opened a product -> "Shall I add it to your cart?"; you showed the certificates -> "Which one shall I open?"; you showed the Demo Kit -> "Shall I add the Demo Kit to your cart? It is free."; you added to the cart -> "Shall I take you to checkout?"; you opened a certificate -> "Shall I scroll down?". No text outside the JSON.'
 ].join('\n');
 
 /* Every language a customer may speak to the mic in. The widget sends whichever
@@ -207,6 +257,121 @@ function soldOutNote(message, state) {
   return '\n(Stock: the ' + hit.map((s) => PRODUCT_NAME[s]).join(' and ') + (hit.length > 1 ? ' are' : ' is') +
          ' OUT OF STOCK right now. If it comes up, say so plainly first, and never offer to add it to the cart.)';
 }
+/* ---- The Demo Kit's two actions, said where they are read ----
+   Its facts are in KNOWLEDGE, and still, with the customer signed out, Llama
+   answered "where do I order it?" and "order the demo kit for me" with the
+   cart's own rule: act login (11 Oct 2026 replay, 3 of 3). So a turn about
+   the kit carries the choice next to the question. "About the kit" is their
+   words now OR the one exchange before: "कहाँ order करना है इसको?" names
+   nothing, and an earlier note that read only the current words lost the
+   kit on exactly that line. Not two exchanges back: then a mention of the kit
+   kept the note on refund questions, and she answered them with the kit.
+   And since she offers the kit herself now, her mentioning it is not enough:
+   their reply must follow it up — a yes, a where, a how, an order.
+   Every other turn stays as long as it was. */
+const KIT_WORDS = /demo|\bkit\b|sample|trial|डेमो|किट|सैंपल|ट्रायल|డెమో|కిట్|శాంపిల్|டெமோ|கிட்/i;
+const KIT_FOLLOW = /order|where|how|get|buy|send|कहाँ|कहां|किधर|कैसे|मिलेग|मंगा|ऑर्डर|भेज|ఎక్కడ|ఎలా|ఆర్డర్|పంప/i;
+function kitNote(message, history) {
+  const followsHer = KIT_WORDS.test(lastAssistant(history)) && (YES_RE.test(message) || KIT_FOLLOW.test(message));
+  if (!KIT_WORDS.test(message) && !followsHer) return '';
+  return '\n(Only if they are asking about the free Demo Kit: "how do I get it / test it / where is it" -> act {"do":"showkit"} and ask "Shall I add the Demo Kit to your cart? It is completely free."; ' +
+         '"yes" to that, or "order it for me" -> act {"do":"kit"}, which asks for sign-in by itself. Never act "login" and never a product page for the kit. Anything else, answer it and ignore this.)';
+}
+const SILENCE = '[silence]';   // what the widget sends when the customer has gone quiet
+/* ---- The refund rule, said where it is read ----
+   With the salesperson's "reassure the doubter" in the prompt, Llama promised
+   "if it does not work you can return it or get it replaced" (11 Oct 2026
+   replay) — the very lie of the live transcript. A turn about refunds,
+   returns, guarantees or "what if it does not work" carries the policy beside
+   the question; about 60 tokens, on those turns only. */
+const ASKED_REFUND = /refund|return|money\s*back|guarantee|warrant|replace|(doesn'?t|does not|did not|didn'?t|not) work|रिफंड|रिटर्न|वापस|पैसे|गारंटी|वारंटी|बदल|काम नहीं|काम न|రీఫండ్|వాపసు|తిరిగి|గ్యారంటీ|వారంటీ|మార్చ|పని చేయ/i;
+const REFUND_NOTE = '\n(The policy, exactly — answer the part they asked: GUARANTEE / WARRANTY = a 6-month replacement warranty, a defective product is replaced free. ' +
+  'REFUND = only if the order is cancelled before it ships. After delivery: NO return, NO refund; a damaged or defective product is replaced free if they tell us within 48 hours. ' +
+  'Do not promise more. Offer the free Demo Kit to check first.)';
+/* "मैं ले जा सकता हूँ", "कर रहा हूँ": she is a woman, the prompt says so, and
+   Llama still slips into the masculine. A first-person form ("…ता हूँ",
+   "रहा हूँ", "…ूँगा") can only be her own, so it is put right here. */
+/* "टैप फिल्टर … पानी को साफ करता है", "it purifies water": never true —
+   the products stop hard-water scale and its effects, they purify nothing —
+   and the NOT line in KNOWLEDGE did not stop it (11 Oct 2026, 2 of 22
+   replayed turns). The claim itself is put right. */
+const PURIFY = [
+  [/पानी\s*(?:को\s*)?(?:साफ|शुद्ध)\s*(?:कर(?:ता|ती|ते)\s*है|बना(?:ता|ती)\s*है)/g, 'हार्ड पानी का असर कम करता है'],
+  [/(?:आपको\s*)?(?:साफ|शुद्ध)\s*पानी\s*(?:दे(?:ता|ती)\s*है|मिलता\s*है)/g, 'हार्ड पानी का असर कम करता है'],
+  [/\b(?:gives?\s+(?:you\s+)?)?(?:clean|pure|purified)\s+water\b/gi, 'less hard-water damage'],
+  [/\b(?:purif(?:y|ies)|cleans?)\s+(?:the\s+|your\s+)?water\b/gi, 'reduces the effects of hard water']
+];
+function noPurifying(s) { for (const [re, to] of PURIFY) s = s.replace(re, to); return s; }
+function feminineHindi(s) {
+  return s.replace(/(\S)ता(\s+)(हूँ|हूं)/g, '$1ती$2$3').replace(/रहा(\s+)(हूँ|हूं)/g, 'रही$1$2')
+          .replace(/(ूँ|ूं|ऊँ|ऊं)गा(?=[\s।,.!?]|$)/g, '$1गी');
+}
+/* ---- A sign-in nobody asked for ----
+   Signed out, Llama reaches for act login on lines that have nothing to do
+   with buying — "refund हो जाएगा अगर काम नहीं किया?", a garbled "कि बस paper
+   लगाओ ना answer", "अपना website खोलते ही" — 4 or 5 turns of the 22 in the
+   11 Oct 2026 replay, with the old prompt and the new alike. The sign-in box
+   then pops up over a customer asking about refunds. It stays only when their
+   words are about buying, the cart or signing in, or her last line asked
+   them to sign in ("yes" to that); a reply that was nothing but "please sign
+   in" becomes "say that again". */
+const WANTS_ACCOUNT = /\b(buy|order|purchase|add|cart|check\s*out|pay|payment|sign|login|log\s*in|account|wishlist|save)\b|खरीद|ऑर्डर|आर्डर|मंगा|कार्ट|डाल|जोड़|चेकआउट|पेमेंट|साइन|लॉग|अकाउंट|కొన|ఆర్డర్|కార్ట్|పెట్ట|చెక్|సైన్|లాగిన్|యాడ్/i;
+const SIGN_IN_TALK = /sign[\s-]*in|log[\s-]*in|साइन[\s-]*इन|लॉग[\s-]*इन|సైన్[\s-]*ఇన్|లాగిన్/i;
+/* ---- Ask first, then do ----
+   The salesperson's question ("Shall I add it to your cart?") came back with
+   the add already done: "tell me about the shower filter" put it in the cart
+   (11 Oct 2026). A cart change — add, the free kit, checkout — happens only
+   when their words ask for it, or they say yes to an offer she just made. */
+const YES_RE = /^\s*(yes|yeah|yep|ok|okay|sure|please|go ahead|do it|haan?|ha|ji|theek|hmm+)\b|^\s*(हाँ|हां|हा|जी|ठीक|कर दो|कर दीजिए|डाल दो|ज़रूर|जरूर|అవును|సరే|చేయండి|ఓకే)/i;
+const CART_OFFER = /cart|checkout|order|कार्ट|चेकआउट|ऑर्डर|కార్ట్|చెక్|ఆర్డర్/i;
+const CHECKOUT_OFFER = /check\s*out|चेकआउट|చెక్\s*‌?అవుట్/i;
+function lastAssistant(history) {
+  const last = (Array.isArray(history) ? history.slice().reverse() : []).find((h) => h && h.role === 'assistant');
+  return last && typeof last.text === 'string' ? last.text : '';
+}
+function cartWanted(message, history) {
+  if (WANTS_ACCOUNT.test(message)) return true;
+  return YES_RE.test(message) && CART_OFFER.test(lastAssistant(history));
+}
+// the reply without its sentences asking them to sign in
+function dropSignInTalk(reply) {
+  return String(reply || '').split(/(?<=[.!?।])\s+/).filter((p) => !SIGN_IN_TALK.test(p)).join(' ').trim();
+}
+
+/* ---- What she says is what the screen does ----
+   "टैप फिल्टर दिखा रही हूँ" with nothing opening; "I recommend the Shower
+   Head Filter" while the page went to the softener. A customer who cannot read
+   follows her words with their eyes, so the two must agree:
+   - she says she is showing / opening one product, or the Demo Kit, or the
+     certificates, and nothing does it -> it is done;
+   - she names exactly one product and "go" opens a different one -> the page
+     she named. */
+const SHOW_CLAIM = /\b(?:showing|opening|here is|here are|here's)\b|दिखा रही|दिखाती हूँ|दिखाती हूं|खोल रही|खोल देती|यह रहा|ये रहा|ये रहे|यह रही|ये रही|చూపిస్తున్నాను|తెరుస్తున్నాను|ఇదిగో/i;
+const NAMED = [
+  ['water-softener', /water\s*softener|\bsoftener|सॉफ्टनर|सॉफ़्टनर|सोफ्टनर|సాఫ్ట్\s*‌?నర్/i],
+  ['shower-filter', /shower|शावर|शॉवर|షవర్/i],
+  ['tap-filter', /tap\s*filter|टैप\s*फ़?ि?ल्टर|टैप फिल्टर|नल\s*(?:का\s*)?फ़?िल्टर|ట్యాప్\s*ఫిల్టర్|టాప్\s*ఫిల్టర్/i],
+  ['washing-ball', /washing|वॉशिंग|वाशिंग|వాషింగ్/i],
+  ['tap-tile-cleaner', /tile\s*cleaner|टाइल|టైల్/i]
+];
+const KIT_SAID = /demo\s*kit|डेमो\s*किट|డెమో\s*కిట్/i, CERTS_SAID = /certificate|सर्टिफिकेट|प्रमाणपत्र|సర్టిఫికెట్/i;
+function matchScreenToWords(out, state) {
+  const said = String(out.reply || '').split(/(?<=[.!।])\s+/).filter((p) => !/[?？]\s*$/.test(p)).join(' ');   // not her question
+  const named = NAMED.filter(([, re]) => re.test(said)).map(([s]) => s);
+  const page = String((state && state.page) || '');
+  if (!out.go && !out.act && SHOW_CLAIM.test(said)) {
+    if (KIT_SAID.test(said)) out.act = { do: 'showkit' };
+    else if (CERTS_SAID.test(said)) out.act = { do: 'certs' };
+    else if (named.length === 1 && page !== '/product/' + named[0]) out.go = '/product/' + named[0];
+  }
+  const gm = /^\/product\/([a-z0-9-]+)$/.exec(out.go || '');
+  if (gm && named.length === 1 && named[0] !== gm[1]) out.go = '/product/' + named[0];
+}
+function signInWanted(message, history) {
+  if (WANTS_ACCOUNT.test(message)) return true;
+  const last = (Array.isArray(history) ? history.slice().reverse() : []).find((h) => h && h.role === 'assistant');
+  return !!(last && typeof last.text === 'string' && SIGN_IN_TALK.test(last.text));
+}
 const ALLOWED_PATHS = new Set([
   '/', '/collection', '/cart', '/track-order', '/contact', '/faq', '/shipping-returns',
   '/privacy-policy', '/legal', '/wishlist', '/search', '/blog', '/about',
@@ -225,7 +390,11 @@ function safeGo(go) {
    The widget executes these in the browser (js/voice-assistant.js runAction),
    so nothing the model invents can reach it: unknown verbs, unknown products,
    silly quantities and odd characters are all dropped here. */
-const ACT_DO = { add: 1, remove: 1, qty: 1, clear: 1, coupon: 1, checkout: 1, wish: 1, unwish: 1, search: 1, track: 1, scroll: 1, back: 1, login: 1 };
+const ACT_DO = { add: 1, remove: 1, qty: 1, clear: 1, coupon: 1, checkout: 1, wish: 1, unwish: 1, search: 1, track: 1, scroll: 1, back: 1, login: 1, kit: 1, showkit: 1, certs: 1, cert: 1, close: 1 };
+// the documents the widget can open (js/voice-assistant.js CERTS) — and what
+// the STATE line calls the one on screen
+const CERT_NAME = { lab: 'Food-Grade Test Report', msds: 'Material Safety Data Sheet', trademark: 'Trade Mark Registration',
+                    design: 'Design Registration', all: 'all four certificates' };
 function safeAct(a) {
   if (!a || typeof a !== 'object') return null;
   const d = String(a.do || a.type || a.action || '').toLowerCase().trim();
@@ -241,20 +410,22 @@ function safeAct(a) {
   if (d === 'search') { const q = String(a.q || a.query || '').trim().slice(0, 80); if (!q) return null; out.q = q; }
   if (d === 'track') { const o = String(a.order || a.id || '').trim().replace(/[^A-Za-z0-9#_-]/g, '').slice(0, 40); if (!o) return null; out.order = o; }
   if (d === 'scroll') out.dir = /up|top/i.test(String(a.dir || '')) ? 'up' : 'down';
+  if (d === 'cert') { const w = String(a.which || a.id || a.cert || '').toLowerCase().trim(); if (!CERT_NAME[w]) return null; out.which = w; }
   return out;
 }
 
-/* ---- The free Demo Kit, told only when it is asked about ----
-   The kit is not one of the five products, so the BOUNDARY rule would have her
-   say "we do not sell that". Its facts ride on the turn that asks and on no
-   other: every other turn's prompt stays exactly as long as before, because her
-   reply time comes first. Terms match server.js kitProblem. */
-const ASKED_DEMO_KIT = /demo|\bkit\b|sample|trial|free\s*gift|try\s+(it\s+)?(first|before)|before\s+buying|डेमो|किट|सैंपल|ट्रायल|డెమో|కిట్|శాంపిల్|ట్రయల్|டெமோ|கிட்/i;
-const DEMO_KIT_NOTE = "\n(Facts for this answer: the D'Cal Demo Kit is FREE (worth 99 rupees) and is ordered on its own, " +
-  'with nothing to pay and free delivery, one per customer. To order it: the "Order free" button below the products on the home page ' +
-  'or the products page puts it in the cart, then checkout as usual. It is a small sachet: dip it like a tea bag in 1 litre of bore ' +
-  'water, boil it for 10 minutes next to 1 litre of plain bore water, let both cool, and compare the white calcium deposit. ' +
-  'It IS ours: never say we do not sell it. To show it, set "go" to "/collection".)';
+/* "It", "this product", "मतलब साल भर चले गए product": on the Tap Filter's
+   page Llama still answered with the softener's 10-12 months (11 Oct 2026
+   replay) — two products, two lives, one line apart in KNOWLEDGE. The product
+   on screen carries its own facts in the situation line, about 20 tokens, on
+   product pages only. */
+const ON_SCREEN = {
+  'water-softener': 'for an independent house\'s own tank, not a flat; dropped into the overhead tank; LIFE 10-12 months per cartridge',
+  'shower-filter': 'fits on the shower, 14-stage filtration; LIFE 6 months, then a new cartridge',
+  'tap-filter': 'hangs on one tap, no fitting, not 14-stage; LIFE 6 months, then a new cartridge',
+  'washing-ball': 'dropped in the washing machine, halves detergent use; its life is not stated on the website',
+  'tap-tile-cleaner': 'spray, scrub, wash off' + (OUT('tap-tile-cleaner') ? '; OUT OF STOCK' : '')
+};
 
 /* ---- The customer's situation, in one short line the model can read ----
    Sent by the widget with every message: which page they are on, what is in
@@ -268,6 +439,7 @@ function describeState(state) {
   if (Array.isArray(state.cart) && state.cart.length) {
     cart = state.cart.slice(0, 10).map((i) => {
       const p = String((i && (i.p || i.product || i.slug)) || '').toLowerCase();
+      if (p === 'demo-kit') return 'free Demo Kit';
       if (PRODUCT_SLUGS.indexOf(p) === -1) return null;
       const q = Math.max(1, Math.min(99, parseInt(i.q || i.qty, 10) || 1));
       return p + ' x' + q;
@@ -276,9 +448,15 @@ function describeState(state) {
   // the product on their screen: the page's own, or the one she has lit up
   // for them — what "this product" means
   const pm = /^\/product\/([a-z0-9-]+)/.exec(page);
-  const show = PRODUCT_NAME[String(state.show || '')] || (pm && PRODUCT_NAME[pm[1]]) || '';
+  const slug = PRODUCT_NAME[String(state.show || '')] ? String(state.show) : (pm && PRODUCT_NAME[pm[1]] ? pm[1] : '');
+  const show = slug ? PRODUCT_NAME[slug] : '';
+  // a certificate open in front of them ("design:2:8" = page 2 of 8): what
+  // "scroll down", "next page" and "close it" are about
+  const cm = /^([a-z]+):(\d{1,3}):(\d{1,3})$/.exec(String(state.cert || ''));
+  const cert = cm && CERT_NAME[cm[1]] ? '; OPEN ON SCREEN: the ' + CERT_NAME[cm[1]] + ', page ' + cm[2] + ' of ' + cm[3] +
+               ' ("scroll" moves inside it, "close" closes it)' : '';
   return '\n(Their situation, for your information only — not their question: page ' + page +
-         (show ? '; looking at: the ' + show : '') +
+         (show ? '; looking at: the ' + show + ' (' + ON_SCREEN[slug] + ')' : '') + cert +
          '; cart: ' + cart + '; signed in: ' + (state.login ? 'yes' : 'no') + '.)';
 }
 
@@ -326,8 +504,36 @@ const SCRIPT_LANGS = [
 ];
 function langOfScript(text, detected) {
   const s = String(text || '');
-  for (const [re, owners] of SCRIPT_LANGS) if (re.test(s)) return owners.indexOf(detected) !== -1 ? detected : owners[0];
+  for (const [re, owners] of SCRIPT_LANGS) {
+    if (!re.test(s)) continue;
+    if (owners[0] === 'hi') return devanagariLang(s, detected);
+    return owners.indexOf(detected) !== -1 ? detected : owners[0];
+  }
   return detected;
+}
+/* Hindi or Marathi? The detector's guess is not to be trusted on a short or
+   code-mixed line: on 11 Oct 2026 "क्या कैसे कर दे रहे हो guarantee?" and
+   "अपना website खोलते ही" came back as Marathi, and a Hindi speaker was
+   answered in Marathi twice. The words settle it — each language's everyday
+   grammar words, none the other uses in the same sense (no तो / ही / का,
+   which both do). Nepali and Sanskrit guesses on these lines are the same
+   mistake. Keep in step with the widget's devanagariLang(). */
+const HINDI_WORDS = new Set(('है हैं हूँ हूं था थी थे नहीं क्या क्यों कैसे कैसा कैसी कहाँ कहां कब कितना कितने कितनी ' +
+  'आप आपका आपकी आपके आपको आपने मुझे मेरा मेरी मेरे मैं हम हमें हमारा तुम यह ये वह वो इस उस इसको इसका इसमें ' +
+  'को की के में से पर और भी कर करो करें करना करेंगे दीजिए बताओ बताइए बताइये चाहिए अपना अपनी अपने ' +
+  'रहे रहा रही गया गई सकते सकता सकती वाला लिए अगर लेकिन मतलब ठीक हाँ हां').split(' '));
+const MARATHI_WORDS = new Set(('आहे आहेत नाही नाहीत काय मला तुला तुम्ही तुम्हाला तुमच्या तुमचा तुमची आम्ही आम्हाला ' +
+  'आमच्या आमचा आमची माझा माझी माझे माझ्या कसा कशी कसे केले करा करायचे करायला पाहिजे सांगा द्या घ्या ' +
+  'झाले झाला आणि पण किंवा म्हणजे मध्ये साठी हवे हवा हवी कुठे किती').split(' '));
+function devanagariLang(text, detected) {
+  let hi = 0, mr = 0;
+  for (const w of String(text || '').split(/[^\p{L}\p{M}]+/u)) {
+    if (HINDI_WORDS.has(w)) hi++;
+    else if (MARATHI_WORDS.has(w) || /च्या$/.test(w)) mr++;
+  }
+  if (detected === 'hi') return mr >= 2 && mr > hi ? 'mr' : 'hi';
+  if (detected === 'mr') return hi > mr ? 'hi' : 'mr';
+  return mr > hi ? 'mr' : 'hi';                    // ne / sa / anything else on Devanagari
 }
 
 /* "Explain it in Telugu", "Tamil mein batao", "తెలుగులో చెప్పండి": the customer
@@ -382,9 +588,102 @@ function parseReply(raw) {
     if (m) { try { obj = JSON.parse(m[0]); } catch (e2) { obj = null; } }
   }
   if (obj && typeof obj === 'object') {
-    return { reply: cleanReply(obj.reply), go: safeGo(obj.go), act: safeAct(obj.act) };
+    // the act where it belongs, or where the model dropped it: inside "ask"
+    // or "reply" as {"do":"add",…}, or as a bare "do:add,product:…" string
+    const act = safeAct(obj.act) || safeAct(pullAct(obj.act)) || safeAct(pullAct(obj.ask)) || safeAct(pullAct(obj.reply));
+    return { reply: cleanReply(obj.reply), ask: cleanAsk(obj.ask), go: safeGo(obj.go), act: act };
   }
-  return { reply: cleanReply(raw.replace(/[{}"]/g, '')), go: null, act: null };   // last resort: speak the text
+  return { reply: cleanReply(raw.replace(/[{}"]/g, '')), ask: '', go: null, act: null };   // last resort: speak the text
+}
+/* "क्या इसे आपकी कर्ट में डालूँ? do:add,product:tap-filter,qty:1" was READ
+   ALOUD on 11 Oct 2026: the model wrote the act into the "ask" text, the
+   braces were stripped, and nothing was added or opened while she said she
+   was showing it. -> the act object found in a string, or null */
+function pullAct(s) {
+  if (typeof s !== 'string' || !/\bdo\b"?\s*:/.test(s)) return null;
+  const m = /\{[^{}]*\}/.exec(s);
+  if (m) { try { return JSON.parse(m[0]); } catch (e) {} }
+  const o = {};
+  String(m ? m[0] : s).replace(/"?\b(do|product|qty|code|q|order|dir|which)\b"?\s*:\s*"?([\w-]+)"?/gi, (_, k, v) => { o[k.toLowerCase()] = v; });
+  return o.do ? o : null;
+}
+// what is left of a spoken line once an act written into it is cut off
+const ACT_RESIDUE = /\s*(?:\{[\s\S]*$|"?\b(?:do|product|qty)\b"?\s*:[\s\S]*$)/i;
+/* Her next question, asked for in a field of its own: as a rule in the
+   prompt ("end every reply with a question") Llama kept it on 4-7 turns of 16;
+   a JSON field it has to fill, it fills. Joined onto the reply here, unless the
+   reply already ends in a question ([silence] turns are one). */
+function cleanAsk(s) {
+  s = (typeof s === 'string' ? s : '').replace(ACT_RESIDUE, '').replace(CJK, '').replace(/[{}"]+/g, '').replace(/\s+/g, ' ').trim();
+  return /\p{L}/u.test(s) ? s.slice(0, 120) : '';
+}
+/* "Shall I open the Shower Head Filter for you?" — over the page already
+   opening; "shall I show them?" over the certificates already shown (11 Oct
+   2026, the "ask" examples notwithstanding). The question moves one step on,
+   in the languages with a line for it. */
+const NEXT_ASK = {
+  product: { en: 'Shall I add it to your cart?', hi: 'क्या मैं इसे आपके कार्ट में डाल दूँ?', te: 'దీన్ని మీ కార్ట్‌లో పెట్టనా?' },
+  certs: { en: 'Which one shall I open?', hi: 'इनमें से कौन सा खोलकर दिखाऊँ?', te: 'వీటిలో ఏది తెరిచి చూపించనా?' }
+};
+const ASKS_TO_SHOW = /\b(open|show|see)\b|खोल|दिखा|देखना|తెర|చూపి|చూడ/i;
+function nextAsk(ask, go, act, lang) {
+  if (!ask || !ASKS_TO_SHOW.test(ask)) return ask;
+  const pm = /^\/product\/([a-z0-9-]+)$/.exec(go || '');
+  if (pm && !OUT(pm[1]) && NEXT_ASK.product[lang]) return NEXT_ASK.product[lang];
+  if (act && act.do === 'certs' && NEXT_ASK.certs[lang]) return NEXT_ASK.certs[lang];
+  return ask;
+}
+/* The same close, again and again: "shall I add the Tap Filter to your
+   cart?" ended 12 replies running in the 11 Oct replay while the customer
+   argued about refunds — pushy, and the wrong step for a doubter. Telling the
+   model so beside the question cost facts (it began stretching claims), so it
+   is settled here instead: a question she asked in her last two lines gives
+   way to the next sales step she has not offered lately — unless what the
+   customer just said is about that very thing ("how do I get the kit?" is
+   answered by offering the kit again). "Shall I take you to the login page?",
+   which the model invents as a step, goes the same way unless they are buying. */
+const NEXT_STEPS = [
+  { when: (st) => cartHas(st, null), say: { en: 'Shall I take you to checkout?', hi: 'चेकआउट पर ले चलूँ?', te: 'చెక్‌అవుట్‌కి తీసుకెళ్ళనా?' } },
+  { when: (st) => !cartHas(st, 'demo-kit'), say: { en: 'Shall I add the free Demo Kit to your cart, so you can test your water at home?', hi: 'क्या मैं फ्री डेमो किट आपके कार्ट में डाल दूँ, ताकि आप घर पर पानी टेस्ट कर सकें?', te: 'ఇంట్లో నీటిని టెస్ట్ చేయడానికి ఫ్రీ డెమో కిట్ మీ కార్ట్‌లో పెట్టనా?' } },
+  { when: () => true, say: { en: 'Shall I show you our lab certificates?', hi: 'क्या मैं आपको हमारे लैब सर्टिफिकेट दिखाऊँ?', te: 'మా ల్యాబ్ సర్టిఫికెట్లు చూపించనా?' } },
+  { when: () => true, say: { en: 'Is it for an independent house or an apartment?', hi: 'यह independent house के लिए है या apartment के लिए?', te: 'ఇది ఇండిపెండెంట్ హౌస్ కోసమా, అపార్ట్‌మెంట్ కోసమా?' } }
+];
+function cartHas(st, slug) {
+  const c = (st && Array.isArray(st.cart)) ? st.cart : [];
+  return slug ? c.some((i) => i && (i.p || i.product || i.slug) === slug) : c.length > 0;
+}
+function qWords(s) { return new Set(String(s || '').toLowerCase().split(/[^\p{L}\p{M}\p{N}]+/u).filter((w) => w.length > 1)); }
+// the same question, not merely the same "shall I put it in your cart" frame
+function alike(a, b) {
+  const A = qWords(a), B = qWords(b);
+  if (!A.size || !B.size) return false;
+  let both = 0; A.forEach((w) => { if (B.has(w)) both++; });
+  return both / (A.size + B.size - both) >= 0.5;
+}
+const ASK_TOPICS = [/demo|\bkit\b|डेमो|किट|డెమో|కిట్/i, /order|buy|cart|ऑर्डर|खरीद|कार्ट|मंगा|ఆర్డర్|కార్ట్|కొన/i,
+                    /certif|सर्टिफिकेट|प्रमाण|సర్టిఫికెట్/i, /check\s*out|चेकआउट|చెక్/i];
+const LOGIN_ASK = /log\s*-?\s*in|sign\s*-?\s*in|लॉग\s*-?\s*इन|लॉगिन|साइन\s*-?\s*इन|లాగిన్|సైన్\s*ఇన్/i;
+function freshAsk(ask, message, history, state, lang) {
+  if (!ask || !NEXT_STEPS[0].say[lang]) return ask;
+  const mine = (Array.isArray(history) ? history : []).filter((h) => h && h.role === 'assistant').map((h) => String(h.text || ''));
+  const endQ = (t) => t.split(/(?<=[.!।])\s+/).pop();
+  const askedIn = (q, n) => mine.slice(-n).some((t) => alike(q, endQ(t)));
+  const onTopic = ASK_TOPICS.some((re) => re.test(ask) && re.test(String(message || '')));
+  const repeated = askedIn(ask, 2) && !onTopic;
+  const loginStep = LOGIN_ASK.test(ask) && !signInWanted(message, history);
+  if (!repeated && !loginStep) return ask;
+  const step = NEXT_STEPS.find((s) => s.when(state) && !askedIn(s.say[lang], 3));
+  return step ? step.say[lang] : ask;
+}
+function withAsk(reply, ask) {
+  if (!ask || /[?？؟]\s*$/.test(reply)) return reply;
+  // the two together stay one breath of listening: the answer gives way, at
+  // a sentence end, so the question always survives
+  if (reply.length + ask.length > MAX_SPOKEN + 40) reply = trimForSpeech(reply, Math.max(60, MAX_SPOKEN + 40 - ask.length));
+  reply = reply.replace(/[\s,;:–—-]+$/, '');
+  // the voice pauses at a full stop: "खोल रही हूँ क्या आपको…" ran on as one breath
+  if (!/[.!।॥]$/.test(reply)) reply += /[ऀ-ॿ]/.test(reply) ? '।' : '.';
+  return reply + ' ' + ask;
 }
 /* Characters that can NEVER belong in an Indian-language answer: Chinese,
    Japanese and Korean. Models do slip them in — llama-3.3-70b answered a Hindi
@@ -396,7 +695,8 @@ const CJK = /[　-〿぀-ゟ゠-ヿ㐀-䶿一-鿿豈-﫿가-힯]/g;
 // tidy a reply: drop any leaked "reply:"/"go:" repetition some models emit, cap length
 function cleanReply(s) {
   s = (typeof s === 'string' ? s : '').trim();
-  s = s.split(/\s*["']?\b(?:reply|go)\b["']?\s*[:：]/i)[0].trim();   // cut at a leaked key
+  s = s.split(/\s*["']?\b(?:reply|go|ask|act)\b["']?\s*[:：]/i)[0].trim();   // cut at a leaked key
+  s = s.replace(ACT_RESIDUE, '').trim();                                     // ...or a leaked act
   s = s.replace(/[{}"]+\s*$/, '').trim();
   // replace (never test) — a /g regex keeps its lastIndex after .test(), so the
   // NEXT reply would start scanning from the middle and miss what is at the front
@@ -461,15 +761,16 @@ function stripUnsolicitedStats(reply, question) {
 }
 
 const MAX_SPOKEN = parseInt(process.env.ASSISTANT_MAX_CHARS || '200', 10);
-function trimForSpeech(s) {
-  if (s.length <= MAX_SPOKEN) return s;
-  const cut = s.slice(0, MAX_SPOKEN + 1);
+function trimForSpeech(s, max) {
+  max = max || MAX_SPOKEN;
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max + 1);
   // '।' is the Devanagari full stop, used in Hindi/Marathi replies
   const end = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('?'),
                        cut.lastIndexOf('!'), cut.lastIndexOf('।'));
-  if (end > MAX_SPOKEN * 0.4) return cut.slice(0, end + 1).trim();
+  if (end > max * 0.4) return cut.slice(0, end + 1).trim();
   const space = cut.lastIndexOf(' ');
-  return (space > 0 ? cut.slice(0, space) : cut.slice(0, MAX_SPOKEN)).trim();
+  return (space > 0 ? cut.slice(0, space) : cut.slice(0, max)).trim();
 }
 
 /* Ask for a strict JSON object where supported. If the model/provider rejects
@@ -637,11 +938,14 @@ async function answer(message, lang, history, state, pref) {
         said = message + '\n(Give the real answer now, in ' + L + ' — what it is and what it does — not "I will explain".)';
       }
     }
-    if (ASKED_DEMO_KIT.test(message)) said += DEMO_KIT_NOTE;
+    // The widget heard nobody for a few seconds after her line (js/voice-
+    // assistant.js nudge()): a salesperson does not stand there in silence.
+    if (message === SILENCE) said = SILENCE + ' (they have said nothing for a few seconds: bring them back by offering the next concrete step — "Shall I add the Tap Filter to your cart?", "Shall I show you the certificates?", "Is it for a house or an apartment?" — never "any other questions?", never the question you just asked)';
     messages.push({
       role: 'user',
       content: 'Answer in ' + LANG_NAME[lang] + ' only, using ' + LANG_NAME[lang] +
-               ' script. Customer says: ' + said + soldOutNote(message, state) + describeState(state)
+               ' script. Customer says: ' + said + soldOutNote(message, state) + kitNote(message, history) +
+               (ASKED_REFUND.test(message) ? REFUND_NOTE : '') + describeState(state)
     });
 
     const opts = { model: MODEL, messages: messages, temperature: 0.3, max_tokens: 450 };
@@ -658,9 +962,50 @@ async function answer(message, lang, history, state, pref) {
 
     const raw = await completeJson(opts);
     let out = parseReply(raw);
-    if (!out.reply) out.reply = (ASK_AGAIN[lang] || ASK_AGAIN.en);
+    if (out.act && out.act.do === 'login' && !signInWanted(message, history)) {
+      // A sign-in nobody asked for: the act goes, and so does the sentence
+      // asking for it — only that sentence. Swapping the WHOLE reply for
+      // "sorry, say that again" while its "go" still opened a page made her
+      // words and the screen disagree: the customer living in an apartment
+      // heard "say that again" as the Water Softener page opened (11 Oct 2026).
+      out.act = null;
+      out.reply = dropSignInTalk(out.reply);
+      if (SIGN_IN_TALK.test(out.ask)) out.ask = '';
+    }
+    if (!out.reply && out.ask) { out.reply = out.ask; out.ask = ''; }   // a [silence] turn can be all question
+    let misfire = false;
+    if (!out.reply) { out.reply = (ASK_AGAIN[lang] || ASK_AGAIN.en); misfire = true; }
     else out.reply = stripUnsolicitedStats(out.reply, message);   // seconds they never asked to wait
     if (asked) out.reply = dropLanguagePromise(out.reply, asked);   // "I will explain in Telugu, …" -> the explanation
+    if (out.act && /^(add|kit|checkout)$/.test(out.act.do) && !cartWanted(message, history)) out.act = null;   // offered, not done
+    // "हाँ" to her own "shall I take you to checkout?" came back as "taking you
+    // to checkout" with nothing done (11 Oct 2026). Checkout needs no product
+    // to guess, so a yes to that offer is the act.
+    if (!out.act && YES_RE.test(message) && CHECKOUT_OFFER.test(lastAssistant(history))) out.act = { do: 'checkout' };
+    // "Say that again" never comes with a page change or an act: she did not
+    // understand, so nothing on the screen may move either.
+    if (misfire) { out.go = null; out.act = null; }
+    else matchScreenToWords(out, state);
+    // Scrolling or closing the certificate in front of them never changes the
+    // page as well: "अगला पेज" with a certificate open came back with go
+    // /about (11 Oct 2026) — "next page" read as "another page".
+    if (out.act && (out.act.do === 'scroll' || out.act.do === 'close') && state && state.cert) out.go = null;
+    // ...and the acts that show something choose their own page (the widget
+    // opens / or /collection when what they show is not on this one)
+    if (out.act && /^(cert|certs|showkit|kit)$/.test(out.act.do)) out.go = null;
+    if (!misfire) {
+      // her question, wherever she put it: at the end of "reply" instead of
+      // in "ask", it slipped past the repeat and sign-in checks
+      let body = out.reply, ask = out.ask;
+      if (/[?？؟]\s*$/.test(body)) {
+        const tq = /^([\s\S]*?[.!।])\s+([^.!?।]+[?？؟])\s*$/.exec(body);
+        if (tq) { body = tq[1]; ask = tq[2]; } else { ask = body; body = ''; }
+      }
+      ask = freshAsk(nextAsk(ask, out.go, out.act, lang), message, history, state, lang);
+      out.reply = body ? withAsk(body, ask) : (ask || out.reply);
+    }
+    out.reply = noPurifying(out.reply);
+    if (lang === 'hi') out.reply = feminineHindi(out.reply);
     // Start making the audio NOW, not after the browser reads this and asks.
     if (tts && tts.warm) { try { tts.warm(out.reply, lang); } catch (e) {} }
     return { reply: out.reply, go: out.go, act: out.act || null, lang: lang, asked: asked || null };
