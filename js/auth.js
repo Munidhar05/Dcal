@@ -1268,17 +1268,23 @@
     if (kitClaimedHere()) return Promise.resolve({ ok: false, reason: KIT_CLAIMED });
     return api('POST', '/api/demo-kit/check', { mobile: sessionMobile() }).catch(function () { return { ok: true }; });
   }
-  function orderFreeKit() {
-    if (findInCart(cartGet(), FREE_KIT) > -1) { location.href = '/cart'; return; }   // already in: just show it
-    kitCheck().then(function (r) {
-      if (!r || !r.ok) { toast((r && r.reason) || KIT_CLAIMED); return; }
-      itemFor(FREE_KIT, 1).then(function (p) {
-        if (!p) { toast('Sorry, the Demo Kit is not available right now.'); return; }
+  // -> Promise<{ok, reason}>: the kit is in the cart, or why not. Stays on the
+  // page, so the voice assistant can finish her sentence before the cart opens.
+  function kitAdd() {
+    if (findInCart(cartGet(), FREE_KIT) > -1) return Promise.resolve({ ok: true });   // already in
+    return kitCheck().then(function (r) {
+      if (!r || !r.ok) { var why = (r && r.reason) || KIT_CLAIMED; toast(why); return { ok: false, reason: why }; }
+      return itemFor(FREE_KIT, 1).then(function (p) {
+        if (!p) { toast('Sorry, the Demo Kit is not available right now.'); return { ok: false, reason: 'unavailable' }; }
         var cart = cartGet(); cart.push(p); cartSave(cart); updateCartBubbles();
         toast('Free Demo Kit added ✓');
-        setTimeout(function () { location.href = '/cart'; }, 500);
+        return { ok: true };
       });
     });
+  }
+  function orderFreeKit() {
+    if (findInCart(cartGet(), FREE_KIT) > -1) { location.href = '/cart'; return; }   // already in: just show it
+    kitAdd().then(function (r) { if (r.ok) setTimeout(function () { location.href = '/cart'; }, 500); });
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-free-kit]');
@@ -2726,6 +2732,15 @@
     login: function () { openAuth(); },
     product: function (slug) { return CATALOG ? (CATALOG[slug] || null) : null; },
     cart: function () { return cartGet().map(function (i) { return { id: i.id, slug: i.slug || i.id, title: i.title, price: i.price, qty: i.qty || 1 }; }); },
+    // The free Demo Kit, as the "Order free" button orders it, minus the jump
+    // to /cart. Not signed in: the box opens and this settles once they are
+    // (typed or spoken). -> Promise<{ok, reason}>
+    freeKit: function () {
+      return new Promise(function (done) {
+        if (isLoggedIn()) kitAdd().then(done);
+        else { pendingAction = function () { kitAdd().then(done); }; openAuth(); }
+      });
+    },
     // Add — behind the same sign-in gate as the button. Not signed in: the
     // sign-in box opens, and the add completes by itself once they are.
     add: function (slug, qty) {

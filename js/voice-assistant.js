@@ -432,12 +432,13 @@
         hi: ['रिटर्न', 'वापसी', 'वापस', 'रिफंड', 'पैसे वापस', 'return', 'refund'],
         en: ['return', 'refund', 'money back', 'send back', 'replace', 'replacement']
       },
+      // The policy itself, not "I am opening the page": a customer asking
+      // "refund?" was sent to pages and the phone again and again (11 Oct 2026).
       reply: {
-        te: 'రిటర్న్ మరియు రీఫండ్ వివరాల కోసం నేను పేజీ తెరుస్తున్నాను. ఏదైనా సమస్య ఉంటే ' + PHONE + ' కు కాల్ చేయండి, మేము సహాయం చేస్తాము.',
-        hi: 'रिटर्न और रिफंड की जानकारी के लिए मैं पेज खोल रही हूँ। कोई दिक्कत हो तो ' + PHONE + ' पर कॉल करें, हम मदद करेंगे।',
-        en: 'I am opening the page for return and refund details. If there is any problem, call ' + PHONE + ' and we will help you.'
-      },
-      go: '/shipping-returns', delay: 4600
+        te: 'ఆర్డర్ పంపించే ముందు క్యాన్సిల్ చేస్తేనే రీఫండ్ వస్తుంది, డబ్బు 5 నుండి 7 పని దినాల్లో తిరిగి వస్తుంది. డెలివరీ తర్వాత ప్రోడక్ట్ పాడైతే లేదా లోపం ఉంటే, 48 గంటల్లో చెబితే ఉచితంగా మార్చి ఇస్తాము.',
+        hi: 'रिफंड तभी मिलता है जब ऑर्डर शिप होने से पहले कैंसिल हो, पैसा 5 से 7 कार्यदिवस में वापस आता है। डिलीवरी के बाद प्रोडक्ट खराब या टूटा हो तो 48 घंटे में बताने पर फ्री में बदल देते हैं।',
+        en: 'A refund is only for an order cancelled before it ships: the money comes back in 5 to 7 business days. After delivery, a damaged or defective product is replaced free if you tell us within 48 hours.'
+      }
     },
 
     /* ---- HOME ---- */
@@ -511,9 +512,9 @@
         en: ['warranty', 'guarantee', 'how many years', 'warranty period']
       },
       reply: {
-        te: 'మా ఉత్పత్తులు నాణ్యమైనవి మరియు మన్నికైనవి. వారంటీ వివరాల కోసం ' + PHONE + ' కు కాల్ చేయండి లేదా వాట్సాప్ చేయండి.',
-        hi: 'हमारे उत्पाद अच्छी गुणवत्ता और टिकाऊ हैं। वारंटी की जानकारी के लिए ' + PHONE + ' पर कॉल या व्हाट्सएप करें।',
-        en: 'Our products are high quality and long lasting. For warranty details, please call or WhatsApp ' + PHONE + '.'
+        te: 'డిక్యాల్ కు 6 నెలల రీప్లేస్‌మెంట్ వారంటీ ఉంది, లోపం ఉన్న ప్రోడక్ట్‌ను ఉచితంగా మార్చి ఇస్తాము. కార్ట్రిడ్జ్ ఎంత కాలం పని చేస్తుందనేది వేరు: వాటర్ సాఫ్ట్‌నర్ 10 నుండి 12 నెలలు, షవర్ మరియు ట్యాప్ ఫిల్టర్ 6 నెలలు.',
+        hi: 'डीकाल पर 6 महीने की रिप्लेसमेंट वारंटी है, खराब प्रोडक्ट फ्री में बदला जाता है। कार्ट्रिज कितना चलता है वो अलग है: वॉटर सॉफ्टनर 10 से 12 महीने, शावर और टैप फिल्टर 6 महीने।',
+        en: 'D\'Cal has a 6-month replacement warranty: a defective product is replaced free. How long the cartridge lasts is separate: Water Softener 10 to 12 months, Shower and Tap Filter 6 months.'
       }
     },
 
@@ -734,9 +735,11 @@
         en: ['electricity', 'power', 'maintenance', 'chemical', 'chemicals', 'how long does it last', 'lifespan', 'servicing', 'no power']
       },
       reply: {
-        te: 'డిక్యాల్ కు విద్యుత్తు అవసరం లేదు, రసాయనాలు అవసరం లేదు, నిర్వహణ అవసరం లేదు. ఇది ఏడాది పొడవునా — దాదాపు 365 రోజులు — నిరంతరం పని చేస్తుంది.',
-        hi: 'डीकाल को न बिजली चाहिए, न केमिकल, न रखरखाव। यह पूरे साल — लगभग 365 दिन — लगातार काम करता है।',
-        en: 'D\'Cal needs no electricity, no chemicals and no maintenance. It works continuously for a full year — up to 365 days.'
+        // per product: "a full year" said of everything is how the Tap Filter
+        // (6 months) got a 365-day promise on 11 Oct 2026
+        te: 'డిక్యాల్ కు విద్యుత్తు అవసరం లేదు, రసాయనాలు అవసరం లేదు, నిర్వహణ అవసరం లేదు. వాటర్ సాఫ్ట్‌నర్ కార్ట్రిడ్జ్ 10 నుండి 12 నెలలు, షవర్ మరియు ట్యాప్ ఫిల్టర్ కార్ట్రిడ్జ్ 6 నెలలు పని చేస్తాయి.',
+        hi: 'डीकाल को न बिजली चाहिए, न केमिकल, न रखरखाव। वॉटर सॉफ्टनर का कार्ट्रिज 10 से 12 महीने चलता है, शावर और टैप फिल्टर का 6 महीने।',
+        en: 'D\'Cal needs no electricity, no chemicals and no maintenance. The Water Softener cartridge lasts 10 to 12 months; the Shower and Tap Filter cartridges last 6 months.'
       }
     },
 
@@ -749,9 +752,9 @@
         en: ['cancel my order', 'cancel order', 'cancel my', 'cancel', 'cancellation', 'get refund', 'want refund', 'my refund', 'refund', 'money back']
       },
       reply: {
-        te: 'వస్తువు పంపే ముందు మీరు "My Orders" నుండి ఆర్డర్‌ను రద్దు చేయవచ్చు. చెల్లించిన డబ్బు ఐదు నుండి ఏడు పని దినాల్లో తిరిగి వస్తుంది. వస్తువు పాడైతే 48 గంటల్లో మాకు తెలియజేయండి.',
-        hi: 'सामान भेजे जाने से पहले आप "My Orders" से ऑर्डर रद्द कर सकते हैं। भुगतान किया पैसा पाँच से सात कार्यदिवस में वापस आ जाता है। सामान खराब हो तो 48 घंटे में हमें बताएं।',
-        en: 'You can cancel your order from "My Orders" before it ships. Paid money is refunded within five to seven business days. If an item arrives damaged, tell us within 48 hours.'
+        te: 'వస్తువు పంపే ముందు మీరు "My Orders" నుండి ఆర్డర్‌ను రద్దు చేయవచ్చు. చెల్లించిన డబ్బు ఐదు నుండి ఏడు పని దినాల్లో తిరిగి వస్తుంది. వస్తువు పాడై లేదా లోపంతో వస్తే 48 గంటల్లో తెలియజేయండి, ఉచితంగా మార్చి ఇస్తాము.',
+        hi: 'सामान भेजे जाने से पहले आप "My Orders" से ऑर्डर रद्द कर सकते हैं। भुगतान किया पैसा पाँच से सात कार्यदिवस में वापस आ जाता है। सामान खराब या टूटा आए तो 48 घंटे में बताएं, फ्री में बदल देंगे।',
+        en: 'You can cancel your order from "My Orders" before it ships. Paid money is refunded within five to seven business days. If an item arrives damaged or defective, tell us within 48 hours and it is replaced free.'
       }
     },
 
@@ -1178,6 +1181,31 @@
     // box (html.dcal-lock is set while it is open; the box is centred, she is at
     // the side). On a phone the box is a bottom sheet she would cover, so not there.
     + '@media(min-width:900px){html.dcal-lock .dcv-panel,html.dcal-lock .dcv-fab{z-index:10001}}'
+    // A certificate she opens: a sheet under her panel's layer, beside the
+    // panel on a wide screen (never behind it), the whole screen on a phone
+    // with room at the foot to scroll the last page up above her.
+    + '.dcv-cert{position:fixed;inset:0;z-index:9990;display:none;align-items:stretch;justify-content:center;padding:24px;box-sizing:border-box;background:rgba(4,22,40,.62)}'
+    + '.dcv-cert.dcv-on{display:flex}'
+    + '.dcv-cert-sheet{display:flex;flex-direction:column;width:100%;max-width:860px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35)}'
+    + '.dcv-cert-head{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 18px;border-bottom:1px solid #e3edf3}'
+    + '.dcv-cert-title{flex:1;min-width:0;font-weight:800;font-size:16px;color:#08334a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '.dcv-cert-page{font-size:13px;font-weight:600;color:#4b6b7a;white-space:nowrap}'
+    + '.dcv-cert-dl{font-size:13px;font-weight:700;color:#fff;background:#0077B6;border-radius:9px;padding:8px 12px;text-decoration:none;white-space:nowrap}'
+    + '.dcv-cert-x{flex:none;width:36px;height:36px;border:0;border-radius:50%;background:#eef4f8;color:#08334a;font-size:22px;line-height:1;cursor:pointer}'
+    // .dcv-cert .dcv-cert-body, not .dcv-cert-body: it must outrank the theme's
+    // div:empty{display:none} for the moment between two documents
+    + '.dcv-cert .dcv-cert-body{display:block;flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#e9f0f4;padding:18px}'
+    + '.dcv-cert-body canvas{display:block;width:100%;height:auto;margin:0 auto 18px;background:#fff;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.14)}'
+    + '.dcv-cert-msg{margin:40px auto;text-align:center;color:#4b6b7a;font-weight:600}.dcv-cert-msg a{color:#0077B6}'
+    + '@media(min-width:1100px){.dcv-cert{padding-right:388px}}'
+    + '@media(max-width:600px){.dcv-cert{padding:0}.dcv-cert-sheet{border-radius:0}.dcv-cert-head{padding-left:14px}.dcv-cert-title{font-size:14.5px}.dcv-cert-dl{padding:7px 9px}.dcv-cert-body{padding:10px 10px 55vh}}'
+    + 'html.dcv-cert-lock,html.dcv-cert-lock body{overflow:hidden}'
+    // ...and on a phone she steps aside to her header and mic bar while it is
+    // open: at full size she covered two thirds of the page being read. She
+    // still talks and listens; only her picture goes.
+    + '@media(max-width:600px){html.dcv-cert-lock .dcv-panel{height:auto}html.dcv-cert-lock .dcv-stage{display:none}}'
+    // what she shows on the page (the kit, the certificates) rings for a moment
+    + '.dcv-flash{outline:3px solid rgba(0,180,216,.9);outline-offset:6px;border-radius:16px}'
     + '@media(prefers-reduced-motion:reduce){.dcv-spot-hole::after,.dcv-spot-card::after{animation:none}.dcv-spot-hole.dcv-glide{transition:opacity .2s ease}}'
     + '@media(prefers-reduced-motion:reduce){.dcv-fab,.dcv-fab .dcv-ring,.dcv-fab.dcv-pop::before,.dcv-fab.dcv-pop svg,.dcv-mic.dcv-live::after,.dcv-speaking .dcv-lady{animation:none}'
     +   '.dcv-panel.dcv-open{animation:none}.dcv-panel{transition:opacity .2s ease}.dcv-stage,.dcv-foot{transition:none;transform:none}}';
@@ -1768,12 +1796,62 @@
   }
   var SILENT_MAX_MS = 10 * 60 * 1000;        // ten minutes of nobody talking -> she lets the mic go
   var silentSince = 0;
-  // A clip with nobody on it. Say nothing, send nothing; just listen again.
+  // A clip with nobody on it. Send nothing; listen again — or, the first time
+  // or two, follow up the way a salesperson would (see nudge()).
   function keepListeningQuietly() {
     if (!handsFree || !opened || userStopped) return;
     if (!silentSince) silentSince = Date.now();
     if (Date.now() - silentSince > SILENT_MAX_MS) { silentSince = 0; closeMic(); return; }
+    quietClips++;
+    if (nudgeDue()) { nudge(); return; }
     listenAgain();
+  }
+  /* ---- A salesperson does not stand there in silence ----
+     She answered, she asked, and nobody said a word: hands-free, the recorder
+     gives up after ~7 s of nothing and the empty clip lands above. Instead of
+     listening on without a sound, she follows up — a fresh, easy question
+     from the brain, which knows where the conversation is ("don't make the
+     customer sit in silence; the assistant should speak with the customer",
+     11 Oct 2026). Twice unanswered and she goes quiet, still listening. Never
+     while they sign in, fill the checkout or pay, never on a hidden tab, and
+     not after "wait", "stop", "later" or "bye".
+     Never into a question either: on 11 Oct 2026 it fired while "is there
+     any delivery fee?" was still being answered, and spoke over the answer
+     twice ("Shh. Okay, shh."). So: not while a question is in hand or an
+     answer is held (parked), and her follow-up is dropped if any voice was
+     heard after it was asked for, or if it took more than 5 s to come. */
+  var NUDGE_MAX = 2, NUDGE_STALE_MS = 5000;
+  var SILENCE_MSG = '[silence]';      // server/assistant.js SILENCE
+  var nudges = 0, quietClips = 0, nudgeHold = false;
+  // "wait, I am reading it" holds her follow-ups however it is said...
+  var HUSH = /\b(wait|hold on|one (minute|second|moment)|give me (a )?(minute|second|moment)|let me (read|think|see|check)|i'?m reading|reading it|later|bye|goodbye|shh+)\b|रुक|एक मिनट|एक सेकंड|बाद में|पढ़ने दो|पढ़ रह|सोचने दो|ఆగు|ఆగండి|ఒక్క నిమిషం|తర్వాత|చదువుతున్న/i;
+  // ...these only as a short line of their own: "बस" is also "just" in "बस यह बताओ"
+  var HUSH_SHORT = /\b(stop|enough|thanks|thank you|no thanks)\b|बस|धन्यवाद|शुक्रिया|बाय|चुप|ధన్యవాదాలు|బై|చాలు/i;
+  // every word the customer says comes through addYou(): they are talking, so
+  // the follow-ups start over — unless what they said asks her to hold on.
+  function heardCustomer(text) {
+    text = String(text || '').trim();
+    nudges = 0; quietClips = 0; heardTick++;
+    nudgeHold = HUSH.test(text) || (text.split(/\s+/).length <= 5 && HUSH_SHORT.test(text));
+  }
+  function nudgeDue() {
+    if (nudgeHold || nudges >= NUDGE_MAX || aiState === 'off' || !introduced) return false;
+    if (pendingAsks > 0 || parked || speakingNow || payQuiet || signWaiting() || coStep()) return false;
+    if (document.visibilityState && document.visibilityState !== 'visible') return false;
+    return quietClips >= (certId ? 2 : 1);     // reading a certificate takes longer than seven seconds
+  }
+  function nudge() {
+    nudges++; quietClips = 0;
+    var tick = heardTick, t0 = Date.now();
+    vlogEv('nudge', String(nudges));
+    listenAgain();                  // keep listening while the brain thinks: they may speak first
+    askAI(SILENCE_MSG, aiContext(true)).then(function (d) {
+      if (!d || !d.reply || !opened || userStopped || speakingNow) return;
+      if (tick !== heardTick || pendingAsks > 0 || parked || Date.now() - t0 > NUDGE_STALE_MS) { vlogEv('nudge_dropped'); return; }
+      if (listening && rec && recHeardMs > 0) { vlogEv('nudge_dropped'); return; }   // they have just started talking
+      if (listening) { recDiscard = true; stopRecording(); }   // nobody on the open clip: she speaks first
+      deliverAI(d);
+    });
   }
   // The page was opened BY her, mid-conversation: pick the conversation up
   // where it was — once we know whether the server recogniser is available,
@@ -1898,10 +1976,18 @@
     // Never upload it (a paid transcription of nothing) and never answer it:
     // "sorry, I did not understand" every ten seconds to an empty room is
     // exactly how a hands-free assistant becomes unbearable. Just listen on.
-    if (!blob || blob.size < 600 || recHeardMs < 250) { setStatus(''); keepListeningQuietly(); return; }
+    if (!blob || blob.size < 600 || recHeardMs < 250) {
+      setStatus('');
+      quietSeq = askSeq;
+      // the clip that cut in on an answer held nothing after all: the answer stands
+      if (parked && parked.seq === askSeq) { var p = parked; parked = null; deliverAsk(p.d); return; }
+      keepListeningQuietly(); return;
+    }
     silentSince = 0;                                               // someone is talking
+    heardTick++;
     setStatus(UI[lang].thinking);
     var myAsk = ++askSeq;            // this turn — superseded if they speak again before it is answered
+    if (parked) { keepWords(parked.d); parked = null; }   // they did say more: the held answer goes, their words stay
     vlogTurn('voice', Date.now() - 550);   // they stopped speaking 550ms ago: the silence that ended the clip
     armThinking();                   // keep watching the mic while the server thinks
     // The sign-in box is open, so this is a number, a code or a name for it:
@@ -1940,6 +2026,7 @@
     // out of what they said, in this same request, instead of chatting.
     if (coStep() === 'form') headers['X-Dcal-Form'] = 'address';
     if (askedLang) headers['X-Dcal-Lang-Pref'] = askedLang.want + ':' + askedLang.spoke;
+    pendingAsks++;
     fetch(ASK_URL, { method: 'POST', headers: headers, body: blob })
       .then(function (r) {
         return r.ok ? readAsk(r, function (h) {
@@ -1947,38 +2034,59 @@
         }) : null;
       })
       .then(function (d) {
-        if (myAsk !== askSeq) { keepWords(d); return; }   // they went on talking: their words stay, this reply goes
-        if (!d) throw new Error('ask failed');
-        setStatus('');
-        var said = d.text ? autoCorrect(d.text) : '';
-        if (!said) { localMiss(); return; }
-        followLang(d.spoke || d.lang, d.asked, d.lang);
-        vlogYouLang = d.spoke || d.lang;
-        listenRetry = 0;
-        if (!introduced) {
-          markIntroduced();
-          if (isGreetingBack(said)) {
-            addYou(said);
-            var hello = welcomeSaid ? UI[lang].helpAsk : UI[lang].greeting;   // introduced already? just ask again
-            addBot(hello);
-            speak(hello, function () { if (opened && !listening) startListening(); });
-            return;
+        pendingAsks = Math.max(0, pendingAsks - 1);
+        if (myAsk !== askSeq) {
+          /* Something on the mic cut in while this was being worked out. Only
+             a clip with real speech in it replaces this answer: an "uh", a
+             cough or her own echo used to throw the answer away, and if the
+             clip then held nothing the question was never answered — on 11
+             Oct 2026 "is there any delivery fee for the demo kit?" got her
+             silence follow-up instead, twice. So the answer waits for the
+             cut-in clip, and stands if it comes back empty. */
+          if (askSeq === myAsk + 1 && d && d.text) {
+            if (quietSeq === askSeq) { deliverAsk(d); return; }   // it already came back empty
+            parked = { d: d, seq: askSeq }; return;
           }
+          keepWords(d); return;                         // they went on talking: their words stay, this reply goes
         }
-        // The checkout is on screen: their words may be for it — fields for the
-        // address form, a "yes", "cash on delivery". Only if not, the answer.
-        if (coStep() || couponWanted(said)) {
-          markIntroduced(); addYou(said);
-          if (couponByVoice(said) || checkoutByVoice(said, d.form || null)) return;
-          if (d.reply) deliverAI(d, said);
-          else handleQuery(said, undefined, false, true);
-          return;
-        }
-        if (!d.reply) { handleQuery(said); return; }     // AI had nothing -> normal routing
-        addYou(said);
-        deliverAI(d, said);
+        if (!d) throw new Error('ask failed');
+        deliverAsk(d);
       })
-      .catch(function () { if (myAsk === askSeq) { vlogEv('ask_failed'); sendViaStt(blob, myAsk); } });   // one-shot path unavailable
+      .catch(function () { pendingAsks = Math.max(0, pendingAsks - 1); if (myAsk === askSeq) { vlogEv('ask_failed'); sendViaStt(blob, myAsk); } });   // one-shot path unavailable
+  }
+  // A held answer, while the clip that cut in on it is still being recorded:
+  // {d, seq}. quietSeq = the turn number the last empty clip came back on.
+  var parked = null, quietSeq = -1, pendingAsks = 0, heardTick = 0;
+  // /api/ask's answer for the turn in hand: their words, then hers.
+  function deliverAsk(d) {
+    setStatus('');
+    var said = d.text ? autoCorrect(d.text) : '';
+    if (!said) { localMiss(); return; }
+    followLang(d.spoke || d.lang, d.asked, d.lang);
+    vlogYouLang = d.spoke || d.lang;
+    listenRetry = 0;
+    if (!introduced) {
+      markIntroduced();
+      if (isGreetingBack(said)) {
+        addYou(said);
+        var hello = welcomeSaid ? UI[lang].helpAsk : UI[lang].greeting;   // introduced already? just ask again
+        addBot(hello);
+        speak(hello, function () { if (opened && !listening) startListening(); });
+        return;
+      }
+    }
+    // The checkout is on screen: their words may be for it — fields for the
+    // address form, a "yes", "cash on delivery". Only if not, the answer.
+    if (coStep() || couponWanted(said)) {
+      markIntroduced(); addYou(said);
+      if (couponByVoice(said) || checkoutByVoice(said, d.form || null)) return;
+      if (d.reply) deliverAI(d, said);
+      else handleQuery(said, undefined, false, true);
+      return;
+    }
+    if (!d.reply) { handleQuery(said); return; }     // AI had nothing -> normal routing
+    addYou(said);
+    deliverAI(d, said);
   }
 
   // /api/ask's answer: one JSON object, or — when the server can — two lines,
@@ -2030,8 +2138,11 @@
 
   // The original two-step path, kept as the fallback: transcribe, then ask.
   function sendViaStt(blob, myAsk) {
+    pendingAsks++;
+    var settled = function (v) { pendingAsks = Math.max(0, pendingAsks - 1); return v; };
     fetch(STT_URL, { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob })
       .then(function (r) { return r.ok ? r.json() : null; })
+      .then(settled, function (e) { settled(); throw e; })
       .then(function (d) {
         if (myAsk !== undefined && myAsk !== askSeq) { keepWords(d); return; }
         setStatus('');
@@ -2492,6 +2603,7 @@
   function bargeCommit() {
     var said = spokenSoFar();
     vlogEv('barge', speakingText ? (said.length / speakingText.length).toFixed(2) : '0');   // how much of her line they heard
+    heardTick++;                    // a voice on the mic: not silence, whatever the clip turns out to hold
     var thr = vadSt ? vadSt.probeMinPeak * 1.5 : 0;     // the background under their voice
     vadStop();
     voicePaused = false;
@@ -2693,6 +2805,7 @@
     var S = window.DcalStore, st = { page: location.pathname };
     var show = spotFocus || pageProductSlug();       // "this product" = the one being talked about, else the page's
     if (show) st.show = show;
+    if (certId) st.cert = certId + ':' + certPage + ':' + (certPages || 1);   // what "scroll down" / "close it" are about
     try {
       if (S) {
         st.login = !!S.loggedIn();
@@ -2718,12 +2831,196 @@
         case 'unwish':   if (S) S.wish(act.product, false); return null;
         case 'search':   return '/search?q=' + encodeURIComponent(act.q || '');
         case 'track':    return '/track-order?order=' + encodeURIComponent(act.order || '');
-        case 'scroll':   try { window.scrollBy({ top: (act.dir === 'up' ? -0.8 : 0.8) * window.innerHeight, behavior: 'smooth' }); } catch (e) { window.scrollBy(0, (act.dir === 'up' ? -0.8 : 0.8) * window.innerHeight); } return null;
+        case 'scroll':
+          if (certScroll(act.dir)) return null;                        // the certificate in front of them, not the page behind
+          try { window.scrollBy({ top: (act.dir === 'up' ? -0.8 : 0.8) * window.innerHeight, behavior: 'smooth' }); } catch (e) { window.scrollBy(0, (act.dir === 'up' ? -0.8 : 0.8) * window.innerHeight); } return null;
         case 'back':     return 'back';
         case 'login':    if (window.DcalAuth && window.DcalAuth.open) window.DcalAuth.open(); return null;
+        case 'showkit':  return showOnPage('kit');
+        case 'certs':    certClose(); return showOnPage('certs');
+        case 'cert':     certOpen(act.which); return null;
+        case 'close':    certClose(); return null;
       }
     } catch (e) {}
     return null;
+  }
+  /* ---- Showing things, not pointing at them ----
+     "Where do I order it?" on the home page used to send them to /collection,
+     where the kit sits below the fold just the same; "certificates?" got "they
+     are on the home page, go and check" (11 Oct 2026). Each lives in one place:
+     scroll to it here, or open its page and scroll there on arrival.
+     -> a URL to open, or null */
+  var SHOW_KEY = 'dcal_voice_show';   // sessionStorage: she opened this page to show something on it
+  var SHOWN = { kit: ['.dcal-kit-strip', '/collection'], certs: ['#certificates', '/'] };
+  // Near the top of the screen, not the middle: centred, the kit's "Order
+  // free" button (the strip's right end) sat under her own open panel on a
+  // laptop. A ring for a moment, so the eye finds what she is talking about.
+  function scrollToShow(el) {
+    var top = el.getBoundingClientRect().top + window.pageYOffset - 70;
+    try { window.scrollTo({ top: top, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, top); }
+    el.classList.add('dcv-flash');
+    setTimeout(function () { el.classList.remove('dcv-flash'); }, 2600);
+  }
+  function showOnPage(what) {
+    var el = document.querySelector(SHOWN[what][0]);
+    if (el) { scrollToShow(el); return null; }
+    try { sessionStorage.setItem(SHOW_KEY, what); } catch (e) {}
+    return SHOWN[what][1];
+  }
+  (function showOnArrival() {
+    var s = null;
+    try { s = sessionStorage.getItem(SHOW_KEY); sessionStorage.removeItem(SHOW_KEY); } catch (e) {}
+    if (s && SHOWN[s]) setTimeout(function () { var el = document.querySelector(SHOWN[s][0]); if (el) scrollToShow(el); }, 600);
+  })();
+
+  /* ---- CERTIFICATES, opened and read by voice ----
+     Shown in a sheet beside her, on whatever page they are on. Not the PDF in
+     a new tab (the site's "View" button): she cannot follow them there, and
+     Chrome's own PDF viewer cannot be scrolled from the page — phones will not
+     show a PDF inside one at all. PDF.js (js/vendor/pdfjs, fetched on the
+     first open only) draws every page, so "scroll down", "next page" and
+     "close it" work, for the 8-page design registration and any certificate
+     added later. */
+  var CERTS = {
+    lab:       { file: '/certificates/dcal-lab-test-report.pdf', title: 'Food-Grade Test Report', name: 'DCal-Food-Grade-Lab-Test-Report.pdf' },
+    msds:      { file: '/certificates/dcal-msds.pdf', title: 'Material Safety Data Sheet', name: 'DCal-Material-Safety-Data-Sheet.pdf' },
+    trademark: { file: '/certificates/dcal-trademark-certificate.pdf', title: 'Trade Mark Registration 3927437', name: 'DCal-Trade-Mark-Registration-3927437.pdf' },
+    design:    { file: '/certificates/dcal-design-registration.pdf', title: 'Design Registration 317385-001', name: 'DCal-Design-Registration-317385-001.pdf' },
+    all:       { file: '/certificates/dcal-all-certificates.pdf', title: 'All four certificates', name: 'DCal-All-Certificates.pdf' }
+  };
+  var PDFJS = '/js/vendor/pdfjs/pdf.min.js', PDFJS_WORKER = '/js/vendor/pdfjs/pdf.worker.min.js';
+  var pdfjsWait = null;
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfjsWait) return pdfjsWait;
+    pdfjsWait = new Promise(function (ok, no) {
+      var s = document.createElement('script');
+      s.src = PDFJS; s.async = true;
+      s.onload = function () {
+        if (!window.pdfjsLib) { pdfjsWait = null; no(new Error('pdfjs')); return; }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        ok(window.pdfjsLib);
+      };
+      s.onerror = function () { pdfjsWait = null; no(new Error('pdfjs')); };
+      document.head.appendChild(s);
+    });
+    return pdfjsWait;
+  }
+  var certBox = null, certBody = null, certTitle = null, certPageEl = null, certDl = null;
+  var certId = null, certPage = 1, certPages = 0, certSeq = 0;
+  function certBuild() {
+    if (certBox) return;
+    certBox = document.createElement('div');
+    certBox.className = 'dcv-cert';
+    certBox.setAttribute('role', 'dialog');
+    certBox.setAttribute('aria-modal', 'true');
+    certBox.innerHTML = '<div class="dcv-cert-sheet"><div class="dcv-cert-head"><div class="dcv-cert-title"></div>' +
+      '<div class="dcv-cert-page"></div><a class="dcv-cert-dl" download>Download</a>' +
+      '<button type="button" class="dcv-cert-x" aria-label="Close">&times;</button></div><div class="dcv-cert-body"></div></div>';
+    document.body.appendChild(certBox);
+    certBody = certBox.querySelector('.dcv-cert-body');
+    certTitle = certBox.querySelector('.dcv-cert-title');
+    certPageEl = certBox.querySelector('.dcv-cert-page');
+    certDl = certBox.querySelector('.dcv-cert-dl');
+    certBox.addEventListener('click', function (e) { if (e.target === certBox) certClose(); });
+    certBox.querySelector('.dcv-cert-x').addEventListener('click', certClose);
+    certBody.addEventListener('scroll', certTrack, { passive: true });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && certId) certClose(); });
+  }
+  function certLabel() { certPageEl.textContent = certPages > 1 ? 'Page ' + certPage + ' of ' + certPages : ''; }
+  // the page whose top has passed a third of the way down the sheet
+  function certTrack() {
+    var line = certBody.scrollTop + certBody.clientHeight / 3, n = 1;
+    certBody.querySelectorAll('canvas').forEach(function (cv) { if (cv.offsetTop <= line) n = +cv.getAttribute('data-page'); });
+    if (n !== certPage) { certPage = n; certLabel(); }
+  }
+  function certOpen(id) {
+    var c = CERTS[id];
+    if (!c) return false;
+    certBuild();
+    var my = ++certSeq;
+    certId = id; certPage = 1; certPages = 0;
+    certTitle.textContent = c.title;
+    certDl.href = c.file; certDl.setAttribute('download', c.name);
+    certLabel();
+    certBody.innerHTML = '<p class="dcv-cert-msg">Opening&hellip;</p>';
+    certBody.scrollTop = 0;
+    certBox.classList.add('dcv-on');
+    document.documentElement.classList.add('dcv-cert-lock');
+    vlogEv('cert', id);
+    loadPdfJs().then(function (lib) { return lib.getDocument(c.file).promise; }).then(function (pdf) {
+      if (my !== certSeq) return;
+      certPages = pdf.numPages; certLabel();
+      // measured while "Opening…" is still in it: the theme's div:empty
+      // {display:none} hides the emptied body, which then measures 0 wide and
+      // every page came out a blank 300x150 canvas
+      var cs = getComputedStyle(certBody);
+      var w = Math.max(240, certBody.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+      certBody.innerHTML = '';
+      var dpr = Math.min(2, window.devicePixelRatio || 1);
+      var chain = Promise.resolve();
+      for (var n = 1; n <= pdf.numPages; n++) (function (n) {
+        chain = chain.then(function () {
+          if (my !== certSeq) return;
+          return pdf.getPage(n).then(function (page) {
+            if (my !== certSeq) return;
+            var vp = page.getViewport({ scale: (w / page.getViewport({ scale: 1 }).width) * dpr });
+            var cv = document.createElement('canvas');
+            cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+            cv.setAttribute('data-page', String(n));
+            cv.setAttribute('aria-label', c.title + ', page ' + n);
+            certBody.appendChild(cv);
+            return page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+          });
+        });
+      })(n);
+      return chain;
+    }).catch(function () {
+      if (my !== certSeq) return;
+      certBody.innerHTML = '<p class="dcv-cert-msg">This document did not open here. <a href="' + c.file + '" target="_blank" rel="noopener">Open the PDF</a></p>';
+    });
+    return true;
+  }
+  function certClose() {
+    if (!certId) return false;
+    certSeq++; certId = null;
+    certBox.classList.remove('dcv-on');
+    document.documentElement.classList.remove('dcv-cert-lock');
+    certBody.innerHTML = '';
+    return true;
+  }
+  // -> true when a certificate is open and was scrolled
+  function certScroll(dir) {
+    if (!certId) return false;
+    var by = (dir === 'up' ? -0.85 : 0.85) * certBody.clientHeight;
+    try { certBody.scrollBy({ top: by, behavior: 'smooth' }); } catch (e) { certBody.scrollTop += by; }
+    return true;
+  }
+  // "Order the demo kit for me": the page checks one-per-customer first, and
+  // she says what actually happened — never "added" over a refusal.
+  var kitWaiting = false;            // sign-in is open for the kit: its outcome speaks, not signFollow
+  // ...and, a salesperson to the end, each line asks for the next step
+  var KIT_SAY = {
+    en: { added: 'Your free Demo Kit is in the cart. Opening the cart — shall we place your free order?', claimed: 'You have already claimed your free Demo Kit; it is one per customer. Shall I show you our filters?' },
+    hi: { added: 'आपकी फ्री डेमो किट कार्ट में डाल दी है। कार्ट खोल रही हूँ — फ्री ऑर्डर प्लेस कर दें?', claimed: 'आप अपनी फ्री डेमो किट पहले ही ले चुके हैं, यह एक ग्राहक को एक ही मिलती है। हमारे फिल्टर दिखाऊँ?' },
+    te: { added: 'మీ ఫ్రీ డెమో కిట్ కార్ట్‌లో పెట్టాను. కార్ట్ తెరుస్తున్నాను — ఫ్రీ ఆర్డర్ ప్లేస్ చేద్దామా?', claimed: 'మీరు మీ ఫ్రీ డెమో కిట్ ఇప్పటికే తీసుకున్నారు, ఇది ఒక కస్టమర్‌కు ఒక్కటే. మా ఫిల్టర్లు చూపించనా?' }
+  };
+  function kitByVoice(reply) {
+    var S = window.DcalStore;
+    if (!S || !S.freeKit) { addBot(reply); sayReply(reply, showOnPage('kit'), false); return; }
+    var signedIn = S.loggedIn();
+    kitWaiting = !signedIn;
+    S.freeKit().then(function (r) {
+      var T = KIT_SAY[lang], prefix = signedIn ? '' : signSay().done + ' ';
+      // what actually happened, in a fixed line where there is one: the brain
+      // wrote its line before the page checked, and once asked "shall I order
+      // it?" over a kit already in the cart. Its words only for the languages
+      // without a line here.
+      var line = r && r.ok ? prefix + (T ? T.added : reply)
+                           : prefix + (T ? T.claimed : (r && r.reason) || reply);
+      addBot(line); sayReply(line, r && r.ok ? '/cart' : null, false);
+    });
+    if (!signedIn) { var ask = signInAsk(); addBot(ask); sayReply(ask, null, false); }
   }
   /* ---- Cart commands understood HERE, in the customer's own language ------
      "వాషింగ్ బాల్ తీసేయి", "टैप फ़िल्टर डाल दो", "make it three", "empty my
@@ -2815,9 +3112,9 @@
   // What she says once it is done — in the three languages the offline
   // engine speaks; every other language goes to the brain instead.
   var CMD_SAY = {
-    en: { add: 'Added the {p} to your cart.', remove: 'Removed the {p} from your cart.', qty: 'Done, {n} {p} in your cart.', clear: 'Your cart is empty now.', checkout: 'Opening checkout for you.', coupon: 'Applying coupon {c}.', login: 'Please sign in with your mobile number first. I have opened the sign-in box.', notin: 'The {p} is not in your cart.', emptycart: 'Your cart is empty.' },
-    hi: { add: '{p} आपके कार्ट में डाल दिया।', remove: '{p} कार्ट से हटा दिया।', qty: 'ठीक है, कार्ट में {p} {n} कर दिया।', clear: 'आपका कार्ट खाली कर दिया।', checkout: 'चेकआउट खोल रही हूँ।', coupon: 'कूपन {c} लगा रही हूँ।', login: 'पहले अपने मोबाइल नंबर से साइन इन करें। मैंने साइन-इन बॉक्स खोल दिया है।', notin: '{p} आपके कार्ट में नहीं है।', emptycart: 'आपका कार्ट खाली है।' },
-    te: { add: '{p} మీ కార్ట్‌లో పెట్టాను.', remove: '{p} కార్ట్ నుండి తీసేశాను.', qty: 'సరే, కార్ట్‌లో {p} {n} చేశాను.', clear: 'మీ కార్ట్ ఖాళీ చేశాను.', checkout: 'చెక్‌అవుట్ తెరుస్తున్నాను.', coupon: 'కూపన్ {c} వేస్తున్నాను.', login: 'ముందు మీ మొబైల్ నంబర్‌తో సైన్ ఇన్ చేయండి. సైన్-ఇన్ బాక్స్ తెరిచాను.', notin: '{p} మీ కార్ట్‌లో లేదు.', emptycart: 'మీ కార్ట్ ఖాళీగా ఉంది.' }
+    en: { add: 'Added the {p} to your cart. Shall I take you to checkout?', remove: 'Removed the {p} from your cart.', qty: 'Done, {n} {p} in your cart.', clear: 'Your cart is empty now.', checkout: 'Opening checkout for you.', coupon: 'Applying coupon {c}.', login: 'Please sign in with your mobile number first. I have opened the sign-in box.', notin: 'The {p} is not in your cart.', emptycart: 'Your cart is empty.' },
+    hi: { add: '{p} आपके कार्ट में डाल दिया। चेकआउट पर ले चलूँ?', remove: '{p} कार्ट से हटा दिया।', qty: 'ठीक है, कार्ट में {p} {n} कर दिया।', clear: 'आपका कार्ट खाली कर दिया।', checkout: 'चेकआउट खोल रही हूँ।', coupon: 'कूपन {c} लगा रही हूँ।', login: 'पहले अपने मोबाइल नंबर से साइन इन करें। मैंने साइन-इन बॉक्स खोल दिया है।', notin: '{p} आपके कार्ट में नहीं है।', emptycart: 'आपका कार्ट खाली है।' },
+    te: { add: '{p} మీ కార్ట్‌లో పెట్టాను. చెక్‌అవుట్‌కి తీసుకెళ్ళనా?', remove: '{p} కార్ట్ నుండి తీసేశాను.', qty: 'సరే, కార్ట్‌లో {p} {n} చేశాను.', clear: 'మీ కార్ట్ ఖాళీ చేశాను.', checkout: 'చెక్‌అవుట్ తెరుస్తున్నాను.', coupon: 'కూపన్ {c} వేస్తున్నాను.', login: 'ముందు మీ మొబైల్ నంబర్‌తో సైన్ ఇన్ చేయండి. సైన్-ఇన్ బాక్స్ తెరిచాను.', notin: '{p} మీ కార్ట్‌లో లేదు.', emptycart: 'మీ కార్ట్ ఖాళీగా ఉంది.' }
   };
   // Carry a parsed command out and say so. -> true if it was handled here.
   function runCommand(cmd) {
@@ -3079,6 +3376,9 @@
       if (A.isLoggedIn()) {
         vlogEv('signin_ok');
         setStatus('');
+        // the kit's own outcome says "signed in" and what happened — whichever
+        // of the two lands first, so this is cleared here, not by the kit
+        if (kitWaiting) { kitWaiting = false; return; }
         var line = T.done + (signThen ? ' ' + signThen : ''), nav = null;
         if (signThenCheckout && S) nav = S.checkout();
         signThen = ''; signThenCheckout = false;
@@ -3510,6 +3810,7 @@
     // A coupon: the page checks it first, then she says what happened — never
     // the brain's own "I applied it".
     if (d.act && d.act.do === 'coupon') { couponByVoice(said || '', d.act.code); return; }
+    if (d.act && d.act.do === 'kit') { vlogEv('act', 'kit'); kitByVoice(d.reply); return; }
     var nav = runAction(d.act);
     var to = nav || d.go;
     // ...and "open the cart" while already on it would reload the page and lose their place
@@ -3520,6 +3821,10 @@
 
   function askAI(text, priorHistory) {
     var spoke = turnSpoke; turnSpoke = null;
+    // a real question in hand holds her silence follow-ups back (nudgeDue)
+    var counted = text !== SILENCE_MSG;
+    if (counted) pendingAsks++;
+    var settled = function (v) { if (counted) pendingAsks = Math.max(0, pendingAsks - 1); return v; };
     return fetch(AI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3531,7 +3836,8 @@
       if (!d || !d.reply) return null;
       if (d.asked || (d.lang && d.lang !== lang)) followLang(spoke, d.asked, d.lang);   // "explain it in Telugu"
       return d;
-    }).catch(function () { vlogEv('ai_unreachable', 'network'); return null; });     // network error -> offline fallback
+    }).catch(function () { vlogEv('ai_unreachable', 'network'); return null; })     // network error -> offline fallback
+      .then(settled);
   }
 
   var missCount = 0;   // consecutive not-understood answers -> escalate the hint
@@ -3631,7 +3937,11 @@
   // Intents whose canned reply is GENERIC (dealer, benefits, about...): a specific
   // question about them should go to the AI for an exact answer. Products always
   // qualify. Pure page-navigation and complete-answer intents stay offline.
-  var AI_ROUTE_IDS = { dealer: 1, benefits: 1, about: 1, recommend: 1, warranty: 1, installation: 1, complaint: 1, offers: 1, maintenance: 1, hotel: 1, hospital: 1, campus: 1 };
+  // shipping / returns / cancel too: "और कितने दिन का guarantee है यह?" hit the
+  // shipping answer on "कितने दिन" (11 Oct 2026), and a refund question asked
+  // any way but the keyword deserves the whole policy, which the brain has
+  var AI_ROUTE_IDS = { dealer: 1, benefits: 1, about: 1, recommend: 1, warranty: 1, installation: 1, complaint: 1, offers: 1, maintenance: 1, hotel: 1, hospital: 1, campus: 1,
+                       shipping: 1, returns: 1, cancel: 1 };
 
   // again: their words are already on screen and were not for the sign-in box
   // or the checkout — just answer them.
@@ -4195,7 +4505,7 @@
     return true;
   }
   function addBot(t) { return addMsg('bot', t); }
-  function addYou(t) { return addMsg('you', t); }
+  function addYou(t) { heardCustomer(t); return addMsg('you', t); }
   function addTyping() {
     var wrap = document.createElement('div');
     wrap.className = 'dcv-msg dcv-bot';
@@ -4439,15 +4749,37 @@
   }
   // What speech-to-text said they spoke, checked against the letters it
   // wrote: Telugu letters are Telugu, whatever the detector guessed.
-  // A script two languages share (Devanagari: Hindi, Marathi) keeps the detector's choice.
+  // Devanagari (Hindi or Marathi) is settled by the words, see devanagariLang.
   function spokeIn(detected, text) {
     var s = String(text || '');
     for (var i = 0; i < SCRIPTS.length; i++) {
       if (!SCRIPTS[i][0].test(s)) continue;
       var owners = SCRIPTS[i][1];
+      if (owners[0] === 'hi') return devanagariLang(s, detected);
       return owners.indexOf(detected) !== -1 ? detected : owners[0];
     }
     return detected;                 // Latin letters: English or romanised — the detector knows better
+  }
+  /* The detector called "क्या कैसे कर दे रहे हो guarantee?" Marathi (11 Oct
+     2026) and she answered a Hindi speaker in Marathi. Each language's own
+     grammar words decide. A copy of server/assistant.js devanagariLang() —
+     keep the two word lists alike. */
+  var HINDI_WORDS = ('है हैं हूँ हूं था थी थे नहीं क्या क्यों कैसे कैसा कैसी कहाँ कहां कब कितना कितने कितनी ' +
+    'आप आपका आपकी आपके आपको आपने मुझे मेरा मेरी मेरे मैं हम हमें हमारा तुम यह ये वह वो इस उस इसको इसका इसमें ' +
+    'को की के में से पर और भी कर करो करें करना करेंगे दीजिए बताओ बताइए बताइये चाहिए अपना अपनी अपने ' +
+    'रहे रहा रही गया गई सकते सकता सकती वाला लिए अगर लेकिन मतलब ठीक हाँ हां').split(' ');
+  var MARATHI_WORDS = ('आहे आहेत नाही नाहीत काय मला तुला तुम्ही तुम्हाला तुमच्या तुमचा तुमची आम्ही आम्हाला ' +
+    'आमच्या आमचा आमची माझा माझी माझे माझ्या कसा कशी कसे केले करा करायचे करायला पाहिजे सांगा द्या घ्या ' +
+    'झाले झाला आणि पण किंवा म्हणजे मध्ये साठी हवे हवा हवी कुठे किती').split(' ');
+  function devanagariLang(text, detected) {
+    var hi = 0, mr = 0, words = String(text || '').split(/[\s,.!?।॥;:"'()\-]+/);
+    for (var i = 0; i < words.length; i++) {
+      if (HINDI_WORDS.indexOf(words[i]) !== -1) hi++;
+      else if (MARATHI_WORDS.indexOf(words[i]) !== -1 || /च्या$/.test(words[i])) mr++;
+    }
+    if (detected === 'hi') return mr >= 2 && mr > hi ? 'mr' : 'hi';
+    if (detected === 'mr') return hi > mr ? 'hi' : 'mr';
+    return mr > hi ? 'mr' : 'hi';
   }
 
   // spoke: heard this turn (may be unknown); asked: a language they named; reply: the answer's language
@@ -4626,6 +4958,10 @@
     _foreign: function (text) { return leftoverSubject(text); },
     // the barge-in detector, for tests that feed it numbers instead of a mic
     _vad: vadStep, _vadState: newVadState, _VAD: VAD,
+    // a voice cutting in, as the detector would commit it — and where the turn
+    // stands (held answer, questions in hand, follow-ups), for the tests of both
+    _cutIn: function () { bargeCommit(); },
+    _turn: function () { return { askSeq: askSeq, pending: pendingAsks, parked: !!parked, nudges: nudges, quietClips: quietClips, hold: nudgeHold }; },
     // the local cart-command parser: "వాషింగ్ బాల్ తీసేయి" -> {do:'remove', product:'washing-ball'}
     _cmd: parseCommand,
     // the spotlight: which products a line names, what is lit, and when each lit up

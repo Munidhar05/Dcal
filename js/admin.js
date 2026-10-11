@@ -307,6 +307,7 @@
     ai_unreachable: 'AI unreachable', ask_failed: 'Speech + AI request failed, retried in two steps',
     stt_failed: 'Speech-to-text failed', tts_failed: 'Natural voice failed, robotic voice used',
     barge: 'Customer talked over her', lang: 'Language', nav: 'Opened', act: 'Did',
+    nudge: 'She followed up after silence', nudge_dropped: 'Follow-up dropped (customer spoke or it came too late)', cert: 'Opened certificate',
     coupon_asked: 'Asked "did you mean"', coupon_applied: 'Coupon applied', coupon_invalid: 'Coupon invalid',
     coupon_rejected: 'Coupon not valid on this order', login_needed: 'Asked them to sign in', signin_ok: 'Signed in',
     otp_wrong: 'Wrong OTP', signin_failed: 'Sign-in failed', form_filled: 'Address form filled', form_error: 'Address form refused',
