@@ -18,6 +18,11 @@ const User = require('./models/User');
 const Order = require('./models/Order');
 const Dealer = require('./models/Dealer');
 const Counter = require('./models/Counter');
+// the read-only partner API (server/partner.js). Loaded defensively for the same
+// reason as the voice modules below: an outside reader must never be the thing
+// that takes the store down.
+let partner = null;
+try { partner = require('./partner'); } catch (e) { console.error('✗ partner API unavailable:', e && e.message); }
 
 const app = express();
 app.set('trust proxy', 1);   // Render is a SINGLE proxy: req.protocol=https AND req.ip is the real client (not a spoofable X-Forwarded-For left value)
@@ -514,7 +519,8 @@ if (RZP_KEY_ID && RZP_KEY_SECRET) {
 }
 
 /* ---------- health ---------- */
-app.get('/api/health', (req, res) => res.json({ ok: true, db: dbReady, payments: !!razorpay }));
+app.get('/api/health', (req, res) => res.json({ ok: true, db: dbReady, payments: !!razorpay,
+  partner: partner ? partner.keyStatus() : { configured: false, hint: 'server/partner.js failed to load' } }));
 
 /* ---------- payments (Razorpay) ---------- */
 app.get('/api/payment/config', (req, res) => res.json({ enabled: !!razorpay, keyId: RZP_KEY_ID, magic: !!razorpay && MAGIC_CHECKOUT }));
@@ -1121,6 +1127,8 @@ const byTitle = {};
 function normTitle(s) { return String(s || '').replace(/[’‘']/g, "'").replace(/\s+/g, ' ').trim().toLowerCase(); }
 Object.keys(CATALOG).forEach((slug) => { byTitle[normTitle(CATALOG[slug].title)] = slug; });
 function money(n) { return '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// the catalog slug a stored cart line is for (by slug, else by title), undefined if none
+function slugOf(it) { return (it && CATALOG[it.slug]) ? it.slug : byTitle[normTitle(it && (it.title || it.id))]; }
 
 /* ---------- order numbers: DC + product no. + product code + running number ----------
    e.g. DC01WS00001. The code comes from the order's MAIN product (highest unit price),
@@ -1586,6 +1594,15 @@ app.post('/api/admin/dealers/restore', adminAuth, async (req, res) => {
   try { res.json({ dealer: await restoreDoc(Dealer, req.body) }); }
   catch (e) { serverErr(res, e); }
 });
+
+/* ---------- partner API: everything above, read only, one key (server/partner.js) ---------- */
+if (partner) {
+  partner.mount(app, {
+    User, Order, Dealer, voicelog, CATALOG, COUPONS, PRODUCT_CODE, slugOf, itemImage, toNum, serverErr,
+    dbReady: () => dbReady,
+    rateLimit: rateLimit({ windowMs: 60 * 1000, max: parseInt(process.env.PARTNER_RATE_PER_MIN, 10) || 120, tag: 'partner' })
+  });
+}
 
 /* ---------- short URLs for the B2B landing pages ----------
    The pages physically live in long-named folders (campus-water-softener/…), but

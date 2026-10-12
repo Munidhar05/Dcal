@@ -23,8 +23,11 @@ const OrderSchema = new mongoose.Schema({
   cancelReason: { type: String, default: '' },
   cancelledAt: { type: Number, default: null },
   refundStatus: { type: String, default: '' },
-  date: { type: Number, default: () => Date.now() }
-});
+  date: { type: Number, default: () => Date.now() },
+  // stamped by mongoose on every write (the option below), in ms like `date`;
+  // the partner API's feed hands out rows by it (server/partner.js)
+  updatedAt: { type: Number }
+}, { timestamps: { createdAt: false, updatedAt: true, currentTime: () => Date.now() } });
 
 // One Razorpay payment / order backs exactly ONE stored order — enforced by the DB
 // (partial so the many orders with empty '' ids are exempt). A concurrent double
