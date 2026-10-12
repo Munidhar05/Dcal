@@ -136,6 +136,14 @@ async function all(limit) {
   const db = fileLoad();
   return Object.keys(db).map((k) => db[k]).sort((a, b) => b.lastAt - a.lastAt).slice(0, limit);
 }
+// last spoken in at or after `t`, oldest first: the partner feed (server/partner.js).
+// No sweep here — a read from outside never deletes anything.
+async function since(t, limit) {
+  if (useDb() && VoiceSession) return VoiceSession.find({ lastAt: { $gte: t } }).sort({ lastAt: 1, sid: 1 }).limit(limit).lean();
+  const db = fileLoad();
+  return Object.keys(db).map((k) => db[k]).filter((s) => s.lastAt >= t)
+    .sort((a, b) => a.lastAt - b.lastAt || (a.sid < b.sid ? -1 : 1)).slice(0, limit);
+}
 async function one(sid) {
   if (useDb() && VoiceSession) return VoiceSession.findOne({ sid }).lean();
   return fileLoad()[sid] || null;
@@ -322,4 +330,4 @@ async function review(sid, complete) {
   return r;
 }
 
-module.exports = { setDbReady, append, all, one, remove, analyze, summaryOf, review, transcriptForReview, maskText, PROBLEMS, SLOW_MS };
+module.exports = { setDbReady, append, all, since, one, remove, analyze, summaryOf, review, transcriptForReview, maskText, PROBLEMS, SLOW_MS };

@@ -15,7 +15,10 @@ const DealerSchema = new mongoose.Schema({
   currentProducts: { type: String, default: '' },
   experience: { type: String, default: '' },
   message: { type: String, default: '' },
-  createdAt: { type: Number, default: () => Date.now(), index: true }
-});
+  createdAt: { type: Number, default: () => Date.now(), index: true },
+  // stamped by mongoose on every write (the option below), in ms like the rest;
+  // the partner API's feed hands out rows by it (server/partner.js)
+  updatedAt: { type: Number }
+}, { timestamps: { createdAt: false, updatedAt: true, currentTime: () => Date.now() } });
 
 module.exports = mongoose.model('Dealer', DealerSchema);
