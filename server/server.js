@@ -445,7 +445,11 @@ async function notifyOrderPlaced(order, base) {
   const inner = '<p style="margin:0 0 6px">Hi ' + escHtml(order.customerName || 'there') + ', thanks for your order!</p>'
     + '<p style="margin:0 0 4px;color:#475569;font-size:14px">Order <b>#' + escHtml(order.orderId) + '</b> · ' + escHtml(order.total) + (order.paid ? ' · Paid' : ' · Pay on delivery') + '</p>'
     + productImgHtml(base, order)
-    + orderItemsHtml(order) + addressHtml(order.address)
+    + orderItemsHtml(order)
+    + (order.shipping > 0 ? '<p style="margin:0 0 4px;color:#475569;font-size:14px">Delivery: ' + escHtml(money(order.shipping)) + '</p>' : '')
+    + (order.walletUsed > 0 ? '<p style="margin:0 0 4px;color:#0B6E4F;font-size:14px">Paid from your D\'Cal wallet: ' + escHtml(money(order.walletUsed)) + '</p>' : '')
+    + (order.walletCredit > 0 ? '<p style="margin:10px 0;padding:10px 14px;background:#ECFDF5;border-radius:10px;color:#065F46;font-size:14px"><b>' + escHtml(money(order.walletCredit)) + ' is now in your D\'Cal wallet.</b> Minimum order of ' + escHtml(money(WALLET_MIN_ORDER)) + ' to use your wallet amount. <a href="' + (base || '') + '/wallet" style="color:#0077B6">See your wallet</a></p>' : '')
+    + addressHtml(order.address)
     + '<p style="margin:16px 0 6px"><a href="' + (base || '') + '/track-order?order=' + encodeURIComponent(order.orderId) + '" style="display:inline-block;background:#0077B6;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:14px">Track your order →</a></p>'
     + '<p style="margin:8px 0 0;color:#475569;font-size:14px">We\'ll email you as your order progresses.</p>';
   const email = await emailForMobile(order.mobile);
@@ -530,13 +534,16 @@ app.get('/api/payment/config', (req, res) => res.json({ enabled: !!razorpay, key
 app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max: 40, tag: 'createorder' }), async (req, res) => {
   if (!razorpay) return res.status(503).json({ error: 'Razorpay not configured' });
   try {
-    const { items, coupon, mobile } = req.body || {};
+    const { items, coupon, mobile, useWallet } = req.body || {};
     // Bind this payment to the VERIFIED session identity (not the client-sent mobile),
     // so a payment can only ever be claimed by the customer who actually made it.
-    const payerMobile = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || String(mobile || '');
+    const verified = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || '';
+    const payerMobile = verified || String(mobile || '');
     // price with the SAME (verified) identity that /api/orders re-quotes with, so a
     // once-per-user coupon can't make the two disagree and save a paid order as unpaid.
-    const q = await quoteOrder(items, coupon, payerMobile);
+    // The wallet is money, so only a signed-in session spends it — never a typed
+    // number — and only when they ticked "Use wallet" in the cart.
+    const q = await quoteOrder(items, coupon, payerMobile, verified && useWallet === true ? { mobile: verified } : null);
     const gone = soldOutIn(q.lines);                     // before any money moves
     if (gone.length) return res.status(409).json({ error: soldOutError(gone) });
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
@@ -550,8 +557,10 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
       currency: 'INR',
       receipt: 'dcal_' + Date.now(),
       // stamp the payer + total onto the Razorpay order itself, so payment can be
-      // reconciled from Razorpay after a server restart (in-memory pending is lost)
-      notes: { mobile: payerMobile, total: String(q.total) }
+      // reconciled from Razorpay after a server restart (in-memory pending is lost).
+      // The wallet amount too: the charge was made net of it, so the order saved
+      // from this payment must spend exactly that, whatever the wallet says by then.
+      notes: { mobile: payerMobile, total: String(q.total), wallet: String(q.wallet), shipping: String(q.shipping) }
     };
     // Magic Checkout: hand Razorpay the cart contents so its modal can show the
     // items and collect the address itself. Built from the SERVER-priced lines so
@@ -577,7 +586,7 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
     }
     const order = await razorpay.orders.create(orderOpts);
     // remember exactly what we charged for, so verify + order-save can trust it
-    pendingPayments.set(order.id, { total: q.total, discount: q.discount, code: q.code, amount: order.amount, mobile: payerMobile, verified: false });
+    pendingPayments.set(order.id, { total: q.total, discount: q.discount, code: q.code, wallet: q.wallet, amount: order.amount, mobile: payerMobile, verified: false });
     res.json({ keyId: RZP_KEY_ID, orderId: order.id, amount: order.amount, currency: order.currency });
   } catch (e) { serverErr(res, e); }
 });
@@ -671,11 +680,14 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
     const address = { name: cd.name || sa.name || '', phone: cd.contact || sa.contact || '',
       line: [sa.line1, sa.line2].filter(Boolean).join(', ') || sa.line || '',
       city: sa.city || '', state: sa.state || '', pincode: sa.zipcode || sa.zip || sa.pincode || '' };
+    const notes = (full && full.notes) || {};
     const order = await Order.create({
       orderId: await genOrderId(items), mobile, customerName: address.name || '',
       title: items.length ? (items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : '')) : 'Order',
       total: money(total), totalNum: total, image: '', items, address,
       payment: isCod ? 'Cash on Delivery' : 'Prepaid (Razorpay)', coupon: '', discount: 0,
+      // what create-order charged net of: the wallet it spent and the delivery it added
+      walletUsed: Number(notes.wallet) || 0, shipping: Number(notes.shipping) || 0,
       paid: !isCod, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now(),
       statusHistory: [{ status: 'Confirmed', at: Date.now() }]
     });
@@ -1117,6 +1129,64 @@ async function kitProblem(lines, mobile) {
   if (kit.qty > 1) return 'Only one free Demo Kit per order.';
   return (await kitClaimedBy(mobile)) ? KIT_CLAIMED : '';
 }
+/* The kit stays free, but on its own it ships for ₹99 (15 Oct 2026): the fee
+   pays for the courier trip and turns away the orders nobody meant. When it
+   rides along with a paid product it goes in the same box, free like the
+   rest. Paid online only (see /api/orders): cash on delivery would let the
+   very orders the fee is meant to stop through again. */
+const KIT_SHIPPING = 99;
+function shippingFor(lines) {
+  return (lines || []).length && lines.every((l) => l.slug === FREE_KIT) ? KIT_SHIPPING : 0;
+}
+const KIT_PREPAID = "The Demo Kit's ₹99 delivery is paid online. Please choose UPI, card or net banking.";
+
+/* ---------- the D'Cal wallet ----------
+   A store wallet, not a Demo Kit feature: for now its only money is the ₹500
+   that goes in the moment a kit order is placed, but the wallet page and the
+   header never say where a balance came from (asked 15 Oct 2026), so another
+   source can be added as one more `walletCredit` without changing them.
+   It pays only on an order of ₹3,499 or more (after any coupon) — the minimum
+   the page states, word for word — and only when the customer ticks "Use
+   wallet" in the order summary (`useWallet`; reaching the minimum never spends
+   it by itself). Then the whole of it comes off at once: it is there to bring
+   the person who tested their water back for a softener or a filter, not to
+   discount the next washing ball.
+   There is no balance column to keep in step. Like a once-per-user coupon,
+   the wallet is read off the orders: each carries what it put in
+   (walletCredit) and what it spent (walletUsed), and a cancelled order counts
+   for neither. So cancelling an order that used the wallet puts the ₹500
+   back by itself, and cancelling the kit's order takes the credit away. */
+const WALLET_CREDIT = 500;
+const WALLET_MIN_ORDER = 3499;
+async function walletOf(mobile) {
+  const out = { balance: 0, credited: 0, used: 0 };
+  if (!mobile || !dbReady) return out;
+  const rows = await Order.find({ mobile, status: { $ne: 'Cancelled' }, $or: [{ walletCredit: { $gt: 0 } }, { walletUsed: { $gt: 0 } }] },
+                                { walletCredit: 1, walletUsed: 1 }).lean();
+  rows.forEach((o) => { out.credited += Number(o.walletCredit) || 0; out.used += Number(o.walletUsed) || 0; });
+  // an admin can cancel a kit order whose ₹500 was already spent: never below 0
+  out.balance = Math.max(0, out.credited - out.used);
+  return out;
+}
+// what the wallet takes off an order worth `goods` (after any coupon): all of
+// it from the minimum up, nothing below
+async function walletUsable(mobile, goods) {
+  if (!(goods >= WALLET_MIN_ORDER)) return 0;
+  return Math.min((await walletOf(mobile)).balance, goods);
+}
+
+/* One customer's orders are saved one at a time. Checking the wallet (or the
+   kit's one-per-customer rule) and writing the order are two steps; two taps
+   in two tabs could otherwise both see ₹500 and both spend it. In-process is
+   enough: the store is one Render instance. */
+const orderQueues = new Map();
+function oneAtATime(key, fn) {
+  const run = (orderQueues.get(key) || Promise.resolve()).then(fn);   // the queue's tail never rejects
+  const tail = run.catch(() => {});
+  orderQueues.set(key, tail);
+  tail.then(() => { if (orderQueues.get(key) === tail) orderQueues.delete(key); });
+  return run;
+}
 
 /* ---------- pricing (server is the source of truth for money) ----------
    Prices come from data/catalog.json, never from the browser. Each cart line is
@@ -1182,8 +1252,11 @@ function priceCart(items) {
   return { subtotal, lines, ok: ok && lines.length > 0 };
 }
 
-// full server quote: catalog pricing + coupon eligibility = the authoritative total
-async function quoteOrder(items, couponCode, mobile) {
+// full server quote: catalog pricing + coupon eligibility + delivery + wallet = the authoritative total.
+// `wallet` says how the wallet is read: { mobile } = what that VERIFIED customer
+// may use now; { amount } = an amount already settled (a payment was made on it);
+// left out = no wallet.
+async function quoteOrder(items, couponCode, mobile, wallet) {
   const { subtotal, lines, ok } = priceCart(items);
   let code = String(couponCode || '').trim().toUpperCase();
   let discount = 0;
@@ -1193,7 +1266,12 @@ async function quoteOrder(items, couponCode, mobile) {
   if (c && base > 0 && (!c.min || base >= c.min) && !(c.oncePerUser && await couponUsedBy(mobile, code))) {
     discount = couponDiscount(c, base);
   } else { code = ''; }
-  return { ok, subtotal, discount, total: subtotal - discount, code, lines };
+  const goods = subtotal - discount;
+  const shipping = shippingFor(lines);
+  let used = 0;
+  if (wallet && wallet.amount != null) used = Math.max(0, Math.min(Number(wallet.amount) || 0, goods));
+  else if (wallet && wallet.mobile) used = await walletUsable(wallet.mobile, goods);
+  return { ok, subtotal, discount, shipping, wallet: used, total: goods + shipping - used, code, lines };
 }
 
 /* ---------- out of stock ----------
@@ -1245,16 +1323,30 @@ app.post('/api/demo-kit/check', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, t
 });
 
 /* ---------- orders (customer) ---------- */
-app.post('/api/orders', authCustomer, async (req, res) => {
+app.post('/api/orders', authCustomer, (req, res) => oneAtATime(req.customerMobile, () => saveOrder(req, res)));
+async function saveOrder(req, res) {
   if (!requireDB(res)) return;
   try {
     const o = req.body || {};
     const mobile = req.customerMobile;          // identity from the session, not the body
     if (!o.orderId) return res.status(400).json({ error: 'orderId required' });
+    const rzpId = String(o.razorpayOrderId || '');
+    const pending = rzpId ? pendingPayments.get(rzpId) : null;
+
+    // The wallet. An order paid online spends exactly what its payment was made
+    // net of: create-order wrote that on the pending payment and on the Razorpay
+    // order, and the charge must still match below. Anything else spends what
+    // the wallet holds now, and only when they ticked "Use wallet" (useWallet).
+    let settled = (pending && pending.verified && pending.mobile === mobile) ? pending.wallet : null;
+    let ro = null;
+    if (settled == null && razorpay && rzpId) {
+      try { ro = await razorpay.orders.fetch(rzpId); } catch (e) { ro = null; }
+      if (ro && String((ro.notes || {}).mobile || '') === mobile) settled = Number((ro.notes || {}).wallet) || 0;
+    }
 
     // SERVER-AUTHORITATIVE total: re-price the cart from the catalog. Never trust
     // the client's total/discount/coupon — they are display values only.
-    const q = await quoteOrder(o.items, o.coupon, mobile);
+    const q = await quoteOrder(o.items, o.coupon, mobile, settled != null ? { amount: settled } : (o.useWallet === true ? { mobile } : null));
     if (!q.ok) return res.status(400).json({ error: 'Some items could not be priced. Please refresh your cart.' });
     // once-per-user coupon backstop (defence in depth)
     if (q.code && COUPONS[q.code] && COUPONS[q.code].oncePerUser && await couponUsedBy(mobile, q.code)) {
@@ -1263,7 +1355,7 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     // out-of-stock backstop. A verified payment is never refused here: create-order
     // already checked its cart, and refusing now would strand the money.
     const gone = soldOutIn(q.lines);
-    if (gone.length && !(pendingPayments.get(String(o.razorpayOrderId || '')) || {}).verified) {
+    if (gone.length && !(pending || {}).verified) {
       return res.status(409).json({ error: soldOutError(gone), outOfStock: gone });
     }
 
@@ -1271,7 +1363,6 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     // verified for this exact amount. Otherwise paid stays false (e.g. COD), and
     // a client claiming paid:true with no real payment is ignored.
     let paid = false, paymentId = '', payLabel = '';
-    const pending = o.razorpayOrderId ? pendingPayments.get(String(o.razorpayOrderId)) : null;
     // Honour "paid" ONLY when a verified Razorpay payment was made BY THIS customer
     // (pending.mobile === session mobile) for THIS exact amount. A Magic COD payment
     // is verified too but its method is 'cod' (no money captured) => stays UNPAID.
@@ -1289,7 +1380,7 @@ app.post('/api/orders', authCustomer, async (req, res) => {
       // RESILIENCE: no verified pending (restart / verify failed) — reconcile straight
       // from Razorpay. A captured NON-cod payment = paid; a cod payment = COD/unpaid.
       try {
-        const ro = await razorpay.orders.fetch(String(o.razorpayOrderId));
+        if (!ro) ro = await razorpay.orders.fetch(rzpId);
         // >= (not ===) so a dashboard-added shipping/COD fee doesn't block reconciliation
         if (ro && String((ro.notes || {}).mobile || '') === mobile && ro.amount >= Math.round(q.total * 100)) {
           const pays = await razorpay.orders.fetchPayments(String(o.razorpayOrderId));
@@ -1308,7 +1399,14 @@ app.post('/api/orders', authCustomer, async (req, res) => {
       const kp = await kitProblem(q.lines, mobile);
       if (kp) return res.status(409).json({ error: kp, demoKit: true });
     }
-    if (q.total <= 0) payLabel = 'Free order';           // just the kit: nothing to pay
+    // the kit on its own pays its ₹99 delivery online (shippingFor). One that came
+    // through Razorpay goes ahead even when the payment can't be confirmed here:
+    // refusing it would strand whatever was paid.
+    if (q.shipping > 0 && !rzpId) return res.status(409).json({ error: KIT_PREPAID, demoKit: true });
+    if (q.total <= 0) payLabel = 'Free order';           // nothing left to pay
+    // ordering the kit puts ₹500 in the wallet — once: a paid order skipped the
+    // one-per-customer check above, so it is asked here again
+    const walletCredit = q.lines.some((l) => l.slug === FREE_KIT) && !(paid && await kitClaimedBy(mobile)) ? WALLET_CREDIT : 0;
 
     let order;
     try {
@@ -1319,7 +1417,8 @@ app.post('/api/orders', authCustomer, async (req, res) => {
         title: o.title || '', total: money(q.total), totalNum: q.total,
         image: o.image || '', items: o.items || [], address: o.address || {},
         payment: payLabel || o.payment || '', coupon: q.code, discount: q.discount,
-        paid, paymentId, razorpayOrderId: String(o.razorpayOrderId || ''),
+        shipping: q.shipping, walletUsed: q.wallet, walletCredit,
+        paid, paymentId, razorpayOrderId: rzpId,
         status: 'Confirmed', date: Date.now(),
         statusHistory: [{ status: 'Confirmed', at: Date.now() }]
       });
@@ -1335,7 +1434,7 @@ app.post('/api/orders', authCustomer, async (req, res) => {
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});   // fire-and-forget order confirmation
     res.json({ order });
   } catch (e) { serverErr(res, e); }
-});
+}
 
 app.get('/api/orders', authCustomer, async (req, res) => {
   if (!requireDB(res)) return;
@@ -1345,8 +1444,27 @@ app.get('/api/orders', authCustomer, async (req, res) => {
   } catch (e) { serverErr(res, e); }
 });
 
+// the wallet page and the cart's "add ₹X more" read this. The rules ride along,
+// so the page never states a minimum the server does not apply.
+app.get('/api/wallet', authCustomer, async (req, res) => {
+  if (!requireDB(res)) return;
+  try {
+    const w = await walletOf(req.customerMobile);
+    // its history: every order that put money in or took it out, cancelled ones
+    // too, so a ₹500 that came back has a line that says why
+    const rows = await Order.find({ mobile: req.customerMobile, $or: [{ walletCredit: { $gt: 0 } }, { walletUsed: { $gt: 0 } }] },
+                                  { orderId: 1, date: 1, status: 1, cancelledAt: 1, walletCredit: 1, walletUsed: 1, title: 1 }).sort({ date: -1 }).lean();
+    res.json({
+      balance: w.balance, credit: WALLET_CREDIT, minOrder: WALLET_MIN_ORDER, kitShipping: KIT_SHIPPING,
+      kitClaimed: await kitClaimedBy(req.customerMobile),
+      history: rows.map((o) => ({ orderId: o.orderId, title: o.title || '', date: o.date, status: o.status, cancelledAt: o.cancelledAt || null,
+                                  credit: Number(o.walletCredit) || 0, used: Number(o.walletUsed) || 0 }))
+    });
+  } catch (e) { serverErr(res, e); }
+});
+
 // customer cancels their own order (only before it ships)
-app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
+app.put('/api/orders/:orderId/cancel', authCustomer, (req, res) => oneAtATime(req.customerMobile, async () => {
   if (!requireDB(res)) return;
   try {
     const { reason } = req.body || {};
@@ -1354,16 +1472,21 @@ app.put('/api/orders/:orderId/cancel', authCustomer, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'order not found' });
     if (['Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'].indexOf(order.status) > -1)
       return res.status(400).json({ error: 'This order can no longer be cancelled.' });
+    // A kit order whose ₹500 has already been spent stays: cancelling it would
+    // refund the ₹99 and free the one-per-customer kit for a second ₹500.
+    if (order.walletCredit > 0 && (await walletOf(req.customerMobile)).balance < order.walletCredit)
+      return res.status(400).json({ error: 'The ₹' + order.walletCredit + ' wallet credit from this Demo Kit order has already been used, so it can no longer be cancelled.' });
     order.status = 'Cancelled';
     order.cancelReason = reason || '';
     order.cancelledAt = Date.now();
-    order.refundStatus = order.paid ? 'Refund initiated' : 'No payment taken';
+    order.refundStatus = (order.paid ? 'Refund initiated' : 'No payment taken') +
+      (order.walletUsed > 0 ? ' · ₹' + order.walletUsed + ' back in your D\'Cal wallet' : '');   // walletOf stops counting it now
     order.statusHistory = (order.statusHistory || []).concat([{ status: 'Cancelled', at: Date.now() }]);
     await order.save();
     notifyOrderCancelled(order, baseUrlFrom(req)).catch(() => {});
     res.json({ order });
   } catch (e) { serverErr(res, e); }
-});
+}));
 
 /* ---------- public order tracking (no login) ----------
    Look up ONE order by its number alone — the customer just pastes the number from

@@ -99,10 +99,10 @@ const KNOWLEDGE = [
   '3. Tap Filter: ' + stock('tap-filter') + 'no fitting, it just hangs on one tap and is portable (it is NOT the 14-stage one). Reduces hair fall, dry skin and skin irritation from hard water. LIFE 6 months, then a new cartridge.',
   '4. Washing Machine Ball: ' + stock('washing-ball') + 'dropped in the washing machine; cuts detergent use by half and keeps clothes looking new.',
   '5. Tap and Tile Cleaner: ' + stock('tap-tile-cleaner') + 'a gentle water-based liquid; spray, scrub, wash off; brings back the shine of taps and tiles and removes existing marks.',
-  'PRICES in rupees (say only when asked): ' + PRICES + '. Delivery is free.',
+  'PRICES in rupees (say only when asked): ' + PRICES + '. Delivery is free, except the Demo Kit on its own: 99 rupees.',
   'RATINGS in stars (say only when asked): ' + RATINGS + '. The 12,840+ reviews shown on product pages are for the whole store.',
   'NOT on the website, so never claim them: replacement cartridges as a separate item (for one, call ' + PHONE + '), how long the Washing Machine Ball lasts, cleaning or purifying the water ("पानी साफ करता है"), killing bacteria, treating a disease. What the products do is stop hard-water scale and its effects. It IS safe: food-grade material, heavy metals within WHO drinking-water limits.',
-  'FREE DEMO KIT — OURS, never say we do not sell it: free (worth 99 rupees), free delivery, nothing to pay, one per customer, ordered on its own; it has NO product page. A sachet to test their own water at home: 1 litre of bore water in each of two utensils, hang the kit in one like a tea bag, boil both 10 minutes, let them cool, compare the white calcium deposit. Ordered with the "Order free" button below the products, on the home page and the products page (sign in with the mobile number, then "Place Free Order" in the cart).',
+  'FREE DEMO KIT — OURS, never say we do not sell it: the kit is free (worth 99 rupees), its delivery 99 rupees paid online, one per customer, ordered on its own; it has NO product page. Ordering it puts 500 rupees in their D\'Cal wallet ("/wallet"), usable on an order of 3,499 rupees or more (the minimum order to use the wallet), never a smaller one: they tick "Use wallet" in the order summary and all 500 come off. A sachet to test their own water at home: 1 litre of bore water in each of two utensils, hang the kit in one like a tea bag, boil both 10 minutes, let them cool, compare the white calcium deposit. Ordered with the "Order now" button below the products, on the home page and the products page (sign in with the mobile number, then pay the 99 rupees in the cart).',
   'WARRANTY, LIFE and REFUND are three DIFFERENT things. Never mix them up:',
   '- WARRANTY (guarantee, गारंटी, वारंटी, గ్యారంటీ): 6-month replacement warranty, a defective product is replaced free. No 1-year or 365-day warranty exists.',
   '- LIFE: Water Softener 10-12 months; Shower Head Filter and Tap Filter 6 months.',
@@ -142,7 +142,7 @@ const KNOWLEDGE = [
   'PAGES you can send the customer to — put the exact path in "go":',
   '  "/" = home,  "/collection" = all products,  "/cart" = cart,  "/track-order" = track an order,',
   '  "/contact" = contact,  "/faq" = FAQ,  "/shipping-returns" = shipping & returns,  "/privacy-policy" = privacy,',
-  '  "/legal" = terms,  "/wishlist" = saved items,  "/search" = search,  "/blog" = blog,  "/about" = about,',
+  '  "/legal" = terms,  "/wishlist" = saved items,  "/wallet" = their wallet,  "/search" = search,  "/blog" = blog,  "/about" = about,',
   '  "/partner/" = become a dealer,  "/hotel/" = hotel solution,  "/hospital/" = hospital solution,  "/campus/" = apartment/school/campus solution.',
   '  Product pages: "/product/water-softener", "/product/shower-filter", "/product/tap-filter", "/product/washing-ball", "/product/tap-tile-cleaner".',
   '  To let them call/chat a human: "https://wa.me/918622909192".',
@@ -192,7 +192,7 @@ const KNOWLEDGE = [
   '  {"do":"wish","product":"<slug>"} / {"do":"unwish","product":"<slug>"} = save to / remove from the wishlist.',
   '  {"do":"search","q":"<words>"} = show search results.  {"do":"track","order":"<order id>"} = track an order by the id they say.',
   '  {"do":"scroll","dir":"up"|"down"} = scroll the page.  {"do":"back"} = go to the previous page.  {"do":"login"} = open the sign-in box.',
-  '  {"do":"showkit"} = show the Demo Kit on screen. Use it whenever they ask how to test, how to trust it, how to get it or where it is: tell them about the free Demo Kit, show it, and ASK "Shall I add the Demo Kit to your cart? It is completely free." "go" null.',
+  '  {"do":"showkit"} = show the Demo Kit on screen. Use it whenever they ask how to test, how to trust it, how to get it or where it is: tell them about the free Demo Kit, show it, and ASK "Shall I add the Demo Kit to your cart? Only 99 rupees delivery, and you get 500 rupees in your wallet." "go" null.',
   '  {"do":"kit"} = put the free Demo Kit in their cart — when they say yes to that offer, or ask you to order it ("order it for me", "मंगा दो", "order कर दो"). Not when they only ask what it is. The website handles sign-in and the one-per-customer check and opens the cart; your reply is one line that you are adding their free Demo Kit, "go" null.',
   '  {"do":"certs"} = show all four certificates on screen (when they ask about certificates, proof, lab tests). Your reply: "Here are our four certificates — the lab report, safety data, trade mark and design registration. Which one shall I open?"',
   '  {"do":"cert","which":"lab"|"msds"|"trademark"|"design"|"all"} = open that certificate on screen for them to read, on any page. While one is open (see STATE), "scroll down / up", "next page" are {"do":"scroll"} and move inside it, and "close it" / "band karo" is {"do":"close"}.',
@@ -203,7 +203,7 @@ const KNOWLEDGE = [
   '  After adding to the cart, confirm in one short line and STAY on the page ("go" null) unless they asked to see the cart or to buy now. Say prices only if asked.',
   '  Include "act" ONLY when there is something to do; otherwise leave it out entirely.',
   '  You can DO only what an "act" above does. Never say you are filling in, typing, entering, saving or submitting anything (their name, address, details, a form, a payment) — you cannot, and saying so while nothing happens on their screen is lying to them. If they tell you their address or details outside the checkout, say they can tell you them on the checkout\'s address form.',
-  '- Answer strictly as JSON only: {"reply": "<spoken answer, no question>", "ask": "<your ONE short question for their next step, in the same language: what comes AFTER what you just did or showed>", "go": "<path or null>", "act": {…} only when acting}. "ask" is never empty, except for a one-word "stop / wait" acknowledgement. Examples of "ask": you opened a product -> "Shall I add it to your cart?"; you showed the certificates -> "Which one shall I open?"; you showed the Demo Kit -> "Shall I add the Demo Kit to your cart? It is free."; you added to the cart -> "Shall I take you to checkout?"; you opened a certificate -> "Shall I scroll down?". No text outside the JSON.'
+  '- Answer strictly as JSON only: {"reply": "<spoken answer, no question>", "ask": "<your ONE short question for their next step, in the same language: what comes AFTER what you just did or showed>", "go": "<path or null>", "act": {…} only when acting}. "ask" is never empty, except for a one-word "stop / wait" acknowledgement. Examples of "ask": you opened a product -> "Shall I add it to your cart?"; you showed the certificates -> "Which one shall I open?"; you showed the Demo Kit -> "Shall I add the Demo Kit to your cart?"; you added to the cart -> "Shall I take you to checkout?"; you opened a certificate -> "Shall I scroll down?". No text outside the JSON.'
 ].join('\n');
 
 /* Every language a customer may speak to the mic in. The widget sends whichever
@@ -274,7 +274,7 @@ const KIT_FOLLOW = /order|where|how|get|buy|send|कहाँ|कहां|क�
 function kitNote(message, history) {
   const followsHer = KIT_WORDS.test(lastAssistant(history)) && (YES_RE.test(message) || KIT_FOLLOW.test(message));
   if (!KIT_WORDS.test(message) && !followsHer) return '';
-  return '\n(Only if they are asking about the free Demo Kit: "how do I get it / test it / where is it" -> act {"do":"showkit"} and ask "Shall I add the Demo Kit to your cart? It is completely free."; ' +
+  return '\n(Only if they are asking about the free Demo Kit: "how do I get it / test it / where is it" -> act {"do":"showkit"} and ask "Shall I add the Demo Kit to your cart? Only 99 rupees delivery, and you get 500 rupees in your wallet."; ' +
          '"yes" to that, or "order it for me" -> act {"do":"kit"}, which asks for sign-in by itself. Never act "login" and never a product page for the kit. Anything else, answer it and ignore this.)';
 }
 const SILENCE = '[silence]';   // what the widget sends when the customer has gone quiet
@@ -374,7 +374,7 @@ function signInWanted(message, history) {
 }
 const ALLOWED_PATHS = new Set([
   '/', '/collection', '/cart', '/track-order', '/contact', '/faq', '/shipping-returns',
-  '/privacy-policy', '/legal', '/wishlist', '/search', '/blog', '/about',
+  '/privacy-policy', '/legal', '/wishlist', '/wallet', '/search', '/blog', '/about',
   '/partner/', '/hotel/', '/hospital/', '/campus/', 'https://wa.me/918622909192'
 ]);
 function safeGo(go) {

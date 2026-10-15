@@ -531,6 +531,15 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 .dcal-acct .dcal-avatar-btn{width:32px!important;height:32px!important;flex:0 0 auto}
 .dcal-acct-trigger .header__icon--account{height:auto!important;min-height:0!important}
 .dcal-acct.open .dcal-acct-caret{transform:rotate(180deg)}
+/* the wallet between the profile and the cart (js/auth.js paintWalletIcon):
+   its balance sits on the icon, as a pill across the foot of it */
+.dcal-wallet-ico{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:0 2px;color:#0B1220;text-decoration:none!important;flex-shrink:0}
+.dcal-wallet-ico svg{width:22px;height:22px;margin-top:-6px;transition:transform .2s ease}
+.dcal-wallet-ico:hover{color:rgb(0,119,182)}
+.dcal-wallet-ico:hover svg{transform:scale(1.07)}
+.dcal-wallet-amt{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);height:16px;line-height:16px;padding:0 5px;border-radius:8px;background:#0B6E4F;color:#fff;font-size:10.5px;font-weight:800;font-family:'Inter',system-ui,sans-serif;white-space:nowrap;letter-spacing:.01em;box-shadow:0 0 0 2px #fff}
+.dcal-wallet-amt[hidden]{display:none}
+.dcal-wallet-ico:has(.dcal-wallet-amt[hidden]) svg{margin-top:0}
 .dcal-acct-menu{position:absolute;top:calc(100% + 14px);right:0;width:262px;background:#fff;border-radius:16px;box-shadow:0 26px 60px -20px rgba(2,42,90,.42);border:1px solid rgba(2,42,90,.08);padding:8px;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease,visibility .2s ease;z-index:200}
 .dcal-acct-menu::before{content:"";position:absolute;top:-7px;right:24px;width:14px;height:14px;background:#fff;border-left:1px solid rgba(2,42,90,.08);border-top:1px solid rgba(2,42,90,.08);transform:rotate(45deg)}
 .dcal-acct.open .dcal-acct-menu{opacity:1;visibility:visible;transform:none}
@@ -597,6 +606,9 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 .dcal-kit-strip-go{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0}
 .dcal-kit-strip-go .btn{padding:13px 28px}
 .dcal-kit-strip-go span{font-size:12px;color:#64748B;white-space:nowrap}
+/* what ordering it earns: ₹500 in the D'Cal wallet (server.js walletOf) */
+.dcal-kit-strip .dcal-kit-wallet{margin:0 0 12px;padding:8px 12px;border-radius:10px;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;font-size:14px}
+.dcal-kit-strip .dcal-kit-wallet b{color:#0B6E4F}
 /* the four steps from the printed Demo Kit card */
 .dcal-kit-strip .dcal-kit-steps-h{margin:2px 0 8px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0077B6}
 .dcal-kit-steps{list-style:none;counter-reset:kitstep;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
@@ -792,3 +804,24 @@ select.dcal-input::-ms-expand{display:none}
 .dcal-oos .pp-card-btn,.dcal-oos-btn{background:#E2E8F0!important;color:#64748B!important;box-shadow:none!important}
 .dcal-oos-btn{cursor:not-allowed!important}
 .dcal-ci-oos{margin:4px 0 0;font-size:12.5px;font-weight:700;color:#DC2626}
+/* the D'Cal wallet (js/auth.js walletNoteHTML): the kit's ₹500, the wallet
+   paying, or "add ₹X more" with how far the cart has come */
+.dcal-ci-perk{margin:4px 0 0;font-size:12.5px;font-weight:700;color:#0B6E4F}
+.dcal-acct-badge--wallet{background:#0B6E4F}
+.dcal-wallet-note{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;padding:12px 14px;border-radius:12px;font-size:13.5px;line-height:1.45;color:#334155}
+.dcal-wallet-note b{font-size:14px;color:#0B1220}
+.dcal-wallet-note a{color:#0077B6;font-weight:700}
+.dcal-wallet-note--gift{background:#ECFDF5;border:1px solid #A7F3D0}
+/* "Use ₹500 from your D'Cal wallet": the box is the only thing that spends it */
+.dcal-wallet-note--use{background:#fff;border:1.5px solid #CBD5E1;padding:0;transition:border-color .15s,background .15s}
+.dcal-wallet-note--use.is-on{background:#ECFDF5;border-color:#0B6E4F}
+.dcal-wallet-use{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;cursor:pointer;margin:0}
+.dcal-wallet-use input{flex:0 0 auto;width:20px;height:20px;margin:1px 0 0;accent-color:#0B6E4F;cursor:pointer}
+.dcal-wallet-use span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dcal-wallet-use small{font-size:12.5px;color:#64748B}
+.dcal-wallet-note--use.is-on small{color:#0B6E4F;font-weight:700}
+.dcal-wallet-note--nudge{background:#FFFBEB;border:1.5px dashed #F59E0B;animation:dcalWalletPop .5s cubic-bezier(.2,1.4,.4,1) both}
+.dcal-wallet-bar{display:block;height:7px;border-radius:99px;background:#FDE68A;overflow:hidden}
+.dcal-wallet-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#F59E0B,#0B6E4F)}
+@keyframes dcalWalletPop{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.dcal-wallet-note--nudge{animation:none}}

@@ -13,6 +13,11 @@ const OrderSchema = new mongoose.Schema({
   payment: { type: String, default: '' },
   coupon: { type: String, default: '' },           // coupon code applied (e.g. YASEEN200)
   discount: { type: Number, default: 0 },          // discount amount in rupees
+  shipping: { type: Number, default: 0 },          // delivery charged, in rupees (₹99 on a Demo Kit on its own)
+  // the D'Cal wallet (server.js walletOf): what this order put in and took out.
+  // A cancelled order counts for neither, so there is no balance to keep in step.
+  walletCredit: { type: Number, default: 0 },      // ₹ added by ordering the Demo Kit
+  walletUsed: { type: Number, default: 0 },        // ₹ of this order paid from the wallet
   paid: { type: Boolean, default: false },         // true once Razorpay payment is verified
   paymentId: { type: String, default: '' },        // Razorpay payment id (pay_XXXX)
   razorpayOrderId: { type: String, default: '' },  // Razorpay order id (order_XXXX)

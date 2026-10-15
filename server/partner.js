@@ -202,6 +202,8 @@ function mount(app, d) {
       send(res, docs.map((o) => {
         const total = Number(o.totalNum) || toNum(o.total);
         const discount = Number(o.discount) || 0;
+        // total = subtotal − discount + shipping − wallet (server.js quoteOrder)
+        const shipping = Number(o.shipping) || 0, wallet = Number(o.walletUsed) || 0;
         return {
           order_id: o.orderId,
           created_at: iso(o.date),
@@ -219,7 +221,8 @@ function mount(app, d) {
               image_url: abs(base, itemImage(it) || (it && it.image))
             };
           }),
-          subtotal: total + discount, discount, coupon: str(o.coupon), total, currency: 'INR',
+          subtotal: total + discount + wallet - shipping, discount, coupon: str(o.coupon),
+          shipping, wallet_used: wallet, wallet_credit: Number(o.walletCredit) || 0, total, currency: 'INR',
           payment: str(o.payment), paid: !!o.paid,
           payment_id: str(o.paymentId), razorpay_order_id: str(o.razorpayOrderId),
           address: addressRow(o.address),
