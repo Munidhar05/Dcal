@@ -1,0 +1,46 @@
+{
+  "asin": "B0DV5SD2M1",
+  "url": "https://www.amazon.in/dp/B0DV5SD2M1",
+  "fetchedAt": "2026-10-15",
+  "images": [
+    {
+      "src": "/images/amazon/5138JE3OVrL.jpg",
+      "thumb": "/images/amazon/thumb/5138JE3OVrL.jpg"
+    },
+    {
+      "src": "/images/amazon/61k7Gt9Cn9L.jpg",
+      "thumb": "/images/amazon/thumb/61k7Gt9Cn9L.jpg"
+    },
+    {
+      "src": "/images/amazon/61Dek4pcm3L.jpg",
+      "thumb": "/images/amazon/thumb/61Dek4pcm3L.jpg"
+    },
+    {
+      "src": "/images/amazon/518pRcOQaWL.jpg",
+      "thumb": "/images/amazon/thumb/518pRcOQaWL.jpg"
+    },
+    {
+      "src": "/images/amazon/61Nd32pgClL.jpg",
+      "thumb": "/images/amazon/thumb/61Nd32pgClL.jpg"
+    },
+    {
+      "src": "/images/amazon/61aIaGydVdL.jpg",
+      "thumb": "/images/amazon/thumb/61aIaGydVdL.jpg"
+    },
+    {
+      "src": "/images/amazon/61z7ZEpeW9L.jpg",
+      "thumb": "/images/amazon/thumb/61z7ZEpeW9L.jpg"
+    }
+  ],
+  "videos": [
+    {
+      "src": "/videos/amazon/tap-filter-1.mp4",
+      "poster": "/images/amazon/511xGBPV0DL.jpg",
+      "thumb": "/images/amazon/thumb/511xGBPV0DL.jpg",
+      "title": "DCal Tap Filter",
+      "seconds": 29
+    }
+  ],
+  "reviewCount": 4,
+  "reviewPages": 1
+}
