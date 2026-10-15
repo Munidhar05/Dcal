@@ -105,6 +105,7 @@
       address: order.address, payment: order.payment, paid: order.paid, paymentId: order.paymentId,
       razorpayOrderId: order.razorpayOrderId,
       coupon: order.coupon, discount: order.discount,
+      useWallet: order.walletUsed > 0,              // only when they ticked the box
       status: order.status, date: order.date
     });
   }
@@ -121,6 +122,7 @@
             items: o.items || [], address: o.address || {}, payment: o.payment,
             paid: o.paid, paymentId: o.paymentId, date: o.date, status: o.status,
             coupon: o.coupon, discount: o.discount,
+            shipping: o.shipping || 0, walletUsed: o.walletUsed || 0, walletCredit: o.walletCredit || 0,
             cancelReason: o.cancelReason, refundStatus: o.refundStatus, cancelledAt: o.cancelledAt };
         }));
       }
@@ -773,6 +775,7 @@
     updateHeader();
     updateCartBubbles();
     pullOrders(mobile);   // bring this customer's orders from the central DB to this device
+    loadWallet().then(function () { if (coVoiceStep() === 'cart') renderCartPage(); });
     var fn = pendingAction; pendingAction = null;   // capture before closeAuth() clears it
     closeAuth();
     var user = currentUser();
@@ -783,6 +786,7 @@
   function logout() {
     api('POST', '/api/logout').catch(function () {});   // clear the server session cookie
     LS.removeItem(K_SESSION);
+    walletState.balance = 0; walletState.loaded = false; walletState.asked = false;
     updateHeader();
     updateCartBubbles();   // guest -> empty cart -> bubble hidden
     closeDrawer();
@@ -799,6 +803,7 @@
     heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>',
     pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>',
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
     chev: '<svg class="dcal-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
     back: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>'
@@ -830,6 +835,7 @@
         '<button class="dcal-mi" data-go="edit">' + IC.edit + ' Edit Profile ' + IC.chev + '</button>' +
         (magicOn() ? '' : '<button class="dcal-mi" data-go="addresses">' + IC.pin + ' My Addresses ' + IC.chev + '</button>') +
         '<button class="dcal-mi" data-go="orders">' + IC.bag + ' My Orders ' + IC.chev + '</button>' +
+        '<button class="dcal-mi" data-act="wallet">' + IC.wallet + ' My Wallet' + walletBadge() + ' ' + IC.chev + '</button>' +
         '<button class="dcal-mi" data-act="wishlist">' + IC.heart + ' Wishlist ' + IC.chev + '</button>' +
         '<button class="dcal-mi dcal-mi--danger" data-act="logout">' + IC.logout + ' Logout</button>' +
       '</div>';
@@ -837,6 +843,8 @@
     drawer.querySelectorAll('[data-go]').forEach(function (b) {
       b.addEventListener('click', function () { openSub(b.getAttribute('data-go')); });
     });
+    var dWallet = drawer.querySelector('[data-act="wallet"]');
+    if (dWallet) dWallet.addEventListener('click', function () { location.href = '/wallet'; });
     var dWish = drawer.querySelector('[data-act="wishlist"]');
     if (dWish) dWish.addEventListener('click', function () { location.href = '/wishlist'; });
     drawer.querySelector('[data-act="logout"]').addEventListener('click', logout);
@@ -871,8 +879,8 @@
     else {
       renderOrders(sbody);                 // show the cached list instantly…
       var om = sessionMobile();            // …then refresh from the server so admin
-      if (om) pullOrders(om).then(function () {   // status changes & deletions show up
-        if (sbody.isConnected) renderOrders(sbody);
+      if (om) Promise.all([pullOrders(om), loadWallet()]).then(function () {   // status changes & deletions show up
+        if (sbody.isConnected) renderOrders(sbody);   // (the wallet decides whether a kit order may still be cancelled)
       });
     }
     view.querySelector('.dcal-sback').addEventListener('click', function () {
@@ -1045,6 +1053,8 @@
     'Want to change address or payment', 'Item no longer needed', 'Other'
   ];
   function orderCancellable(o) { var s = o.status || 'Confirmed'; return s === 'Confirmed' || s === 'Processing'; }
+  // a kit order whose ₹500 the wallet no longer holds (known only once the wallet has loaded)
+  function kitCreditSpent(o) { return o.walletCredit > 0 && walletState.loaded && walletState.balance < o.walletCredit; }
 
   function cancelLocalOrder(orderId, reason) {
     var list = orders();
@@ -1062,8 +1072,16 @@
   function doCancelOrder(orderId, reason, box) {
     cancelLocalOrder(orderId, reason);              // update this device immediately
     toast('Order cancelled');
+    var m = sessionMobile();
     api('PUT', '/api/orders/' + encodeURIComponent(orderId) + '/cancel',
-      { mobile: sessionMobile(), reason: reason }).catch(function () {});   // sync to the central DB
+      { mobile: m, reason: reason })                // sync to the central DB
+      .then(function () { loadWallet(); }, function (e) {
+        // a refusal about the wallet (a kit whose ₹500 is spent): the server's
+        // copy stands, so say why and show the order as it really is
+        if (!(e && /wallet/i.test(e.message || ''))) return;
+        toast(e.message);
+        if (m) pullOrders(m).then(function () { if (box.isConnected) renderOrders(box); });
+      });
     renderOrders(box);
   }
 
@@ -1087,6 +1105,18 @@
       html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Discount</h4>' +
         '<span class="dcal-order__pay" style="color:#0B6E4F">−' + money(o.discount) + (o.coupon ? ' (' + esc(o.coupon) + ')' : '') + '</span></div>';
     }
+    if (o.shipping > 0) {
+      html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Delivery</h4>' +
+        '<span class="dcal-order__pay">' + money(o.shipping) + '</span></div>';
+    }
+    if (o.walletUsed > 0) {
+      html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">D’Cal wallet</h4>' +
+        '<span class="dcal-order__pay" style="color:#0B6E4F">−' + money(o.walletUsed) + '</span></div>';
+    }
+    if (o.walletCredit > 0 && o.status !== 'Cancelled') {
+      html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Wallet credit</h4>' +
+        '<a class="dcal-order__pay" href="/wallet" style="color:#0B6E4F">+' + money(o.walletCredit) + ' added</a></div>';
+    }
     if (o.payment) {
       html += '<div class="dcal-order__sec dcal-order__sec--row"><h4 class="dcal-order__h4" style="margin:0">Payment</h4>' +
         '<span class="dcal-order__pay">' + esc(o.payment) + (o.paid ? ' · Paid ✓' : '') + '</span></div>';
@@ -1101,6 +1131,10 @@
         '<p class="dcal-order__addr">Status: <b style="color:#DC2626">Cancelled</b>' +
         (o.cancelReason ? '<br>Reason: ' + esc(o.cancelReason) : '') +
         (o.refundStatus ? '<br>Refund: <b>' + esc(o.refundStatus) + '</b>' : '') + '</p></div>';
+    } else if (orderCancellable(o) && kitCreditSpent(o)) {
+      // server.js refuses it too: cancelling would hand the kit, and its ₹500, out again
+      html += '<div class="dcal-order__sec"><p class="dcal-cancel-note" style="margin:0">The ' + rupees(o.walletCredit) +
+        ' wallet credit from this Demo Kit has been used, so this order can no longer be cancelled.</p></div>';
     } else if (orderCancellable(o)) {
       html += '<div class="dcal-order__sec">' +
         '<button type="button" class="dcal-link-btn dcal-link-btn--danger" data-cancel-open="' + esc(o.id) + '">Cancel this order</button>' +
@@ -1113,7 +1147,9 @@
             '<button type="button" class="dcal-btn dcal-btn--danger" data-cancel-confirm="' + esc(o.id) + '" style="width:auto;padding-left:22px;padding-right:22px">Confirm cancellation</button>' +
             '<button type="button" class="dcal-link-btn" data-cancel-close="' + esc(o.id) + '">Keep order</button>' +
           '</div>' +
-          '<p class="dcal-cancel-note">' + (o.paid ? 'Your payment will be refunded in 5–7 business days.' : 'No payment was taken (Cash on Delivery).') + '</p>' +
+          '<p class="dcal-cancel-note">' + (o.paid ? 'Your payment will be refunded in 5–7 business days.' : 'No payment was taken (Cash on Delivery).') +
+            (o.walletUsed > 0 ? ' The ' + rupees(o.walletUsed) + ' paid from your wallet goes back into it.' : '') +
+            (o.walletCredit > 0 ? ' The ' + rupees(o.walletCredit) + ' this order added to your wallet will be taken back.' : '') + '</p>' +
         '</div></div>';
     }
     return html;
@@ -1135,6 +1171,8 @@
 
   // wishlist lives in the account menu now (device-local; works logged-in or not)
   function wishCount() { try { return (JSON.parse(localStorage.getItem('dcal_wishlist') || '[]') || []).length; } catch (e) { return 0; } }
+  // the balance beside "My Wallet", once the server has said what it is
+  function walletBadge() { return walletState.balance > 0 ? '<span class="dcal-acct-badge dcal-acct-badge--wallet">' + rupees(walletState.balance) + '</span>' : ''; }
   function wishItem() {
     var n = wishCount();
     return '<button class="dcal-acct-item" data-ai="wishlist">' + IC.heart + ' Wishlist' + (n ? '<span class="dcal-acct-badge">' + n + '</span>' : '') + '</button>';
@@ -1148,6 +1186,7 @@
         '<button class="dcal-acct-item" data-ai="profile">' + IC.user + ' My Profile</button>' +
         (magicOn() ? '' : '<button class="dcal-acct-item" data-ai="addresses">' + IC.pin + ' My Addresses</button>') +
         '<button class="dcal-acct-item" data-ai="orders">' + IC.bag + ' My Orders</button>' +
+        '<button class="dcal-acct-item" data-ai="wallet">' + IC.wallet + ' My Wallet' + walletBadge() + '</button>' +
         wishItem() +
         '<button class="dcal-acct-item dcal-acct-item--danger" data-ai="logout">' + IC.logout + ' Logout</button>';
     } else {
@@ -1199,6 +1238,7 @@
           else if (act === 'addresses') isLoggedIn() ? openProfile('addresses') : openAuth();
           else if (act === 'orders') isLoggedIn() ? openProfile('orders') : openAuth();
           else if (act === 'wishlist') location.href = '/wishlist';
+          else if (act === 'wallet') location.href = '/wallet';
           else openAuth(); // login / signup
         });
       }
@@ -1219,6 +1259,27 @@
         if (vh) vh.textContent = 'Login / Sign up';
         a.setAttribute('title', 'Login / Sign up');
       }
+    });
+    paintWalletIcon();
+  }
+
+  // The wallet in the header, between the profile and the cart, its balance on
+  // the icon. Signed in only: signed out there is no wallet to show. It is put
+  // in from here because every page carries its own copy of the header.
+  function paintWalletIcon() {
+    var on = isLoggedIn();
+    document.querySelectorAll('.header__icon--cart').forEach(function (cart) {
+      var w = cart.parentNode.querySelector('.dcal-wallet-ico');
+      if (!on) { if (w) w.parentNode.removeChild(w); return; }
+      if (!w) {
+        w = el('<a href="/wallet" class="dcal-wallet-ico">' + IC.wallet + '<span class="dcal-wallet-amt" hidden></span></a>');
+        cart.parentNode.insertBefore(w, cart);
+      }
+      var amt = w.querySelector('.dcal-wallet-amt'), known = walletState.loaded;
+      amt.textContent = known ? rupees(walletState.balance) : '';
+      amt.hidden = !known;                                  // no guessed ₹0 before the server has said
+      w.setAttribute('aria-label', 'My wallet' + (known ? ', balance ' + rupees(walletState.balance) : ''));
+      w.title = 'My wallet' + (known ? ': ' + rupees(walletState.balance) : '');
     });
   }
 
@@ -1285,6 +1346,38 @@
   function orderFreeKit() {
     if (findInCart(cartGet(), FREE_KIT) > -1) { location.href = '/cart'; return; }   // already in: just show it
     kitAdd().then(function (r) { if (r.ok) setTimeout(function () { location.href = '/cart'; }, 500); });
+  }
+  // the kit alone ships for ₹99 and is paid online (server.js shippingFor); with
+  // a paid product it travels in the same box, free
+  function kitOnly(cart) { cart = cart || cartGet(); return cart.length > 0 && cart.every(isFreeKit); }
+
+  /* ---------- THE D'CAL WALLET (server.js walletOf) ----------
+     For now only ordering the kit puts money in it (₹500); it comes off, whole,
+     an order of ₹3,499 or more. The numbers below are the server's, repeated so
+     the cart can draw before /api/wallet answers; its answer replaces them.
+     Signed out, or with no database behind the site, the balance stays 0 and
+     nothing changes. */
+  // loaded = the server answered; asked = it was asked at least once (a site
+  // with no database answers 503 every time, so the cart asks only once)
+  var walletState = { balance: 0, credit: 500, minOrder: 3499, kitShipping: 99, kitClaimed: false, history: [], loaded: false, asked: false };
+  // the one sentence that states the rule, the same wherever it is shown
+  function walletRule() { return 'Minimum order of ' + rupees(walletState.minOrder) + ' to use your wallet amount.'; }
+  var walletWait = null;
+  function loadWallet() {
+    if (!isLoggedIn()) { walletState.balance = 0; walletState.loaded = false; return Promise.resolve(walletState); }
+    walletState.asked = true;
+    if (walletWait) return walletWait;
+    walletWait = api('GET', '/api/wallet').then(function (w) {
+      walletState.balance = Number(w.balance) || 0;
+      if (w.credit) walletState.credit = w.credit;
+      if (w.minOrder) walletState.minOrder = w.minOrder;
+      if (w.kitShipping) walletState.kitShipping = w.kitShipping;
+      walletState.kitClaimed = !!w.kitClaimed;
+      walletState.history = w.history || [];
+      walletState.loaded = true;
+      paintWalletIcon();                                  // the balance on the header icon
+    }).catch(function () {}).then(function () { walletWait = null; return walletState; });
+    return walletWait;
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-free-kit]');
@@ -1375,6 +1468,7 @@
 
   function priceNum(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
   function money(n) { return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function rupees(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }   // in a sentence: ₹500, not ₹500.00
 
   var CART_ICON = '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>';
 
@@ -1391,7 +1485,8 @@
     // the free kit is one per order: no stepper, so there is nothing to raise
     if (isFreeKit(item)) return '<div class="dcal-cart-item">' +
       (item.image ? '<img src="' + esc(item.image) + '" alt="" style="object-fit:contain;background:#fff">' : '<div class="dcal-ci-noimg">' + CART_ICON + '</div>') +
-      '<div class="dcal-ci-info"><p class="dcal-ci-title">' + esc(item.title) + '</p><p class="dcal-ci-price">Free · one per customer</p></div>' +
+      '<div class="dcal-ci-info"><p class="dcal-ci-title">' + esc(item.title) + '</p><p class="dcal-ci-price">Free · one per customer</p>' +
+        '<p class="dcal-ci-perk">+ ' + rupees(walletState.credit) + ' in your D’Cal wallet when you order</p></div>' +
       '<div class="dcal-ci-sub" style="color:#0B6E4F">FREE</div>' +
       '<button class="dcal-ci-rm" data-rm="' + id + '" aria-label="Remove">×</button>' +
       '</div>';
@@ -1413,6 +1508,9 @@
     var subtotal = cart.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
     var blocked = cart.some(soldOut);                     // the server would refuse it anyway
     if (!CATALOG) loadCatalog().then(function () { if (cartGet().some(soldOut)) renderCartPage(); });
+    // the wallet changes the summary, so it is drawn again once known — unless
+    // they have moved on into checkout by then
+    if (isLoggedIn() && !walletState.asked && !walletWait) loadWallet().then(function () { if (walletState.loaded && coVoiceStep() === 'cart') renderCartPage(); });
     root.innerHTML =
       '<div class="dcal-cart-grid">' +
         '<div class="dcal-cart-items">' + cart.map(cartItemHTML).join('') + '</div>' +
@@ -1443,6 +1541,15 @@
       window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
     });
     wireCoupon(root, renderCartPage);
+    wireWallet(root, renderCartPage);
+    // the "add ₹X more" card is in the summary; it also pops up once a visit,
+    // the way a shop says it at the till
+    var short = walletShortBy(computeTotals(subtotal));
+    if (short > 0) {
+      var seen = false;
+      try { seen = sessionStorage.getItem('dcal_wallet_nudge') === '1'; sessionStorage.setItem('dcal_wallet_nudge', '1'); } catch (e) {}
+      if (!seen) setTimeout(function () { toast('Add ' + rupees(short) + ' more to use your ' + rupees(walletState.balance) + ' D’Cal wallet 🎁'); }, 600);
+    }
   }
 
   /* ====================================================
@@ -1505,6 +1612,11 @@
   }
   function getCouponCode() { try { return (localStorage.getItem('dcal_coupon') || '').toUpperCase(); } catch (e) { return ''; } }
   function setCouponCode(c) { try { if (c) localStorage.setItem('dcal_coupon', c.toUpperCase()); else localStorage.removeItem('dcal_coupon'); } catch (e) {} }
+  // The wallet is used only when they tick "Use … from your D'Cal wallet" (asked
+  // 15 Oct 2026: reaching ₹3,499 must not take it off by itself). Kept like the
+  // coupon, so the tick lasts from the cart to payment; cleared once ordered.
+  function useWalletChosen() { try { return localStorage.getItem('dcal_use_wallet') === '1'; } catch (e) { return false; } }
+  function setUseWallet(on) { try { if (on) localStorage.setItem('dcal_use_wallet', '1'); else localStorage.removeItem('dcal_use_wallet'); } catch (e) {} }
   function computeTotals(subtotal) {
     var code = getCouponCode(), c = COUPONS[code], discount = 0;
     var base = c ? eligibleSubtotal(c) : 0;
@@ -1512,9 +1624,47 @@
       discount = c.type === 'percent' ? Math.round(base * c.value / 100) : c.value;
       if (discount > base) discount = base;
     } else { code = ''; }
-    return { subtotal: subtotal, code: code, discount: discount, total: subtotal - discount };
+    // the same sum as server.js quoteOrder: goods after the coupon, the kit's own
+    // delivery, and the wallet — all of it, once the goods reach the minimum AND
+    // they have ticked the box
+    var goods = subtotal - discount;
+    var shipping = kitOnly() ? walletState.kitShipping : 0;
+    var canWallet = walletState.balance > 0 && goods >= walletState.minOrder;
+    var wallet = canWallet && useWalletChosen() ? Math.min(walletState.balance, goods) : 0;
+    return { subtotal: subtotal, code: code, discount: discount, goods: goods, shipping: shipping,
+             canWallet: canWallet, wallet: wallet, total: goods + shipping - wallet };
   }
   function cartTotal() { return computeTotals(cartSubtotal()).total; }
+  // -> rupees still to add before the wallet can be used, 0 when it can / is empty
+  function walletShortBy(t) {
+    if (!(walletState.balance > 0) || t.canWallet || kitOnly()) return 0;
+    return Math.max(0, walletState.minOrder - t.goods);
+  }
+  // The wallet, said in the order summary: what ordering the kit will add, the
+  // box that spends it once the order is big enough, or how far it is from that.
+  function walletNoteHTML(t) {
+    var W = 'D’Cal wallet', link = '<a href="/wallet">' + W + '</a>';
+    if (cartGet().some(isFreeKit) && !walletState.kitClaimed) {
+      return '<div class="dcal-wallet-note dcal-wallet-note--gift"><b>🎁 Get ' + rupees(walletState.credit) + ' in your ' + link + '</b>' +
+        '<span>It is added the moment you place this order. ' + walletRule() + '</span></div>';
+    }
+    if (!(walletState.balance > 0)) return '';
+    if (t.canWallet) {
+      var on = t.wallet > 0;
+      return '<div class="dcal-wallet-note dcal-wallet-note--use' + (on ? ' is-on' : '') + '">' +
+        '<label class="dcal-wallet-use"><input type="checkbox" data-wallet-use' + (on ? ' checked' : '') + '>' +
+          '<span><b>Use ' + rupees(Math.min(walletState.balance, t.goods)) + ' from your ' + link + '</b>' +
+          '<small>' + (on ? rupees(t.wallet) + ' off this order' : 'Balance ' + rupees(walletState.balance) + ' · tick to use it on this order') + '</small></span>' +
+        '</label></div>';
+    }
+    var short = walletShortBy(t);
+    if (!short) return '';
+    var pct = Math.max(4, Math.min(100, Math.round(t.goods / walletState.minOrder * 100)));
+    return '<div class="dcal-wallet-note dcal-wallet-note--nudge" role="status">' +
+      '<b>Add ' + rupees(short) + ' more to use your ' + rupees(walletState.balance) + ' ' + link + '</b>' +
+      '<span class="dcal-wallet-bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span>' +
+      '<span>' + walletRule() + ' <a href="/collection">Add products →</a></span></div>';
+  }
 
   function couponBoxHTML(t) {
     if (t.code && t.discount > 0) {
@@ -1527,11 +1677,23 @@
   }
   function summaryBodyHTML(subtotal) {
     var t = computeTotals(subtotal), n = cartCount();
-    return '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
-      '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>' +
-      (t.subtotal > 0 ? couponBoxHTML(t) : '') +            // nothing to discount on a free order
+    return walletNoteHTML(t) +
+      '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
+      (t.shipping > 0 ? '<div class="dcal-sum-row"><span>Delivery (Demo Kit)</span><b>' + money(t.shipping) + '</b></div>'
+                      : '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>') +
+      (t.subtotal > 0 ? couponBoxHTML(t) : '') +            // nothing to discount when only the kit is in it
       (t.discount > 0 ? '<div class="dcal-sum-row"><span>Discount (' + esc(t.code) + ')</span><b style="color:#0B6E4F">−' + money(t.discount) + '</b></div>' : '') +
+      (t.wallet > 0 ? '<div class="dcal-sum-row"><span>D’Cal wallet</span><b style="color:#0B6E4F">−' + money(t.wallet) + '</b></div>' : '') +
       '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(t.total) + '</b></div>';
+  }
+  // the "Use wallet" box: the tick is the only thing that spends the wallet
+  function wireWallet(root, rerender) {
+    var box = root.querySelector('[data-wallet-use]');
+    if (box) box.addEventListener('change', function () {
+      setUseWallet(box.checked);
+      toast(box.checked ? 'Wallet amount applied' : 'Wallet amount removed');
+      rerender();
+    });
   }
   function wireCoupon(root, rerender) {
     var apply = root.querySelector('[data-coupon-apply]');
@@ -1937,6 +2099,7 @@
     root.querySelector('.dcal-co-back').addEventListener('click', coAddress);
     root.querySelector('[data-co-edit]').addEventListener('click', coAddress);
     wireCoupon(root, coSummary);
+    wireWallet(root, coSummary);
   }
 
   /* ---------- STEP 3 — Payment ---------- */
@@ -1944,11 +2107,16 @@
     var cart = cartGet(); if (!cart.length) return;
     var subtotal = cartSubtotal();
     if (computeTotals(subtotal).total <= 0) return coPaymentFree(subtotal);
+    // the kit's ₹99 delivery is paid online only (server.js KIT_PREPAID)
+    var onlineOnly = kitOnly(cart);
+    var methods = PAY_METHODS.filter(function (p) { return !(onlineOnly && p.id === 'cod'); });
+    if (onlineOnly && checkout.payment === 'cod') checkout.payment = 'upi';
     var root = coShell(2,
       '<div class="dcal-co-2col">' +
         '<div class="dcal-co-card">' +
           '<h3 class="dcal-co-h">Payment method</h3>' +
-          '<div class="dcal-pay-list">' + PAY_METHODS.map(function (p) {
+          (onlineOnly ? '<p class="dcal-co-addr" style="margin:0 0 12px">The Demo Kit is free — only its ' + rupees(walletState.kitShipping) + ' delivery is paid, online.</p>' : '') +
+          '<div class="dcal-pay-list">' + methods.map(function (p) {
             return '<label class="dcal-pay-opt' + (checkout.payment === p.id ? ' sel' : '') + '">' +
               '<input type="radio" name="dcal-pay" value="' + p.id + '"' + (checkout.payment === p.id ? ' checked' : '') + '>' +
               '<span class="dcal-pay-radio"></span>' +
@@ -1983,6 +2151,7 @@
     root.querySelector('.dcal-co-back').addEventListener('click', coSummary);
     root.querySelector('.dcal-co-place').addEventListener('click', handlePlaceOrder);
     wireCoupon(root, coPayment);
+    wireWallet(root, coPayment);
     // load whether real Razorpay is on; if not, show the demo card/UPI/bank fields
     loadPaymentConfig().then(refreshPayFields);
   }
@@ -2117,10 +2286,19 @@
   // amount we send to Razorpay reflects a coupon the server still accepts.
   // The free Demo Kit is checked first, the same way: a second claim is taken out
   // of the cart here, before anything is placed or paid.
+  // The wallet is read again first: the total on the button must be the one the
+  // server charges, and the balance may have moved in another tab since the cart.
   function handlePlaceOrder() {
-    if (!cartGet().some(isFreeKit)) return checkCouponThenPlace();
     var btn = document.querySelector('.dcal-co-place');
     if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    var shown = cartTotal();
+    loadWallet().then(function () {
+      if (cartTotal() !== shown) { toast('Your total has changed — please check it and place the order again.'); coPayment(); return; }
+      placeAfterWallet();
+    });
+  }
+  function placeAfterWallet() {
+    if (!cartGet().some(isFreeKit)) return checkCouponThenPlace();
     kitCheck().then(function (r) {
       if (r && r.ok) return checkCouponThenPlace();
       cartSave(cartGet().filter(function (it) { return !isFreeKit(it); }));
@@ -2367,11 +2545,12 @@
     // RAZORPAY ONLY: with no gateway configured we must never record a paid order,
     // so refuse instead of simulating a successful payment.
     var errBox = document.querySelector('[data-pf-err]');
+    var noCod = kitOnly();                                // the kit has no Cash on Delivery to fall back on
     if (errBox) {
-      errBox.textContent = 'Online payment is unavailable right now — Razorpay is not configured. Please choose Cash on Delivery.';
+      errBox.textContent = 'Online payment is unavailable right now — Razorpay is not configured.' + (noCod ? ' Please try again later.' : ' Please choose Cash on Delivery.');
       errBox.classList.add('show');
     }
-    toast('Online payment unavailable — please choose Cash on Delivery.');
+    toast(noCod ? 'Online payment is unavailable right now. Please try again later.' : 'Online payment unavailable — please choose Cash on Delivery.');
     resetPlaceBtn();
   }
 
@@ -2382,7 +2561,8 @@
     // returns the Razorpay order. We never send a client-computed amount, so the
     // charge can't be tampered with.
     api('POST', '/api/payment/create-order', {
-      items: cartGet(), coupon: getCouponCode(), mobile: sessionMobile()
+      items: cartGet(), coupon: getCouponCode(), mobile: sessionMobile(),
+      useWallet: computeTotals(cartSubtotal()).wallet > 0   // the server spends it only when told to
     })
       .then(function (order) {
         return loadRazorpay().then(function (ok) {
@@ -2435,13 +2615,13 @@
       title: cart[0].title + (cart.length > 1 ? ' + ' + (cart.length - 1) + ' more' : ''),
       total: money(t.total), image: cart[0].image, items: cart.slice(),
       address: addr, payment: payLabel,
-      coupon: t.code, discount: t.discount,
+      coupon: t.code, discount: t.discount, shipping: t.shipping, walletUsed: t.wallet,
       paid: !!payInfo.paid, paymentId: payInfo.paymentId || '',
       razorpayOrderId: payInfo.razorpayOrderId || '',
       date: Date.now(), status: 'Confirmed'
     };
     var list = orders(); list.unshift(newOrder); saveOrders(list);
-    cartSave([]); setCouponCode(''); updateCartBubbles();
+    cartSave([]); setCouponCode(''); setUseWallet(false); updateCartBubbles();
     checkout = { address: null, addressId: null, payment: 'upi' };
     var payNote = payInfo.paid
       ? 'Paid online via <b>' + esc(payLabel) + '</b> ✓'
@@ -2456,7 +2636,17 @@
         '<h2 style="font-size:22px;font-weight:700;margin:0">Placing your order…</h2>' +
         '<p class="lead" style="margin:10px auto 0">Just a moment while we confirm it.</p></div>';
 
-    function showConfirmation(orderId) {
+    // what the order did to the wallet, from the server's saved order (it decides
+    // whether this kit earned the ₹500); without one, nothing is claimed
+    function walletLine(saved) {
+      var credit = Number(saved && saved.walletCredit) || 0, used = Number(saved && saved.walletUsed) || 0;
+      if (credit > 0) return '<div class="dcal-wallet-note dcal-wallet-note--gift" style="max-width:420px;margin:0 auto 16px;text-align:left">' +
+        '<b>🎁 ' + rupees(credit) + ' added to your <a href="/wallet">D’Cal wallet</a></b>' +
+        '<span>' + walletRule() + '</span></div>';
+      if (used > 0) return '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">' + rupees(used) + ' paid from your D’Cal wallet ✓</p>';
+      return '';
+    }
+    function showConfirmation(orderId, saved) {
       if (root) root.innerHTML =
         '<div class="glass" style="max-width:560px;margin:0 auto;padding:48px;text-align:center;background:#fff">' +
           '<div style="color:#0B6E4F;display:flex;justify-content:center"><svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg></div>' +
@@ -2464,6 +2654,7 @@
           '<p class="lead" style="margin:0 auto 8px">Thank you, ' + esc((addr.name || '').split(' ')[0] || 'friend') + '! Your order is confirmed.</p>' +
           '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
           (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
+          walletLine(saved) +
           '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Save your order number to track it anytime.</p>' +
           '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
             '<a href="/track-order?order=' + encodeURIComponent(orderId) + '" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Track order →</a>' +
@@ -2475,8 +2666,12 @@
     // save to the central DB; the server is authoritative for the order number
     pushOrder(newOrder, sessionMobile()).then(function (r) {
       var saved = (r && r.order) || {};
-      if (saved.orderId) { newOrder.id = saved.orderId; var l = orders(); if (l[0]) { l[0].id = saved.orderId; saveOrders(l); } }
-      showConfirmation(newOrder.id);
+      if (saved.orderId) {
+        newOrder.id = saved.orderId;
+        var l = orders(); if (l[0]) { l[0].id = saved.orderId; l[0].walletCredit = Number(saved.walletCredit) || 0; saveOrders(l); }
+      }
+      showConfirmation(newOrder.id, saved);
+      loadWallet();                                       // the ₹500 in, or out, for the next cart
     }).catch(function () {
       toast('Your order is saved on this device, but syncing to our system failed — please contact support to confirm it.');
       showConfirmation(newOrder.id);
@@ -2563,6 +2758,8 @@
     user: currentUser,
     logout: logout,
     require: function (cb) { if (isLoggedIn()) cb(); else { pendingAction = cb; openAuth(); } },
+    // the /wallet page: -> Promise<the wallet as the server last said it>
+    wallet: function () { return loadWallet().then(function (w) { return w.loaded ? w : null; }); },
     // by voice: what the open box wants, type it in, press its button, read its error
     waiting: function () { var f = voiceField(); return f ? f.kind : null; },
     fill: voiceFill,
@@ -2773,7 +2970,7 @@
       cartSave(cart); repaint();
       return true;
     },
-    clear: function () { cartSave([]); setCouponCode(''); repaint(); toast('Cart cleared'); return true; },
+    clear: function () { cartSave([]); setCouponCode(''); setUseWallet(false); repaint(); toast('Cart cleared'); return true; },
     // Same checks as the cart page's Apply button, same server validation.
     coupon: function (code) { return couponTry(code).then(function (r) { return r.ok; }); },
     // -> Promise<{ok, reason: 'invalid'|'only'|'min'|'server', text}> — the outcome,
@@ -2811,7 +3008,8 @@
   function init() {
     updateHeader();
     updateCartBubbles();
-    renderCartPage();
+    renderCartPage();                    // (on /cart this also asks for the wallet)
+    if (isLoggedIn() && !walletState.asked) loadWallet();   // the account menu shows its balance
     // "Buy Now" from a product page lands here -> open checkout straight away, skipping
     // the cart review (the flag is set by doBuyNow before it navigates to /cart).
     if (document.getElementById('dcal-cart-root')) {

@@ -565,6 +565,9 @@
       '<div class="adm-det-col"><h4>Meta</h4><p class="adm-muted">Placed: ' + fmtDate(o.date) +
         '<br>Payment: ' + esc(o.payment || '—') + ' (' + (o.paid ? 'Paid' : 'Unpaid') + ')' +
         (o.discount > 0 ? '<br>Coupon: ' + esc(o.coupon || '—') + ' (−' + money(o.discount) + ')' : '') +
+        (o.shipping > 0 ? '<br>Delivery: ' + money(o.shipping) : '') +
+        (o.walletUsed > 0 ? '<br>Wallet used: −' + money(o.walletUsed) : '') +
+        (o.walletCredit > 0 ? '<br>Wallet credit: +' + money(o.walletCredit) + ' (Demo Kit)' : '') +
         (o.paymentId ? '<br>Txn: ' + esc(o.paymentId) : '') +
         ((o.status === 'Cancelled') ? '<br>Cancel reason: ' + esc(o.cancelReason || '—') + '<br>Refund: ' + esc(o.refundStatus || '—') : '') +
         '</p></div>' +

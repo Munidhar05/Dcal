@@ -3001,9 +3001,9 @@
   var kitWaiting = false;            // sign-in is open for the kit: its outcome speaks, not signFollow
   // ...and, a salesperson to the end, each line asks for the next step
   var KIT_SAY = {
-    en: { added: 'Your free Demo Kit is in the cart. Opening the cart — shall we place your free order?', claimed: 'You have already claimed your free Demo Kit; it is one per customer. Shall I show you our filters?' },
-    hi: { added: 'आपकी फ्री डेमो किट कार्ट में डाल दी है। कार्ट खोल रही हूँ — फ्री ऑर्डर प्लेस कर दें?', claimed: 'आप अपनी फ्री डेमो किट पहले ही ले चुके हैं, यह एक ग्राहक को एक ही मिलती है। हमारे फिल्टर दिखाऊँ?' },
-    te: { added: 'మీ ఫ్రీ డెమో కిట్ కార్ట్‌లో పెట్టాను. కార్ట్ తెరుస్తున్నాను — ఫ్రీ ఆర్డర్ ప్లేస్ చేద్దామా?', claimed: 'మీరు మీ ఫ్రీ డెమో కిట్ ఇప్పటికే తీసుకున్నారు, ఇది ఒక కస్టమర్‌కు ఒక్కటే. మా ఫిల్టర్లు చూపించనా?' }
+    en: { added: 'Your free Demo Kit is in the cart. Delivery is 99 rupees, and 500 rupees go into your wallet the moment you order. Opening the cart — shall we place the order?', claimed: 'You have already claimed your free Demo Kit; it is one per customer. Shall I show you our filters?' },
+    hi: { added: 'आपकी फ्री डेमो किट कार्ट में डाल दी है। डिलीवरी 99 रुपये है, और ऑर्डर करते ही 500 रुपये आपके वॉलेट में आ जाएँगे। कार्ट खोल रही हूँ — ऑर्डर प्लेस कर दें?', claimed: 'आप अपनी फ्री डेमो किट पहले ही ले चुके हैं, यह एक ग्राहक को एक ही मिलती है। हमारे फिल्टर दिखाऊँ?' },
+    te: { added: 'మీ ఫ్రీ డెమో కిట్ కార్ట్‌లో పెట్టాను. డెలివరీ 99 రూపాయలు, ఆర్డర్ చేయగానే 500 రూపాయలు మీ వాలెట్‌లోకి వస్తాయి. కార్ట్ తెరుస్తున్నాను — ఆర్డర్ ప్లేస్ చేద్దామా?', claimed: 'మీరు మీ ఫ్రీ డెమో కిట్ ఇప్పటికే తీసుకున్నారు, ఇది ఒక కస్టమర్‌కు ఒక్కటే. మా ఫిల్టర్లు చూపించనా?' }
   };
   function kitByVoice(reply) {
     var S = window.DcalStore;
