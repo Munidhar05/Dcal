@@ -628,6 +628,97 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
   .dcal-kit-strip>img{width:180px}
   .dcal-kit-steps{grid-template-columns:1fr;max-width:420px;margin:0 auto}
 }
+.dcal-kit-more{background:none;border:0;padding:2px 4px;color:#0077B6;font-size:13px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.dcal-kit-more:hover{color:#023E8A}
+
+/* ---------- Amazon photos, videos and reviews (js/amazon-media.js) ---------- */
+html.amz-locked,html.amz-locked body{overflow:hidden}
+.amz-zoomable{cursor:zoom-in}
+/* gallery: thumbnails under the big frame. A grid column grows to its content's
+   min width, so without min-width:0 a long strip would push the info column off
+   the page instead of scrolling inside its own column. */
+.pp-col-gallery{min-width:0}
+/* max-width: on phones .pp-top is a flex column that keeps align-items:start,
+   which would size the strip to all its thumbs and clip the rest unscrollably */
+.amz-thumbs{max-width:100%;box-sizing:border-box;display:flex;gap:10px;margin-top:14px;padding:2px 2px 8px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent}
+.amz-thumb{position:relative;flex:0 0 76px;height:76px;padding:0;border:2px solid #E2E8F0;border-radius:14px;background:#fff;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:border-color .2s,box-shadow .2s}
+.amz-thumb img{width:100%;height:100%;object-fit:contain;display:block}
+.amz-thumb:hover{border-color:#90E0EF}
+.amz-thumb.active{border-color:#00B4D8;box-shadow:0 0 0 3px rgba(0,180,216,.18)}
+.amz-thumb.is-video img{object-fit:cover}
+.amz-thumb-play{position:absolute;left:50%;top:50%;width:32px;height:32px;margin:-16px 0 0 -16px;border-radius:50%;background:rgba(11,18,32,.7);color:#fff;display:flex;align-items:center;justify-content:center}
+.amz-thumb-time{position:absolute;right:4px;bottom:4px;padding:1px 5px;border-radius:6px;background:rgba(11,18,32,.75);color:#fff;font-size:10.5px;font-weight:700;line-height:1.4}
+.amz-nav{position:absolute;top:50%;z-index:3;width:40px;height:40px;margin-top:-20px;border:0;border-radius:50%;background:rgba(255,255,255,.92);color:#0B1220;box-shadow:0 6px 18px -6px rgba(2,8,23,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .2s}
+.amz-prev{left:12px}
+.amz-next{right:12px}
+.pp-image-wrap:hover .amz-nav,.amz-modal-frame:hover .amz-nav,.amz-nav:focus-visible{opacity:1}
+@media(hover:none){.amz-nav{opacity:.9}}
+.amz-video{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:contain;background:#0B1220}
+.amz-playing .amz-nav{top:calc(50% - 28px)}   /* clear of the video's own control bar */
+/* full-screen photo viewer */
+.amz-lb{position:fixed;inset:0;z-index:10004;background:rgba(2,8,23,.94);display:flex;align-items:center;justify-content:center;padding:56px 16px}
+.amz-lb img{max-width:min(92vw,1100px);max-height:100%;object-fit:contain;border-radius:12px;background:#fff}
+.amz-lb-btn{position:absolute;width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.amz-lb-btn:hover{background:rgba(255,255,255,.26)}
+.amz-lb-close{top:12px;right:12px}
+.amz-lb-prev{left:12px;top:50%;margin-top:-23px}
+.amz-lb-next{right:12px;top:50%;margin-top:-23px}
+.amz-lb-count{position:absolute;bottom:16px;left:0;right:0;text-align:center;color:#CBD5E1;font-size:13px;font-weight:600}
+/* reviews */
+.amz-reviews{max-width:1080px;margin:0 auto;text-align:left}
+.amz-rv-sum{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 16px;margin-bottom:24px;font-size:14px;color:#475569;text-align:center}
+.amz-rv-badge{padding:4px 12px;border-radius:99px;background:#0B1220;color:#fff;font-size:12px;font-weight:700;letter-spacing:.03em}
+.amz-rv-link{color:#0077B6;font-weight:700;text-decoration:none}
+.amz-rv-link:hover{text-decoration:underline}
+.amz-rv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.amz-rv-grid:has(> .amz-rv:only-child){grid-template-columns:minmax(0,640px);justify-content:center}   /* a lone card sits under the centred heading */
+.amz-rv{background:#fff;border:1px solid #E2E8F0;border-radius:20px;padding:22px;box-shadow:0 14px 30px -24px rgba(2,8,23,.25)}
+.amz-rv-who{display:flex;align-items:center;gap:12px}
+.amz-rv-av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#0077B6,#00B4D8);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0}
+.amz-rv-name{font-weight:700;font-size:15px;color:#0B1220;word-break:break-word}
+.amz-rv-ver{font-size:12px;font-weight:700;color:#047857;margin-top:1px}
+.amz-rv-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:14px}
+.amz-stars{display:inline-flex;gap:1px;line-height:0}
+.amz-stars .on svg{fill:#F59E0B;stroke:#F59E0B}
+.amz-stars .off svg{fill:#E2E8F0;stroke:#E2E8F0}
+.amz-rv-title{margin:0;font-size:16px;font-weight:700;color:#0B1220;letter-spacing:-.01em;line-height:1.35}
+.amz-rv-date{margin:6px 0 10px;font-size:13px;color:#64748B}
+.amz-rv-body{margin:0;font-size:15px;line-height:1.6;color:#1F2937;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.amz-rv.open .amz-rv-body{display:block;-webkit-line-clamp:unset}
+.amz-rv-more{background:none;border:0;padding:6px 0 0;color:#0077B6;font-size:14px;font-weight:700;cursor:pointer}
+.amz-rv-more[hidden],.amz-rv-showmore[hidden]{display:none}
+.amz-rv-photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.amz-rv-photos button{width:72px;height:72px;padding:0;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;background:#F8FAFC;cursor:zoom-in}
+.amz-rv-photos img{width:100%;height:100%;object-fit:cover;display:block}
+.amz-rv-showmore{display:flex;margin:24px auto 0;padding:13px 26px;border:1.5px solid #CBD5E1;border-radius:999px;background:#fff;color:#0B1220;font-weight:700;cursor:pointer}
+.amz-rv-showmore:hover{border-color:#00B4D8;color:#0077B6}
+@media(max-width:900px){
+  .amz-rv-grid{grid-template-columns:minmax(0,1fr)}
+  .amz-thumb{flex-basis:64px;height:64px}
+}
+/* Demo Kit window (opened from its strip) */
+.amz-modal{position:fixed;inset:0;z-index:10002;background:rgba(2,8,23,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.amz-modal-card{width:min(1040px,100%);max-height:calc(100vh - 48px);background:#fff;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(2,8,23,.5)}
+.amz-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid #E2E8F0}
+.amz-modal-head h2{margin:0;font-family:'Montserrat','Inter',sans-serif;font-size:20px;font-weight:800;color:#0B1220}
+.amz-modal-x{width:40px;height:40px;border:0;border-radius:50%;background:#F1F5F9;color:#0B1220;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.amz-modal-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:22px;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:28px;align-items:start}
+.amz-modal-media{position:sticky;top:0}
+.amz-modal-frame{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;background:linear-gradient(135deg,#ECF9FF,#E3F4FB)}
+.amz-modal-frame>img{width:100%;height:100%;object-fit:contain;display:block}
+.amz-modal .amz-rv-grid{grid-template-columns:minmax(0,1fr)}
+.amz-modal .amz-rv-sum{justify-content:flex-start;text-align:left}
+.amz-modal-foot{display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 22px;border-top:1px solid #E2E8F0;flex-wrap:wrap}
+.amz-modal-foot span{font-size:12px;color:#64748B}
+/* no review meets the 5-star rule yet: the window is just the photos */
+.amz-modal--photos .amz-modal-card{width:min(560px,100%)}
+.amz-modal--photos .amz-modal-body{grid-template-columns:minmax(0,1fr)}
+@media(max-width:768px){
+  .amz-modal{padding:0}
+  .amz-modal-card{width:100%;height:100%;max-height:none;border-radius:0}
+  .amz-modal-body{grid-template-columns:minmax(0,1fr);padding:16px;gap:20px}
+  .amz-modal-media{position:static}
+}
 
 /* ===== Multi-step checkout (Address → Summary → Payment) ===== */
 .dcal-checkout{max-width:960px;margin:0 auto}

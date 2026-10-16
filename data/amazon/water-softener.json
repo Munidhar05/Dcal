@@ -1,0 +1,61 @@
+{
+  "asin": "B079BZF2W4",
+  "url": "https://www.amazon.in/dp/B079BZF2W4",
+  "fetchedAt": "2026-10-15",
+  "images": [
+    {
+      "src": "/images/amazon/41YIAvc0N9L.jpg",
+      "thumb": "/images/amazon/thumb/41YIAvc0N9L.jpg"
+    },
+    {
+      "src": "/images/amazon/71Kh_B_aAAL.jpg",
+      "thumb": "/images/amazon/thumb/71Kh_B_aAAL.jpg"
+    },
+    {
+      "src": "/images/amazon/61yhVOux3sL.jpg",
+      "thumb": "/images/amazon/thumb/61yhVOux3sL.jpg"
+    },
+    {
+      "src": "/images/amazon/61tkgzi5WNL.jpg",
+      "thumb": "/images/amazon/thumb/61tkgzi5WNL.jpg"
+    },
+    {
+      "src": "/images/amazon/61R2zWWNJJL.jpg",
+      "thumb": "/images/amazon/thumb/61R2zWWNJJL.jpg"
+    },
+    {
+      "src": "/images/amazon/61HdzEESSwL.jpg",
+      "thumb": "/images/amazon/thumb/61HdzEESSwL.jpg"
+    },
+    {
+      "src": "/images/amazon/61aIaGydVdL.jpg",
+      "thumb": "/images/amazon/thumb/61aIaGydVdL.jpg"
+    },
+    {
+      "src": "/images/amazon/61OPg1EtvHL.jpg",
+      "thumb": "/images/amazon/thumb/61OPg1EtvHL.jpg"
+    },
+    {
+      "src": "/images/amazon/61z7ZEpeW9L.jpg",
+      "thumb": "/images/amazon/thumb/61z7ZEpeW9L.jpg"
+    }
+  ],
+  "videos": [
+    {
+      "src": "/videos/amazon/water-softener-1.mp4",
+      "poster": "/images/amazon/31j_5-kMNJL.jpg",
+      "thumb": "/images/amazon/thumb/31j_5-kMNJL.jpg",
+      "title": "D'Cal - Hard Water Softener | For Complete House",
+      "seconds": 50
+    },
+    {
+      "src": "/videos/amazon/water-softener-2.mp4",
+      "poster": "/images/amazon/41qWXFnJgyL.jpg",
+      "thumb": "/images/amazon/thumb/41qWXFnJgyL.jpg",
+      "title": "D'Cal Hard Water Softener",
+      "seconds": 71
+    }
+  ],
+  "reviewCount": 529,
+  "reviewPages": 4
+}
