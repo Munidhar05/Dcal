@@ -23,6 +23,10 @@ const Counter = require('./models/Counter');
 // that takes the store down.
 let partner = null;
 try { partner = require('./partner'); } catch (e) { console.error('✗ partner API unavailable:', e && e.message); }
+// the blog (server/blog.js), loaded the same way: a missing markdown-it after a
+// bad install must cost the blog, not checkout
+let blog = null;
+try { blog = require('./blog'); } catch (e) { console.error('✗ blog unavailable:', e && e.message); }
 
 const app = express();
 app.set('trust proxy', 1);   // Render is a SINGLE proxy: req.protocol=https AND req.ip is the real client (not a spoofable X-Forwarded-For left value)
@@ -34,6 +38,11 @@ app.use(cors({
   origin: function (origin, cb) { if (!origin || CORS_ALLOW.indexOf(origin) > -1) return cb(null, true); return cb(null, false); },
   credentials: true
 }));
+// Befach Creatives → blog. Signed over the exact bytes sent, so it takes its own
+// raw parser and must stay ABOVE the global express.json: once that has parsed the
+// body, nothing re-serialised from it will match the signature. Not rate-limited —
+// a bad signature costs one HMAC, and the app's own retries must never hit a 429.
+if (blog) app.post('/api/blog/ingest', express.raw({ type: '*/*', limit: '1mb' }), blog.ingest(() => dbReady));
 // keep the raw body so we can verify the Razorpay webhook HMAC signature
 app.use(express.json({ limit: '3mb', verify: function (req, _res, buf) { req.rawBody = buf; } }));
 
@@ -1724,6 +1733,17 @@ if (partner) {
     User, Order, Dealer, voicelog, CATALOG, COUPONS, PRODUCT_CODE, slugOf, itemImage, toNum, serverErr,
     dbReady: () => dbReady,
     rateLimit: rateLimit({ windowMs: 60 * 1000, max: parseInt(process.env.PARTNER_RATE_PER_MIN, 10) || 120, tag: 'partner' })
+  });
+}
+
+/* ---------- blog pages, sitemap.xml, robots.txt (server/blog.js) ----------
+   Rendered per request from the database, so a post from Befach Creatives is
+   live without a deploy. Above the clean-URL/static handlers: /blog would
+   otherwise resolve to the html/blog.html shell itself. */
+if (blog) {
+  blog.mountPages(app, {
+    dbReady: () => dbReady,
+    productSlugs: Object.keys(CATALOG).filter((s) => !CATALOG[s].free)   // the Demo Kit has no page of its own
   });
 }
 
