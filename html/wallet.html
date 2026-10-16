@@ -290,8 +290,10 @@
           '<section class="wa-card" aria-label="Wallet balance">'
           + '<div class="wa-card-lbl">Available balance</div>'
           + '<div class="wa-card-bal">' + money(bal) + '</div>'
-          // the rule, in the words checkout uses too (js/auth.js walletRule)
-          + '<p class="wa-rule">Minimum order of ' + rupees(w.minOrder) + ' to use your wallet amount.</p>'
+          // no minimum here (asked 16 Oct 2026): the rule is said in the "Use wallet"
+          // option at checkout (js/auth.js walletNoteHTML), where the money is spent
+          + '<p class="wa-rule">' + (bal > 0 ? rupees(bal) + ' off your next order — tick “Use wallet” in the order summary at checkout.'
+                                           : 'Your balance comes off your next order at checkout.') + '</p>'
           + '<a class="wa-btn" href="/collection">Shop products →</a>'
           + '</section>'
           + '<h2 class="wa-h2">History</h2>'

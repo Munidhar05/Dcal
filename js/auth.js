@@ -1360,8 +1360,9 @@
   // loaded = the server answered; asked = it was asked at least once (a site
   // with no database answers 503 every time, so the cart asks only once)
   var walletState = { balance: 0, credit: 500, minOrder: 3499, kitShipping: 99, kitClaimed: false, history: [], loaded: false, asked: false };
-  // the one sentence that states the rule, the same wherever it is shown
-  function walletRule() { return 'Minimum order of ' + rupees(walletState.minOrder) + ' to use your wallet amount.'; }
+  // the one sentence that states the rule — said in the "Use wallet" option only
+  // (walletNoteHTML), never where the ₹500 is promised or shown
+  function walletRule() { return 'Minimum order of ' + rupees(walletState.minOrder) + ' to avail ' + rupees(walletState.balance || walletState.credit) + ' off.'; }
   var walletWait = null;
   function loadWallet() {
     if (!isLoggedIn()) { walletState.balance = 0; walletState.loaded = false; return Promise.resolve(walletState); }
@@ -1503,6 +1504,7 @@
   function renderCartPage() {
     var root = document.getElementById('dcal-cart-root');
     if (!root) return;
+    checkout.address = null;                              // the cart comes before the address: no delivery yet (shippingShown)
     var cart = cartGet();
     if (!cart.length) { root.innerHTML = emptyCartHTML(); return; }
     var subtotal = cart.reduce(function (s, i) { return s + priceNum(i.price) * (i.qty || 1); }, 0);
@@ -1542,13 +1544,13 @@
     });
     wireCoupon(root, renderCartPage);
     wireWallet(root, renderCartPage);
-    // the "add ₹X more" card is in the summary; it also pops up once a visit,
+    // the "add ₹X more" line is in the summary; it also pops up once a visit,
     // the way a shop says it at the till
     var short = walletShortBy(computeTotals(subtotal));
     if (short > 0) {
       var seen = false;
       try { seen = sessionStorage.getItem('dcal_wallet_nudge') === '1'; sessionStorage.setItem('dcal_wallet_nudge', '1'); } catch (e) {}
-      if (!seen) setTimeout(function () { toast('Add ' + rupees(short) + ' more to use your ' + rupees(walletState.balance) + ' D’Cal wallet 🎁'); }, 600);
+      if (!seen) setTimeout(function () { toast('Add ' + rupees(short) + ' more to claim your ' + rupees(walletState.balance) + ' wallet amount 🎁'); }, 600);
     }
   }
 
@@ -1617,6 +1619,13 @@
   // coupon, so the tick lasts from the cart to payment; cleared once ordered.
   function useWalletChosen() { try { return localStorage.getItem('dcal_use_wallet') === '1'; } catch (e) { return false; } }
   function setUseWallet(on) { try { if (on) localStorage.setItem('dcal_use_wallet', '1'); else localStorage.removeItem('dcal_use_wallet'); } catch (e) {} }
+  // The kit's ₹99 delivery is shown only once the address is chosen (asked 16
+  // Oct 2026): until then the kit is free, full stop — the strip, the cart line
+  // and the cart summary say nothing of a fee. From the review step on, the
+  // summary carries "Delivery (Demo Kit) ₹99" and the Pay button its total.
+  // The server charges it either way (server.js shippingFor), so what is shown
+  // here decides when it is said, never whether it is paid.
+  function shippingShown() { return !!checkout.address; }
   function computeTotals(subtotal) {
     var code = getCouponCode(), c = COUPONS[code], discount = 0;
     var base = c ? eligibleSubtotal(c) : 0;
@@ -1628,7 +1637,7 @@
     // delivery, and the wallet — all of it, once the goods reach the minimum AND
     // they have ticked the box
     var goods = subtotal - discount;
-    var shipping = kitOnly() ? walletState.kitShipping : 0;
+    var shipping = kitOnly() && shippingShown() ? walletState.kitShipping : 0;
     var canWallet = walletState.balance > 0 && goods >= walletState.minOrder;
     var wallet = canWallet && useWalletChosen() ? Math.min(walletState.balance, goods) : 0;
     return { subtotal: subtotal, code: code, discount: discount, goods: goods, shipping: shipping,
@@ -1640,13 +1649,16 @@
     if (!(walletState.balance > 0) || t.canWallet || kitOnly()) return 0;
     return Math.max(0, walletState.minOrder - t.goods);
   }
-  // The wallet, said in the order summary: what ordering the kit will add, the
-  // box that spends it once the order is big enough, or how far it is from that.
+  // The wallet, said in the order summary. The minimum order is stated in one
+  // place only, the "Use wallet" option (asked 16 Oct 2026): the kit strip, the
+  // gift note, the confirmation and /wallet all just say "₹500", so the rule
+  // meets them where they would spend it, not where they earn it. Below the
+  // minimum the option is there but greyed, with a small "add ₹X more" line.
   function walletNoteHTML(t) {
     var W = 'D’Cal wallet', link = '<a href="/wallet">' + W + '</a>';
     if (cartGet().some(isFreeKit) && !walletState.kitClaimed) {
       return '<div class="dcal-wallet-note dcal-wallet-note--gift"><b>🎁 Get ' + rupees(walletState.credit) + ' in your ' + link + '</b>' +
-        '<span>It is added the moment you place this order. ' + walletRule() + '</span></div>';
+        '<span>It is added the moment you place this order — ' + rupees(walletState.credit) + ' off your next purchase.</span></div>';
     }
     if (!(walletState.balance > 0)) return '';
     if (t.canWallet) {
@@ -1654,16 +1666,17 @@
       return '<div class="dcal-wallet-note dcal-wallet-note--use' + (on ? ' is-on' : '') + '">' +
         '<label class="dcal-wallet-use"><input type="checkbox" data-wallet-use' + (on ? ' checked' : '') + '>' +
           '<span><b>Use ' + rupees(Math.min(walletState.balance, t.goods)) + ' from your ' + link + '</b>' +
-          '<small>' + (on ? rupees(t.wallet) + ' off this order' : 'Balance ' + rupees(walletState.balance) + ' · tick to use it on this order') + '</small></span>' +
+          '<small>' + (on ? rupees(t.wallet) + ' off this order' : walletRule() + ' Tick to use it on this order.') + '</small></span>' +
         '</label></div>';
     }
     var short = walletShortBy(t);
     if (!short) return '';
-    var pct = Math.max(4, Math.min(100, Math.round(t.goods / walletState.minOrder * 100)));
-    return '<div class="dcal-wallet-note dcal-wallet-note--nudge" role="status">' +
-      '<b>Add ' + rupees(short) + ' more to use your ' + rupees(walletState.balance) + ' ' + link + '</b>' +
-      '<span class="dcal-wallet-bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span>' +
-      '<span>' + walletRule() + ' <a href="/collection">Add products →</a></span></div>';
+    return '<div class="dcal-wallet-note dcal-wallet-note--use is-off">' +
+      '<label class="dcal-wallet-use"><input type="checkbox" disabled>' +
+        '<span><b>Use ' + rupees(walletState.balance) + ' from your ' + link + '</b>' +
+        '<small>' + walletRule() + '</small></span>' +
+      '</label>' +
+      '<p class="dcal-wallet-short" role="status">Add ' + rupees(short) + ' more to claim your wallet amount. <a href="/collection">Add products →</a></p></div>';
   }
 
   function couponBoxHTML(t) {
@@ -1680,11 +1693,12 @@
     return walletNoteHTML(t) +
       '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
       (t.shipping > 0 ? '<div class="dcal-sum-row"><span>Delivery (Demo Kit)</span><b>' + money(t.shipping) + '</b></div>'
-                      : '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>') +
+       : kitOnly() ? ''                                   // the kit's delivery is said after the address (shippingShown)
+       : '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>') +
       (t.subtotal > 0 ? couponBoxHTML(t) : '') +            // nothing to discount when only the kit is in it
       (t.discount > 0 ? '<div class="dcal-sum-row"><span>Discount (' + esc(t.code) + ')</span><b style="color:#0B6E4F">−' + money(t.discount) + '</b></div>' : '') +
       (t.wallet > 0 ? '<div class="dcal-sum-row"><span>D’Cal wallet</span><b style="color:#0B6E4F">−' + money(t.wallet) + '</b></div>' : '') +
-      '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + money(t.total) + '</b></div>';
+      '<div class="dcal-sum-row dcal-sum-total"><span>Total</span><b>' + (t.total > 0 ? money(t.total) : 'Free') + '</b></div>';
   }
   // the "Use wallet" box: the tick is the only thing that spends the wallet
   function wireWallet(root, rerender) {
@@ -2642,7 +2656,7 @@
       var credit = Number(saved && saved.walletCredit) || 0, used = Number(saved && saved.walletUsed) || 0;
       if (credit > 0) return '<div class="dcal-wallet-note dcal-wallet-note--gift" style="max-width:420px;margin:0 auto 16px;text-align:left">' +
         '<b>🎁 ' + rupees(credit) + ' added to your <a href="/wallet">D’Cal wallet</a></b>' +
-        '<span>' + walletRule() + '</span></div>';
+        '<span>' + rupees(credit) + ' off your next D’Cal order.</span></div>';
       if (used > 0) return '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">' + rupees(used) + ' paid from your D’Cal wallet ✓</p>';
       return '';
     }
