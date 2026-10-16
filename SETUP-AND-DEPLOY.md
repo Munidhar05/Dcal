@@ -139,6 +139,43 @@ For UPI test, use `success@razorpay`.
 
 ---
 
+## PART 5 — Blog (posts from Befach Creatives)
+
+Nobody writes blog posts on this site. When a post is published in the **Befach
+Creatives** app with "Also publish a blog post" ticked, the app sends the article
+here and it appears at **`/blog`** straight away (no redeploy). Posts are kept in
+the same MongoDB as orders (collection `blog_posts`, hero images included).
+
+- **Webhook:** `POST https://dcal.co.in/api/blog/ingest` — signed with a shared
+  secret (`X-Blog-Timestamp` + `X-Blog-Signature`, an HMAC-SHA256 of
+  `"<timestamp>.<body>"`). Sending the same post again updates it; its address never changes.
+- **Pages:** `/blog` (12 per page), `/blog/<slug>`, plus `/sitemap.xml` and `/robots.txt`.
+- **Render → Environment:**
+
+  | Key | Value |
+  |-----|-------|
+  | `BLOG_WEBHOOK_SECRET` | 64 random hex characters, the same value pasted into the Creatives app |
+  | `SITE_URL` | `https://dcal.co.in` |
+
+  Make a secret with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+  Without it the webhook answers 503 and nothing is published.
+
+**Test it** (prints `200 {"url":…}`; swap in the live URL to test production):
+```
+node --env-file=.env -e '
+const crypto = require("crypto");
+const body = JSON.stringify({ sourceCreativeId: "test-blog-001", businessBrandName: "Test", title: "Test post", slug: "test-post", excerpt: "Testing the blog pipeline.", bodyMarkdown: "## Hello\n\nThis is a **test** post.\n\n<script>alert(1)</script>", heroImageUrl: null });
+const ts = String(Math.floor(Date.now() / 1000));
+const sig = crypto.createHmac("sha256", process.env.BLOG_WEBHOOK_SECRET).update(ts + "." + body).digest("hex");
+fetch(process.argv[1], { method: "POST", headers: { "Content-Type": "application/json", "X-Blog-Signature": sig, "X-Blog-Timestamp": ts }, body })
+  .then(async (r) => console.log(r.status, await r.text()));
+' http://localhost:3000/api/blog/ingest
+```
+Remove the test post afterwards (Atlas → Browse Collections → `blog_posts`, or
+`mongosh "$MONGODB_URI" --eval 'db.blog_posts.deleteOne({ sourceCreativeId: "test-blog-001" })'`).
+
+---
+
 ## Notes & limits
 
 - **Free Render** services "go to sleep" after 15 minutes of no visitors, so the
