@@ -98,6 +98,15 @@ h1,h2,h3,.font-display{font-family:'Montserrat','Inter',sans-serif;letter-spacin
 .header__inline-menu .header__menu-item{white-space:nowrap}
 /* Keep the whole nav on a single straight line — never let the pills wrap to a 2nd row */
 .header__inline-menu .list-menu--inline{flex-wrap:nowrap;align-items:center;column-gap:.6rem}
+/* From 990px (where this menu appears) to 1200px the home header's one row — logo,
+   seven links, partner pill, search, account, cart — is wider than the window and
+   pushes the cart off the right edge. Tighter links there pay for the Blog link
+   and then some; the pill and icons stay as they are. */
+@media(min-width:990px) and (max-width:1199px){
+  .header__inline-menu .header__menu-item{padding-left:.6rem;padding-right:.6rem}
+  .header__inline-menu .header__menu-item.nav-solution{padding:6px 10px}
+  .header__inline-menu .list-menu--inline{column-gap:.2rem}
+}
 /* Subtly emphasise the vertical-market links (For Campuses / Hospitals / Hotels) */
 /* Market links styled as outlined pills — matches the B2B nav */
 .header__menu-item.nav-solution{display:inline-flex;align-items:center;border:1.5px solid #CDE9F5;border-radius:999px;padding:6px 12px;color:var(--brand-2);font-weight:600;text-decoration:none;transition:border-color .25s ease,color .25s ease,background .25s ease}
