@@ -20,6 +20,13 @@ const BlogPostSchema = new mongoose.Schema({
     type: new mongoose.Schema({ data: Buffer, contentType: String }, { _id: false }),
     default: null
   },
+  // A video post's video, unlike its image, is NOT copied: videoUrl is the app's
+  // permanent link, kept exactly as sent; it 302s to a short-lived storage URL
+  // and the browser follows that itself, seeking included. For such a post the
+  // hero image is a still frame from the video (the player's poster). Posts from
+  // before this field simply have none, which reads the same as null.
+  videoUrl: { type: String, default: null },
+  videoMimeType: { type: String, default: null },
   publishedAt: { type: Date, default: () => new Date() },
   updatedAt: { type: Date, default: () => new Date() }
 }, { collection: 'blog_posts' });
