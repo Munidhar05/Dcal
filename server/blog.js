@@ -19,7 +19,8 @@
      X-Blog-Signature  hex HMAC-SHA256 of "<timestamp>.<raw body>" keyed with
                        BLOG_WEBHOOK_SECRET; older than 5 minutes = refused
      body              { sourceCreativeId, businessBrandName, title, slug,
-                         excerpt, bodyMarkdown, heroImageUrl }
+                         excerpt, bodyMarkdown, heroImageUrl,
+                         videoUrl, videoMimeType }   (video: both may be null/absent)
      answer            200 { url, externalId } — anything else (or no url)
                        shows as Failed in the app, and it gives up after 20 s
 
@@ -129,6 +130,20 @@ async function copyImage(url) {
   } finally { clearTimeout(timer); }
 }
 
+/* ---------- the video ----------
+   Stored exactly as sent, never fetched: the app's link is permanent and 302s to
+   a short-lived storage URL that the browser follows itself, seeking included.
+   It ends up in a src attribute, so anything but an https URL of sane length is
+   dropped to null — and, like the image, never a reason to fail the request. */
+function videoFields(b) {
+  const u = b.videoUrl;
+  let ok = typeof u === 'string' && u.length <= 1000 && /^https:\/\//i.test(u);
+  if (ok) { try { ok = new URL(u).protocol === 'https:'; } catch (e) { ok = false; } }
+  if (!ok) return { videoUrl: null, videoMimeType: null };
+  const t = b.videoMimeType;
+  return { videoUrl: u, videoMimeType: typeof t === 'string' && /^video\/[a-z0-9][a-z0-9.+-]{0,60}$/i.test(t) ? t.toLowerCase() : null };
+}
+
 /* ---------- POST /api/blog/ingest ----------
    Mounted with express.raw BEFORE the global express.json (see server.js): once
    the body has been parsed, re-serialising it can never match the signature. */
@@ -151,7 +166,9 @@ function ingest(dbReady) {
     if (!dbReady()) return res.status(503).json({ error: 'Database unavailable.' });
 
     const sid = b.sourceCreativeId.trim();
-    const fields = { title: b.title.trim(), excerpt: b.excerpt.trim(), bodyMarkdown: b.bodyMarkdown };
+    // the video fields ride along with the words: a re-send overwrites them, and
+    // a re-send without a video (null or absent) takes the player off the article
+    const fields = Object.assign({ title: b.title.trim(), excerpt: b.excerpt.trim(), bodyMarkdown: b.bodyMarkdown }, videoFields(b));
     try {
       const image = await copyImage(b.heroImageUrl);
       let post = null;
@@ -216,7 +233,10 @@ function render(res, status, o) {
       '  <meta name="twitter:title" content="' + escHtml(o.ogTitle || o.title) + '">\n' +
       '  <meta name="twitter:description" content="' + escHtml(o.description) + '">\n' +
       '  <meta name="twitter:image" content="' + escHtml(o.image) + '">' +
-      (o.jsonld ? '\n  <script type="application/ld+json">' + jsonForScript(o.jsonld) + '</script>' : '') +
+      (o.video ? '\n  <meta property="og:video" content="' + escHtml(o.video.url) + '">' +
+        '\n  <meta property="og:video:type" content="' + escHtml(o.video.type) + '">' : '') +
+      // one <script> per object: a video post carries a VideoObject beside its BlogPosting
+      [].concat(o.jsonld || []).map(function (j) { return '\n  <script type="application/ld+json">' + jsonForScript(j) + '</script>'; }).join('') +
       (o.noindex ? '\n  <meta name="robots" content="noindex">' : '');
     let out = html.replace(/<title>[\s\S]*?<\/title>/i, '<title>' + escHtml(o.title) + '</title>');
     out = out.replace(/<meta\s+name="description"[^>]*>/i, '<meta name="description" content="' + escHtml(o.description) + '">');
@@ -228,12 +248,14 @@ function render(res, status, o) {
 
 const LIST_DESC = "Tips and guides on hard water, limescale and keeping your home's water soft — from D'Cal.";
 const DROP = '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.7c-3.3 4-6 7.5-6 11a6 6 0 0 0 12 0c0-3.5-2.7-7-6-11z"/></svg>';
+const VIDEO_BADGE = '<span class="bl-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>Video</span>';
 
 function card(p) {
   const href = '/blog/' + encodeURIComponent(p.slug);
-  const thumb = hasImage(p)
+  // the list keeps the still frame as the thumbnail; a badge says there is a video behind it
+  const thumb = (hasImage(p)
     ? '<img src="' + escHtml(imagePath(p)) + '" alt="" loading="lazy" decoding="async">'
-    : '<span class="bl-thumb-none">' + DROP + '</span>';
+    : '<span class="bl-thumb-none">' + DROP + '</span>') + (p.videoUrl ? VIDEO_BADGE : '');
   return '<article class="bl-card"><a class="bl-card-link" href="' + escHtml(href) + '">' +
     '<div class="bl-thumb">' + thumb + '</div>' +
     '<div class="bl-card-body">' +
@@ -265,7 +287,7 @@ function mountPages(app, deps) {
       if (page > pages) return res.status(404).sendFile(NOT_FOUND);
       const posts = await BlogPost.find()
         .sort({ publishedAt: -1, _id: -1 }).skip((page - 1) * PER_PAGE).limit(PER_PAGE)
-        .select('slug title excerpt publishedAt updatedAt heroImage.contentType').lean();
+        .select('slug title excerpt publishedAt updatedAt heroImage.contentType videoUrl').lean();
       let body = posts.length
         ? '<div class="bl-grid">' + posts.map(card).join('') + '</div>'
         : '<p class="bl-empty">No posts yet</p>';
@@ -303,19 +325,38 @@ function mountPages(app, deps) {
         author: { '@type': 'Organization', name: "D'Cal", url: site },
         publisher: { '@type': 'Organization', name: "D'Cal", logo: { '@type': 'ImageObject', url: site + '/img/dcal-logo.png' } }
       };
+      // A video post shows its player where the hero image would be, with that
+      // image (a still from the video) as the poster. Re-checked here as well as
+      // at ingest: whatever is stored, only an https URL ever reaches the page.
+      const video = p.videoUrl && videoFields(p).videoUrl
+        ? { url: p.videoUrl, type: p.videoMimeType || 'video/mp4' }
+        : null;
+      const top = video
+        ? '<video class="bl-video" controls playsinline preload="metadata"' +
+            (hasImage(p) ? ' poster="' + escHtml(imagePath(p)) + '"' : '') + '>' +
+            '<source src="' + escHtml(video.url) + '" type="' + escHtml(video.type) + '">' +
+            'Your browser can\'t play this video.</video>'
+        : (hasImage(p) ? '<img class="bl-hero" src="' + escHtml(imagePath(p)) + '" alt="' + escHtml(p.title) + '" fetchpriority="high">' : '');
+      const ld = video
+        ? [jsonld, {
+            '@context': 'https://schema.org', '@type': 'VideoObject',
+            name: p.title, description: p.excerpt, thumbnailUrl: img,
+            uploadDate: isoDate(p.publishedAt), contentUrl: video.url
+          }]
+        : jsonld;
       const main =
         '<main class="bl-main bl-main--post"><article class="bl-post">' +
           '<a class="bl-back" href="/blog">← All posts</a>' +
           '<h1>' + escHtml(p.title) + '</h1>' +
           '<time class="bl-date" datetime="' + isoDate(p.publishedAt) + '">' + escHtml(fmtDate(p.publishedAt)) + '</time>' +
-          (hasImage(p) ? '<img class="bl-hero" src="' + escHtml(imagePath(p)) + '" alt="' + escHtml(p.title) + '" fetchpriority="high">' : '') +
+          top +
           '<div class="bl-body">' + md.render(p.bodyMarkdown || '') + '</div>' +
           '<div class="bl-cta"><p>Hard water at home? D\'Cal stops limescale without electricity, salt or chemicals.</p>' +
           '<a class="ip-btn" href="/collection">Explore D\'Cal products →</a></div>' +
         '</article></main>';
       render(res, 200, {
         title: p.title + " — D'Cal", ogTitle: p.title, description: p.excerpt, canonical: url,
-        image: img, ogType: 'article', jsonld: jsonld, main: main
+        image: img, ogType: 'article', jsonld: ld, video: video, main: main
       });
     } catch (e) {
       try { console.error('blog post failed:', e && e.message); } catch (x) {}

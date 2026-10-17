@@ -145,6 +145,9 @@ Nobody writes blog posts on this site. When a post is published in the **Befach
 Creatives** app with "Also publish a blog post" ticked, the app sends the article
 here and it appears at **`/blog`** straight away (no redeploy). Posts are kept in
 the same MongoDB as orders (collection `blog_posts`, hero images included).
+A video post also carries a link to its video (`videoUrl`, kept as a link, never
+copied): the article plays it with the post's image as the poster, and `/blog`
+marks it with a "Video" badge.
 
 - **Webhook:** `POST https://dcal.co.in/api/blog/ingest` — signed with a shared
   secret (`X-Blog-Timestamp` + `X-Blog-Signature`, an HMAC-SHA256 of
