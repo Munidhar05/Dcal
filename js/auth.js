@@ -1310,15 +1310,17 @@
     if (!gate) return;
     e.preventDefault(); e.stopImmediatePropagation();
     var run = gate.action === 'checkout' ? doBuyNow : doAddToCart;
+    if (slugOnThisPage() === FREE_KIT) run = gate.action === 'checkout' ? buyFreeKitNow : orderFreeKit;   // one per customer, checked first
     if (!isLoggedIn()) { pendingAction = run; openAuth(); }
     else run();
   }, true);
 
-  /* ---------- FREE DEMO KIT ("Order free" under the products) ----------
-     ₹0 in the catalog, ordered on its own like any product, but ONE per customer
-     (server.js kitProblem is the rule). Sign-in comes first, so the claim has a
-     phone number to belong to. This device's own orders are checked too, which is
-     all there is to go on when the server has no order database. */
+  /* ---------- FREE DEMO KIT (its own page, /product/demo-kit) ----------
+     ₹0 in the catalog (MRP ₹100, 100% off), ordered on its own like any product,
+     but ONE per customer (server.js kitProblem is the rule). Sign-in comes first,
+     so the claim has a phone number to belong to. This device's own orders are
+     checked too, which is all there is to go on when the server has no order
+     database. */
   var FREE_KIT = 'demo-kit';
   var KIT_CLAIMED = 'You have already claimed your free Demo Kit. It is one per customer.';
   function isFreeKit(it) { return !!it && (it.slug === FREE_KIT || it.id === FREE_KIT); }
@@ -1346,6 +1348,14 @@
   function orderFreeKit() {
     if (findInCart(cartGet(), FREE_KIT) > -1) { location.href = '/cart'; return; }   // already in: just show it
     kitAdd().then(function (r) { if (r.ok) setTimeout(function () { location.href = '/cart'; }, 500); });
+  }
+  // its page's "Buy it now": doBuyNow's straight-to-checkout, after the same check
+  function buyFreeKitNow() {
+    kitAdd().then(function (r) {
+      if (!r.ok) return;
+      try { sessionStorage.setItem('dcal_buynow', '1'); } catch (e) {}
+      location.href = '/cart';
+    });
   }
   // the kit alone ships for ₹99 and is paid online (server.js shippingFor); with
   // a paid product it travels in the same box, free
@@ -1380,13 +1390,6 @@
     }).catch(function () {}).then(function () { walletWait = null; return walletState; });
     return walletWait;
   }
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('[data-free-kit]');
-    if (!b) return;
-    e.preventDefault();
-    if (!isLoggedIn()) { pendingAction = orderFreeKit; openAuth(); }
-    else orderFreeKit();
-  });
 
   /* ====================================================
      CART + CHECKOUT (client-side, static demo)
@@ -1620,8 +1623,8 @@
   function useWalletChosen() { try { return localStorage.getItem('dcal_use_wallet') === '1'; } catch (e) { return false; } }
   function setUseWallet(on) { try { if (on) localStorage.setItem('dcal_use_wallet', '1'); else localStorage.removeItem('dcal_use_wallet'); } catch (e) {} }
   // The kit's ₹99 delivery is shown only once the address is chosen (asked 16
-  // Oct 2026): until then the kit is free, full stop — the strip, the cart line
-  // and the cart summary say nothing of a fee. From the review step on, the
+  // Oct 2026): until then the kit is free, full stop — its card and page, the
+  // cart line and the cart summary say nothing of a fee. From the review step on, the
   // summary carries "Delivery (Demo Kit) ₹99" and the Pay button its total.
   // The server charges it either way (server.js shippingFor), so what is shown
   // here decides when it is said, never whether it is paid.
@@ -1650,7 +1653,7 @@
     return Math.max(0, walletState.minOrder - t.goods);
   }
   // The wallet, said in the order summary. The minimum order is stated in one
-  // place only, the "Use wallet" option (asked 16 Oct 2026): the kit strip, the
+  // place only, the "Use wallet" option (asked 16 Oct 2026): the kit's card, the
   // gift note, the confirmation and /wallet all just say "₹500", so the rule
   // meets them where they would spend it, not where they earn it. Below the
   // minimum the option is there but greyed, with a small "add ₹X more" line.
@@ -2964,7 +2967,7 @@
     login: function () { openAuth(); },
     product: function (slug) { return CATALOG ? (CATALOG[slug] || null) : null; },
     cart: function () { return cartGet().map(function (i) { return { id: i.id, slug: i.slug || i.id, title: i.title, price: i.price, qty: i.qty || 1 }; }); },
-    // The free Demo Kit, as the "Order free" button orders it, minus the jump
+    // The free Demo Kit, as its page's Add to Cart orders it, minus the jump
     // to /cart. Not signed in: the box opens and this settles once they are
     // (typed or spoken). -> Promise<{ok, reason}>
     freeKit: function () {

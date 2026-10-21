@@ -482,9 +482,10 @@
             <button type="button" class="cat-pill" data-filter="Tap Filter">Tap Filter</button>
             <button type="button" class="cat-pill" data-filter="Laundry Care">Laundry Care</button>
             <button type="button" class="cat-pill" data-filter="Cleaning">Cleaning</button>
+            <button type="button" class="cat-pill" data-filter="Free Demo Kit">Free Demo Kit</button>
           </div>
           <div class="cat-sort">
-            <span id="cat-count">5 products</span>
+            <span id="cat-count">6 products</span>
             <span class="cat-sort-sep" aria-hidden="true"></span>
             <span class="cat-sort-label">Sort by</span>
             <select id="pp-sort" name="sort_by" aria-label="Sort products">
@@ -574,29 +575,24 @@
             <a href="/product" class="pc-btn">View Product →</a>
           </article>
 
-          </div>
+              <!-- Free Demo Kit: ₹0 against an MRP of ₹100, one per customer (server.js kitProblem); on its own it ships
+                   for ₹99 (shippingFor — said only once the address is chosen, js/auth.js shippingShown) and ordering it puts ₹500 in the D'Cal wallet (walletOf) -->
+              <article class="pc" data-cat="Free Demo Kit" data-price="0.00" data-kit-card>
+            <a href="/product" class="pc-link">
+              <div class="pc-media">
+                <img src="../images/demo-kit.webp" width="720" height="531" loading="lazy" alt="D&#39;Cal Demo Kit">
+                <span class="pc-badge pc-badge-free">FREE</span>
+              </div>
+              <div class="pc-body">
+                <div class="pc-cat">Free Demo Kit</div>
+                <h3 class="pc-title">D'Cal Demo Kit</h3>
+                <div class="pc-rating">Test your water at home · one per customer</div>
+                <div class="pc-price"><span class="pc-now">₹0.00</span> <span class="pc-was">₹100.00</span> <span class="pc-save">SAVE 100%</span></div>
+              </div>
+            </a>
+            <a href="/product" class="pc-btn">View Product →</a>
+          </article>
 
-          <!-- Free Demo Kit: ₹0, one per customer (server.js kitProblem); on its own it ships
-               for ₹99 (shippingFor — said only once the address is chosen, js/auth.js shippingShown) and ordering it puts ₹500 in the D'Cal wallet (walletOf).
-               Outside #catGrid so the category filter and sort never touch it. -->
-          <div class="dcal-kit-strip">
-            <img src="../images/demo-kit.webp" width="720" height="531" loading="lazy" alt="D&#39;Cal Demo Kit">
-            <div class="dcal-kit-strip-text">
-              <span class="dcal-kit-strip-tag">Free</span>
-              <h3>Not sure yet? Get the D'Cal Demo Kit free</h3>
-              <p class="dcal-kit-wallet">Try the free Demo Kit and get <b>₹500 discount</b> on purchase</p>
-              <p class="dcal-kit-steps-h">Demo kit steps</p>
-              <ol class="dcal-kit-steps">
-                <li>Take 1 litre of bore water each in two different utensils.</li>
-                <li>In one utensil, hang 1 demo kit like dip tea.</li>
-                <li>Boil the water in both utensils for 10 minutes and let it cool down.</li>
-                <li>See the difference in calcium deposition.</li>
-              </ol>
-            </div>
-            <div class="dcal-kit-strip-go">
-              <button type="button" class="btn btn-primary" data-free-kit>Order now</button>
-              <span>One per customer</span>
-            </div>
           </div>
 
         
@@ -623,6 +619,7 @@
   .pc-media img{width:100%;height:100%;object-fit:contain;transition:transform .4s ease}
   .pc:hover .pc-media img{transform:scale(1.06)}
   .pc-badge{position:absolute;top:12px;left:12px;z-index:2;background:#0B1220;color:#fff;font-family:var(--font-heading-family);font-weight:700;font-size:11px;line-height:1;letter-spacing:.04em;padding:7px 11px;border-radius:999px}
+  .pc-badge-free{background:#FACC15;color:#0B1220}
   .pc-body{padding:16px 18px 0;flex:1 1 auto}
   .pc-cat{font-family:var(--font-heading-family);font-weight:700;font-size:11px;line-height:1;letter-spacing:.09em;text-transform:uppercase;color:#0077B6;margin-bottom:7px}
   .pc-title{font-family:var(--font-heading-family);font-weight:700;font-size:17px;line-height:1.25;margin:0 0 8px;color:#0B1220}

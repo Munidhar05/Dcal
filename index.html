@@ -817,29 +817,34 @@
             </div>
           </a>
 
+          <!-- Free Demo Kit: ₹0 against an MRP of ₹100, one per customer (server.js kitProblem); on its own it ships
+               for ₹99 (shippingFor — said only once the address is chosen, js/auth.js shippingShown) and ordering it puts ₹500 in the D'Cal wallet (walletOf) -->
+          <a href="/product" class="pp-row" data-reveal data-kit-card>
+            <div class="pp-row-media">
 
-    </div>
 
-    <!-- Free Demo Kit: ₹0, one per customer (server.js kitProblem); on its own it ships
-         for ₹99 (shippingFor — said only once the address is chosen, js/auth.js shippingShown) and ordering it puts ₹500 in the D'Cal wallet (walletOf) -->
-    <div class="dcal-kit-strip" data-reveal>
-      <img src="images/demo-kit.webp" width="720" height="531" loading="lazy" alt="D&#39;Cal Demo Kit">
-      <div class="dcal-kit-strip-text">
-        <span class="dcal-kit-strip-tag">Free</span>
-        <h3>Not sure yet? Get the D'Cal Demo Kit free</h3>
-        <p class="dcal-kit-wallet">Try the free Demo Kit and get <b>₹500 discount</b> on purchase</p>
-        <p class="dcal-kit-steps-h">Demo kit steps</p>
-        <ol class="dcal-kit-steps">
-          <li>Take 1 litre of bore water each in two different utensils.</li>
-          <li>In one utensil, hang 1 demo kit like dip tea.</li>
-          <li>Boil the water in both utensils for 10 minutes and let it cool down.</li>
-          <li>See the difference in calcium deposition.</li>
-        </ol>
-      </div>
-      <div class="dcal-kit-strip-go">
-        <button type="button" class="btn btn-primary" data-free-kit>Order now</button>
-        <span>One per customer</span>
-      </div>
+                <img src="images/demo-kit.webp" width="720" height="531" loading="lazy" alt="D&#39;Cal Demo Kit">
+
+              <span class="pp-badge pp-badge-free">FREE</span>
+            </div>
+            <div class="pp-row-body">
+              <div class="pp-card-tag">Free Demo Kit</div>
+              <h3 class="pp-card-title">D'Cal Demo Kit</h3><ul class="pp-card-benefits">
+                  <li>Test your own water at home — dip it like a tea bag</li>
+                  <li>See the calcium deposit with your own eyes</li>
+                  <li>Try it free and get ₹500 discount on purchase</li>
+
+                </ul><div class="pp-row-foot">
+                <div class="pp-row-price">
+                  <span class="pp-card-cprice">₹100.00</span><span class="pp-card-price">₹0.00</span><span class="pp-card-save">SAVE 100%</span>
+                </div>
+                <span class="btn btn-primary magnetic pp-card-btn">Buy Now <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+</span>
+              </div>
+            </div>
+          </a>
+
+
     </div>
   </div>
 </section>
@@ -869,6 +874,7 @@
 
   .pp-badge{position:absolute;top:12px;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.05em}
   .pp-badge-best{left:12px;background:#FEF3C7;color:#92400E}
+  .pp-badge-free{left:12px;background:#FACC15;color:#0B1220}
   .pp-badge-save{right:12px;background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff}
 
   .pp-card-tag{font-family:var(--font-heading-family);font-size:12px;font-weight:700;color:#0077B6;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}

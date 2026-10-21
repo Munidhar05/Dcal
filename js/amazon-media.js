@@ -15,9 +15,6 @@
 
    Product page: a gallery (our own photo first, then Amazon's
    photos, then its videos) and the reviews block.
-   Home + /collection: the Demo Kit has no product page (it is
-   ordered from its strip), so the strip opens a window with
-   the kit's photos and reviews instead.
    ========================================================= */
 (function () {
   'use strict';
@@ -91,8 +88,8 @@
     }, { passive: true });
   }
 
-  // Overlays lock the page scroll; nested ones (a photo opened from the kit
-  // window) must not unlock it when the inner one closes.
+  // Overlays lock the page scroll; counted, so one closing never unlocks the
+  // page under another that is still open.
   var locks = 0;
   function lock(on) {
     locks = Math.max(0, locks + (on ? 1 : -1));
@@ -332,80 +329,7 @@
     });
   }
 
-  /* ---- Demo Kit strip: a window with its photos and reviews ---- */
-  function kitStrips() {
-    var strips = document.querySelectorAll('.dcal-kit-strip');
-    if (!strips.length) return;
-    load('demo-kit').then(function (data) {
-      if (!data) return;
-      strips.forEach(function (strip) {
-        var go = strip.querySelector('.dcal-kit-strip-go');
-        var pic = strip.querySelector(':scope > img');
-        var n = data.reviewCount || 0;
-        var b = el('button', 'dcal-kit-more', 'See photos' + (n ? ' &amp; ' + n + (n === 1 ? ' review' : ' reviews') : ''));
-        b.type = 'button';
-        b.addEventListener('click', function () { kitWindow(data, pic && pic.getAttribute('src'), b, go); });
-        if (go) go.appendChild(b);
-        if (pic) {
-          pic.classList.add('amz-zoomable');
-          pic.addEventListener('click', function () { kitWindow(data, pic.getAttribute('src'), b, go); });
-        }
-      });
-    });
-  }
-
-  function kitWindow(data, ownSrc, opener, go) {
-    var hasReviews = (data.reviewCount || 0) > 0;
-    var wrap = el('div', 'amz-modal' + (hasReviews ? '' : ' amz-modal--photos'));
-    wrap.setAttribute('role', 'dialog');
-    wrap.setAttribute('aria-modal', 'true');
-    wrap.setAttribute('aria-label', "D'Cal Demo Kit");
-    wrap.innerHTML =
-      '<div class="amz-modal-card">' +
-        '<div class="amz-modal-head"><h2>D\'Cal Demo Kit</h2><button type="button" class="amz-modal-x" aria-label="Close">' + CLOSE + '</button></div>' +
-        '<div class="amz-modal-body">' +
-          '<div class="amz-modal-media"><div class="amz-modal-frame"><img src="" alt="D\'Cal Demo Kit"></div></div>' +
-          (hasReviews ? '<div class="amz-modal-rv"><div class="amz-reviews"></div></div>' : '') +
-        '</div>' +
-        '<div class="amz-modal-foot"></div>' +
-      '</div>';
-    // the strip's own order button and the note under it, copied rather than
-    // retyped, so the window always says what the strip says about price and limits
-    var foot = wrap.querySelector('.amz-modal-foot');
-    if (go) [].forEach.call(go.children, function (c) { if (!c.classList.contains('dcal-kit-more')) foot.appendChild(c.cloneNode(true)); });
-    var frame = wrap.querySelector('.amz-modal-frame');
-    var items = itemsFor(data, ownSrc);
-    frame.querySelector('img').src = items[0].src;
-    gallery(frame, frame, items, "D'Cal Demo Kit");
-    if (hasReviews) {
-      // fetched once the window is on screen, so the cards can be measured for "Read more"
-      var col = wrap.querySelector('.amz-modal-rv');
-      reviews(col.firstChild, data, 'demo-kit').then(function (any) {
-        if (any) return;
-        col.parentNode.removeChild(col);
-        wrap.classList.add('amz-modal--photos');
-      });
-    }
-
-    function done() {
-      document.removeEventListener('keydown', key);
-      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-      lock(false);
-      if (opener) try { opener.focus({ preventScroll: true }); } catch (e) {}
-    }
-    function key(e) { if (e.key === 'Escape') done(); }
-    wrap.addEventListener('click', function (e) {
-      if (e.target === wrap || e.target.closest('.amz-modal-x')) return done();
-      // auth.js handles the order (sign-in first); this window just gets out of its way
-      if (e.target.closest('[data-free-kit]')) done();
-    });
-    document.addEventListener('keydown', key);
-    document.body.appendChild(wrap);
-    lock(true);
-    wrap.querySelector('.amz-modal-x').focus();
-  }
-
-  function init() { productPage(); kitStrips(); }
+  function init() { productPage(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

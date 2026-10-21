@@ -2847,14 +2847,15 @@
   /* ---- Showing things, not pointing at them ----
      "Where do I order it?" on the home page used to send them to /collection,
      where the kit sits below the fold just the same; "certificates?" got "they
-     are on the home page, go and check" (11 Oct 2026). Each lives in one place:
-     scroll to it here, or open its page and scroll there on arrival.
+     are on the home page, go and check" (11 Oct 2026). Scroll to it here (the
+     kit's card on home and /collection, the top of its own page), or open the
+     page it lives on and scroll there on arrival.
      -> a URL to open, or null */
   var SHOW_KEY = 'dcal_voice_show';   // sessionStorage: she opened this page to show something on it
-  var SHOWN = { kit: ['.dcal-kit-strip', '/collection'], certs: ['#certificates', '/'] };
-  // Near the top of the screen, not the middle: centred, the kit's "Order
-  // free" button (the strip's right end) sat under her own open panel on a
-  // laptop. A ring for a moment, so the eye finds what she is talking about.
+  var SHOWN = { kit: ['[data-kit-card]', '/product/demo-kit'], certs: ['#certificates', '/'] };
+  // Near the top of the screen, not the middle: centred, the kit's order
+  // button sat under her own open panel on a laptop. A ring for a moment, so
+  // the eye finds what she is talking about.
   function scrollToShow(el) {
     var top = el.getBoundingClientRect().top + window.pageYOffset - 70;
     try { window.scrollTo({ top: top, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, top); }

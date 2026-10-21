@@ -1321,7 +1321,7 @@ app.post('/api/coupon/validate', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, 
   } catch (e) { res.status(500).json({ ok: false, reason: 'Could not verify the coupon. Please try again.' }); }
 });
 
-// may this customer still claim the free Demo Kit? Asked when they tap "Order free"
+// may this customer still claim the free Demo Kit? Asked when they tap Add to Cart on its page
 // and again before the order is placed, so a second claim is turned away up front
 // instead of after checkout. /api/orders re-checks with the session identity.
 app.post('/api/demo-kit/check', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, tag: 'demokit' }), async (req, res) => {
@@ -1743,7 +1743,7 @@ if (partner) {
 if (blog) {
   blog.mountPages(app, {
     dbReady: () => dbReady,
-    productSlugs: Object.keys(CATALOG).filter((s) => !CATALOG[s].free)   // the Demo Kit has no page of its own
+    productSlugs: Object.keys(CATALOG)
   });
 }
 
@@ -1787,13 +1787,13 @@ const PRODUCT_HTML = path.join(ROOT, 'html', 'product.html');
 // Per-product share-image override: WhatsApp/social previews are most reliable with
 // JPG/PNG, so where a product's catalog image is a .webp we point the share image at
 // a JPG twin when one exists (the storefront cards still use the original .webp).
-const OG_IMAGE = { 'washing-ball': 'Introducing-the-D_cal-Washing-Ball.jpg' };
+// The Demo Kit's card image has no JPG twin, so its preview uses the first photo
+// of its Amazon listing (a JPG on white, the same one its page gallery opens with).
+const OG_IMAGE = { 'washing-ball': 'Introducing-the-D_cal-Washing-Ball.jpg', 'demo-kit': 'amazon/71167T2oEhL.jpg' };
 app.get('/product/:slug', (req, res) => {
   const slug = String(req.params.slug || '');
   const p = CATALOG[slug];
-  // unknown slug -> default page. The free Demo Kit has no product page of its
-  // own (it is ordered from the strip below the products), so it is "unknown" here.
-  if (!p || p.free) return res.sendFile(PRODUCT_HTML);
+  if (!p) return res.sendFile(PRODUCT_HTML);   // unknown slug -> default page
   fs.readFile(PRODUCT_HTML, 'utf8', (err, html) => {
     if (err || !html) return res.sendFile(PRODUCT_HTML);
     const base = baseUrlFrom(req) || (req.protocol + '://' + req.get('host'));

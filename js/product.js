@@ -35,6 +35,15 @@
       price: '₹300.00', was: '₹300.00', img: 'tap-tile-cleaner-card.jpg',
       outOfStock: true,   // same flag as data/catalog.json, which the server refuses orders by
       desc: 'Restores the natural shine of taps & tiles. Gentle water-based formula. Spray it, scrub it, wash it.'
+    },
+    // ₹0 against an MRP of ₹100: a product like the rest, with a 100% discount
+    // (asked 21 Oct 2026). Not Amazon's price (₹69 / MRP ₹99), on purpose: here it is
+    // free. Its listing still gives the page its photos.
+    'demo-kit': {
+      cat: 'Free Demo Kit', title: "D'Cal Demo Kit", rating: '',
+      price: '₹0.00', was: '₹100.00', img: 'demo-kit.webp', amazon: 'B0C19NG9ZX',
+      free: true,         // one per customer (server.js kitProblem); see markPageKit
+      desc: 'Test your water at home: dip it in 1 litre of bore water like a tea bag, boil it for 10 minutes beside plain water, and compare the white calcium deposit. Free, one per customer.'
     }
   };
 
@@ -88,8 +97,8 @@
     var p = CATALOG[pageSlug()];
     if (!p) return;    // no/unknown slug -> leave the default page as-is
     // amazon-media.js reads this to add the product's Amazon photos, videos and
-    // reviews: only on a page that really is this product (an unknown slug like
-    // /product/demo-kit shows the default page) and only if it sells on Amazon
+    // reviews: only on a page that really is this product (an unknown slug shows
+    // the default page) and only if it sells on Amazon
     if (p.amazon) main.setAttribute('data-pp-amazon', pageSlug());
 
     var info = document.querySelector('.pp-col-info') || document;
@@ -108,6 +117,7 @@
     if (save) { var s = savePct(p); save.textContent = 'SAVE ' + s + '%'; save.style.display = s > 0 ? '' : 'none'; }
     var desc = document.querySelector('.pp-full-desc'); if (desc) desc.textContent = p.desc;
     if (p.outOfStock) markPageSoldOut();
+    if (p.free) markPageKit();
     // keep the cart variant data in sync so add-to-cart records the right price
     var vj = document.querySelector('[data-pp-variants]');
     if (vj) { try { var arr = JSON.parse(vj.textContent); if (arr[0]) { arr[0].price = p.price; arr[0].compare_at = p.was; } vj.textContent = JSON.stringify(arr); } catch (e) {} }
@@ -128,6 +138,33 @@
     if (atc) { atc.textContent = 'Out of stock'; atc.classList.add('dcal-oos-btn'); }
     var buy = document.querySelector('[data-pp-buynow]');
     if (buy) buy.style.display = 'none';                  // one disabled button says it; two is noise
+  }
+
+  /* ---- 2c) the free Demo Kit's page ----
+     product.html is the softener's page, and the parts no catalog field fills
+     are the softener's. Each would be untrue of the kit: a star rating it has
+     none of, FREE SHIPPING / COD / warranty badges (on its own it ships for ₹99,
+     prepaid, said only once the address is chosen: auth.js shippingShown), an
+     install-and-cartridge FAQ. So they go, and its benefits become the wallet
+     line and the four steps from the printed kit card. One per order, so no
+     quantity stepper; auth.js sends Add to Cart / Buy now through the
+     one-per-customer check. */
+  var KIT_STEPS = [
+    'Take 1 litre of bore water each in two different utensils.',
+    'In one utensil, hang 1 demo kit like dip tea.',
+    'Boil the water in both utensils for 10 minutes and let it cool down.',
+    'See the difference in calcium deposition.'
+  ];
+  function markPageKit() {
+    document.querySelectorAll('[data-pp-rating-row], [data-pp-badges], [data-pp-faq], [data-pp-qty]').forEach(function (el) { el.style.display = 'none'; });
+    var ben = document.querySelector('[data-pp-benefits]');
+    if (ben) ben.innerHTML =
+      '<p class="dcal-kit-wallet">Try the free Demo Kit and get <b>₹500 discount</b> on purchase</p>' +
+      '<p class="dcal-kit-steps-h">Demo kit steps</p>' +
+      '<ol class="dcal-kit-steps">' + KIT_STEPS.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>' +
+      '<p class="dcal-kit-one">One per customer</p>';
+    // what the voice assistant scrolls to when she shows the kit (voice-assistant.js SHOWN)
+    var top = document.querySelector('.pp-top'); if (top) top.setAttribute('data-kit-card', '');
   }
 
   /* ---- 3) point the Share buttons at the REAL page URL ----

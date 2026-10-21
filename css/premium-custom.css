@@ -605,31 +605,16 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
   .dcal-ci-sub{grid-area:sub;justify-self:end;min-width:0}
 }
 
-/* ---------- Free Demo Kit strip (under the products: home + /collection) ---------- */
-.dcal-kit-strip{display:flex;align-items:center;gap:24px;max-width:1080px;margin:28px auto 0;padding:20px 24px;background:#fff;border:1.5px dashed #90E0EF;border-radius:24px;box-shadow:0 12px 40px -20px rgba(2,8,23,.15)}
-.dcal-kit-strip>img{width:150px;height:auto;flex-shrink:0}
-.dcal-kit-strip-text{flex:1;min-width:0}
-.dcal-kit-strip-tag{display:inline-block;padding:4px 10px;border-radius:99px;background:#FACC15;color:#0B1220;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
-.dcal-kit-strip h3{font-family:'Montserrat','Inter',sans-serif;font-size:20px;font-weight:800;color:#0B1220;margin:8px 0 6px;letter-spacing:-.01em;line-height:1.25}
-.dcal-kit-strip p{margin:0;font-size:14px;color:#475569;line-height:1.55}
-.dcal-kit-strip-go{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0}
-.dcal-kit-strip-go .btn{padding:13px 28px}
-.dcal-kit-strip-go span{font-size:12px;color:#64748B;white-space:nowrap}
+/* ---------- the free Demo Kit's own page: its benefits (js/product.js markPageKit) ---------- */
 /* what ordering it earns: ₹500 in the D'Cal wallet (server.js walletOf) */
-.dcal-kit-strip .dcal-kit-wallet{margin:0 0 12px;padding:8px 12px;border-radius:10px;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;font-size:14px}
-.dcal-kit-strip .dcal-kit-wallet b{color:#0B6E4F}
+.dcal-kit-wallet{margin:0;padding:10px 14px;border-radius:12px;background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;font-size:15px}
+.dcal-kit-wallet b{color:#0B6E4F}
 /* the four steps from the printed Demo Kit card */
-.dcal-kit-strip .dcal-kit-steps-h{margin:2px 0 8px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0077B6}
-.dcal-kit-steps{list-style:none;counter-reset:kitstep;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
-.dcal-kit-steps li{counter-increment:kitstep;position:relative;padding-left:30px;font-size:14px;color:#334155;line-height:1.45;text-align:left}
-.dcal-kit-steps li::before{content:counter(kitstep);position:absolute;left:0;top:0;width:21px;height:21px;border-radius:50%;background:#0077B6;color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
-@media(max-width:768px){
-  .dcal-kit-strip{flex-direction:column;text-align:center;gap:14px;padding:20px}
-  .dcal-kit-strip>img{width:180px}
-  .dcal-kit-steps{grid-template-columns:1fr;max-width:420px;margin:0 auto}
-}
-.dcal-kit-more{background:none;border:0;padding:2px 4px;color:#0077B6;font-size:13px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-.dcal-kit-more:hover{color:#023E8A}
+.dcal-kit-steps-h{margin:6px 0 0;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0077B6}
+.dcal-kit-steps{list-style:none;counter-reset:kitstep;margin:0;padding:0;display:grid;gap:10px}
+.dcal-kit-steps li{counter-increment:kitstep;position:relative;padding-left:32px;font-size:15px;color:#1F2937;line-height:1.5;text-align:left}
+.dcal-kit-steps li::before{content:counter(kitstep);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:50%;background:#0077B6;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.dcal-kit-one{margin:0;font-size:13px;color:#64748B}
 
 /* ---------- Amazon photos, videos and reviews (js/amazon-media.js) ---------- */
 html.amz-locked,html.amz-locked body{overflow:hidden}
@@ -651,7 +636,7 @@ html.amz-locked,html.amz-locked body{overflow:hidden}
 .amz-nav{position:absolute;top:50%;z-index:3;width:40px;height:40px;margin-top:-20px;border:0;border-radius:50%;background:rgba(255,255,255,.92);color:#0B1220;box-shadow:0 6px 18px -6px rgba(2,8,23,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity .2s}
 .amz-prev{left:12px}
 .amz-next{right:12px}
-.pp-image-wrap:hover .amz-nav,.amz-modal-frame:hover .amz-nav,.amz-nav:focus-visible{opacity:1}
+.pp-image-wrap:hover .amz-nav,.amz-nav:focus-visible{opacity:1}
 @media(hover:none){.amz-nav{opacity:.9}}
 .amz-video{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:contain;background:#0B1220}
 .amz-playing .amz-nav{top:calc(50% - 28px)}   /* clear of the video's own control bar */
@@ -695,29 +680,6 @@ html.amz-locked,html.amz-locked body{overflow:hidden}
 @media(max-width:900px){
   .amz-rv-grid{grid-template-columns:minmax(0,1fr)}
   .amz-thumb{flex-basis:64px;height:64px}
-}
-/* Demo Kit window (opened from its strip) */
-.amz-modal{position:fixed;inset:0;z-index:10002;background:rgba(2,8,23,.6);display:flex;align-items:center;justify-content:center;padding:24px}
-.amz-modal-card{width:min(1040px,100%);max-height:calc(100vh - 48px);background:#fff;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(2,8,23,.5)}
-.amz-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid #E2E8F0}
-.amz-modal-head h2{margin:0;font-family:'Montserrat','Inter',sans-serif;font-size:20px;font-weight:800;color:#0B1220}
-.amz-modal-x{width:40px;height:40px;border:0;border-radius:50%;background:#F1F5F9;color:#0B1220;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.amz-modal-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:22px;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:28px;align-items:start}
-.amz-modal-media{position:sticky;top:0}
-.amz-modal-frame{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;background:linear-gradient(135deg,#ECF9FF,#E3F4FB)}
-.amz-modal-frame>img{width:100%;height:100%;object-fit:contain;display:block}
-.amz-modal .amz-rv-grid{grid-template-columns:minmax(0,1fr)}
-.amz-modal .amz-rv-sum{justify-content:flex-start;text-align:left}
-.amz-modal-foot{display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 22px;border-top:1px solid #E2E8F0;flex-wrap:wrap}
-.amz-modal-foot span{font-size:12px;color:#64748B}
-/* no review meets the 5-star rule yet: the window is just the photos */
-.amz-modal--photos .amz-modal-card{width:min(560px,100%)}
-.amz-modal--photos .amz-modal-body{grid-template-columns:minmax(0,1fr)}
-@media(max-width:768px){
-  .amz-modal{padding:0}
-  .amz-modal-card{width:100%;height:100%;max-height:none;border-radius:0}
-  .amz-modal-body{grid-template-columns:minmax(0,1fr);padding:16px;gap:20px}
-  .amz-modal-media{position:static}
 }
 
 /* ===== Multi-step checkout (Address → Summary → Payment) ===== */
