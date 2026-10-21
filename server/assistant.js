@@ -99,10 +99,10 @@ const KNOWLEDGE = [
   '3. Tap Filter: ' + stock('tap-filter') + 'no fitting, it just hangs on one tap and is portable (it is NOT the 14-stage one). Reduces hair fall, dry skin and skin irritation from hard water. LIFE 6 months, then a new cartridge.',
   '4. Washing Machine Ball: ' + stock('washing-ball') + 'dropped in the washing machine; cuts detergent use by half and keeps clothes looking new.',
   '5. Tap and Tile Cleaner: ' + stock('tap-tile-cleaner') + 'a gentle water-based liquid; spray, scrub, wash off; brings back the shine of taps and tiles and removes existing marks.',
-  'PRICES in rupees (say only when asked): ' + PRICES + '. Delivery is free, except the Demo Kit on its own: 99 rupees.',
+  'PRICES in rupees (say only when asked): ' + PRICES + '. Delivery is free (the Demo Kit\'s: see FREE DEMO KIT).',
   'RATINGS in stars (say only when asked): ' + RATINGS + '. The 12,840+ reviews shown on product pages are for the whole store.',
   'NOT on the website, so never claim them: replacement cartridges as a separate item (for one, call ' + PHONE + '), how long the Washing Machine Ball lasts, cleaning or purifying the water ("पानी साफ करता है"), killing bacteria, treating a disease. What the products do is stop hard-water scale and its effects. It IS safe: food-grade material, heavy metals within WHO drinking-water limits.',
-  'FREE DEMO KIT — OURS, never say we do not sell it: the kit is free, one per customer, ordered on its own; it has NO product page. Its 99-rupee delivery is shown at checkout once the address is chosen: say it ONLY if they ask about a delivery fee. Ordering it puts 500 rupees in their D\'Cal wallet ("/wallet"): 500 rupees off a later order, taken by ticking "Use wallet" in the order summary. Its 3,499-rupee minimum: say it ONLY if they ask how to use the wallet, never unasked. A sachet to test their own water at home: 1 litre of bore water in each of two utensils, hang the kit in one like a tea bag, boil both 10 minutes, let them cool, compare the white calcium deposit. Ordered with the "Order now" button below the products, on the home page and the products page (sign in with the mobile number, then place the order from the cart).',
+  'FREE DEMO KIT — OURS, never say we do not sell it: the kit is free (0 rupees; MRP 100 rupees, 100% off), one per customer, ordered on its own; its page is "/product/demo-kit". Its price is that, nothing more. On its own it ships for 99 rupees, shown at checkout once the address is chosen: say it ONLY if they ask about delivery or a fee, never in a price answer. Ordering it puts 500 rupees in their D\'Cal wallet ("/wallet"): 500 rupees off a later order, taken by ticking "Use wallet" in the order summary. Its 3,499-rupee minimum: say it ONLY if they ask how to use the wallet, never unasked. A sachet to test their own water at home: 1 litre of bore water in each of two utensils, hang the kit in one like a tea bag, boil both 10 minutes, let them cool, compare the white calcium deposit. Ordered with "Add to Cart" on its page; its card is with the products on the home page and the products page (sign in with the mobile number, then place the order from the cart).',
   'WARRANTY, LIFE and REFUND are three DIFFERENT things. Never mix them up:',
   '- WARRANTY (guarantee, गारंटी, वारंटी, గ్యారంటీ): 6-month replacement warranty, a defective product is replaced free. No 1-year or 365-day warranty exists.',
   '- LIFE: Water Softener 10-12 months; Shower Head Filter and Tap Filter 6 months.',
@@ -275,7 +275,7 @@ function kitNote(message, history) {
   const followsHer = KIT_WORDS.test(lastAssistant(history)) && (YES_RE.test(message) || KIT_FOLLOW.test(message));
   if (!KIT_WORDS.test(message) && !followsHer) return '';
   return '\n(Only if they are asking about the free Demo Kit: "how do I get it / test it / where is it" -> act {"do":"showkit"} and ask "Shall I add the free Demo Kit to your cart? You get 500 rupees in your wallet for your next order."; ' +
-         '"yes" to that, or "order it for me" -> act {"do":"kit"}, which asks for sign-in by itself. Never act "login" and never a product page for the kit. Anything else, answer it and ignore this.)';
+         '"yes" to that, or "order it for me" -> act {"do":"kit"}, which asks for sign-in by itself. Never act "login" for the kit. Anything else, answer it and ignore this.)';
 }
 const SILENCE = '[silence]';   // what the widget sends when the customer has gone quiet
 /* ---- The refund rule, said where it is read ----
@@ -375,7 +375,8 @@ function signInWanted(message, history) {
 const ALLOWED_PATHS = new Set([
   '/', '/collection', '/cart', '/track-order', '/contact', '/faq', '/shipping-returns',
   '/privacy-policy', '/legal', '/wishlist', '/wallet', '/search', '/blog', '/about',
-  '/partner/', '/hotel/', '/hospital/', '/campus/', 'https://wa.me/918622909192'
+  '/partner/', '/hotel/', '/hospital/', '/campus/', 'https://wa.me/918622909192',
+  '/product/demo-kit'   // a page, but not in PRODUCT_SLUGS: the cart takes the kit only through act "kit"
 ]);
 function safeGo(go) {
   if (!go || typeof go !== 'string') return null;

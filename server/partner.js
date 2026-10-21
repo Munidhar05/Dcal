@@ -156,8 +156,7 @@ function mount(app, d) {
         in_stock: !p.outOfStock, free: !!p.free,
         description: p.desc || null,
         image_url: p.img ? abs(base, 'images/' + p.img) : null,
-        // the free Demo Kit has no page of its own; it is ordered from the strip on /collection
-        url: base + (p.free ? '/collection' : '/product/' + slug)
+        url: base + '/product/' + slug
       };
     }));
   });

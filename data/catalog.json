@@ -26,7 +26,7 @@
   },
   "demo-kit": {
     "cat": "Free Demo Kit", "title": "D'Cal Demo Kit", "rating": "",
-    "price": 0, "was": 99, "img": "demo-kit.webp", "free": true,
+    "price": 0, "was": 100, "img": "demo-kit.webp", "free": true,
     "desc": "Test your water at home: dip it in 1 litre of bore water like a tea bag, boil it for 10 minutes beside plain water, and compare the white calcium deposit. Free, one per customer."
   }
 }
