@@ -2799,22 +2799,43 @@
     if (catalogWait) return catalogWait;
     catalogWait = fetch('/data/catalog.json', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (c) { CATALOG = c || {}; return CATALOG; })
+      .then(function (c) { CATALOG = c || {}; try { repriceCart(); } catch (e) {} return CATALOG; })
       .catch(function () { CATALOG = {}; return CATALOG; });
     return catalogWait;
   }
   setTimeout(function () { loadCatalog(); }, 4000);          // warm, so the first "add" is instant
-  // Out of stock per data/catalog.json ("outOfStock": true), the same flag the
-  // server refuses orders by. False until the catalog has loaded; the cart page
-  // paints again once it has.
-  function soldOut(it) {
-    if (!CATALOG || !it) return false;
+  // the catalog slug a cart line is for: by slug or id, else by title, as server.js slugOf
+  function catalogSlug(it) {
+    if (!CATALOG || !it) return '';
     var slug = CATALOG[it.slug] ? it.slug : (CATALOG[it.id] ? it.id : '');
     if (!slug) {
       var t = String(it.title || '').replace(/[’‘']/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
       Object.keys(CATALOG).forEach(function (s) { if (String(CATALOG[s].title || '').toLowerCase() === t) slug = s; });
     }
+    return slug;
+  }
+  // Out of stock per data/catalog.json ("outOfStock": true), the same flag the
+  // server refuses orders by. False until the catalog has loaded; the cart page
+  // paints again once it has.
+  function soldOut(it) {
+    var slug = catalogSlug(it);
     return !!(slug && CATALOG[slug].outOfStock);
+  }
+  // A cart line keeps the price it was added at, but the server charges today's
+  // catalog price (server.js priceCart). When prices change (21 Oct 2026: matched
+  // to Amazon.in) a cart filled before would show one total and be charged
+  // another, so every line takes the catalog's price as soon as it has loaded,
+  // and the cart is drawn again if one moved while it is on screen.
+  function repriceCart() {
+    var cart = cartGet(), moved = false;
+    cart.forEach(function (it) {
+      var slug = catalogSlug(it), now = slug ? CATALOG[slug].price : null;
+      if (typeof now !== 'number' || priceNum(it.price) === now) return;
+      it.price = money(now); moved = true;
+    });
+    if (!moved) return;
+    cartSave(cart);
+    if (coVoiceStep() === 'cart') renderCartPage();
   }
   function slugOnThisPage() {
     try { var m = location.pathname.match(/\/product\/([^\/?#]+)/i); return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; }
@@ -3030,7 +3051,8 @@
       var wantCheckout = false;
       try { if (sessionStorage.getItem('dcal_buynow') === '1') { wantCheckout = true; sessionStorage.removeItem('dcal_buynow'); } } catch (e) {}
       if (wantCheckout && cartGet().length) {
-        window.DcalAuth.require(function () { loadPaymentConfig().then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
+        // the catalog too: lines added before a price change are repriced (repriceCart) before any total is drawn
+        window.DcalAuth.require(function () { Promise.all([loadPaymentConfig(), loadCatalog()]).then(function () { magicOn() ? openBuyOptions(cartGet(), true) : startCheckout(); }); });
       }
     }
     loadPaymentConfig();   // learn early if Magic Checkout is on (drives Buy Now + hides the address book)

@@ -6,25 +6,28 @@
 (function () {
   'use strict';
 
+  // price and was (the MRP) are those on the product's own Amazon.in listing
+  // (`amazon`, its ASIN), so both stores give the same discount. They must match
+  // data/catalog.json, which is what the server charges.
   var CATALOG = {
     'water-softener': {
       cat: 'Water Softener', title: "D'Cal Independent House Water Softener", rating: '4.9',
-      price: '₹3,960.00', was: '₹4,500.00', img: 'water-softener-card.jpg', amazon: 'B079BZF2W4',
+      price: '₹3,729.00', was: '₹4,500.00', img: 'water-softener-card.jpg', amazon: 'B079BZF2W4',
       desc: 'Drop-in tank softener for independent homes. Stops scaling, hair fall and skin irritation. Lasts 12 months per cartridge.'
     },
     'shower-filter': {
       cat: 'Shower Filter', title: "D'Cal Shower Head Filter", rating: '4.8',
-      price: '₹2,700.00', was: '₹2,700.00', img: 'e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp', amazon: 'B0DV5SFTDW',
+      price: '₹1,429.00', was: '₹2,700.00', img: 'e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp', amazon: 'B0DV5SFTDW',
       desc: 'Easy install with 14-stage filtration. Reduces hair fall and dry skin. 6-month replaceable cartridge.'
     },
     'tap-filter': {
       cat: 'Tap Filter', title: "D'Cal Tap Filter", rating: '4.8',
-      price: '₹2,700.00', was: '₹2,700.00', img: 'tap-filter-card-2.jpg', amazon: 'B0DV5SD2M1',
+      price: '₹1,799.00', was: '₹4,500.00', img: 'tap-filter-card-2.jpg', amazon: 'B0DV5SD2M1',
       desc: 'No fitting needed — just hang it on the tap. Reduces hair fall and skin irritation from hard water.'
     },
     'washing-ball': {
       cat: 'Laundry Care', title: "D'Cal Washing Machine Ball", rating: '4.7',
-      price: '₹500.00', was: '₹500.00', img: 'cdfe502b-7b69-4f95-809a-3a9b2b582b89-IntroducingtheDcalWashingBall.webp', amazon: 'B0D1D3CVWK',
+      price: '₹599.00', was: '₹899.00', img: 'cdfe502b-7b69-4f95-809a-3a9b2b582b89-IntroducingtheDcalWashingBall.webp', amazon: 'B0D1D3CVWK',
       desc: 'Just drop it in your washing machine. Cuts detergent use and keeps your garments looking new.'
     },
     'tap-tile-cleaner': {
