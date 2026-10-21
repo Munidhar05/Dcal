@@ -261,28 +261,28 @@
   /* ---- PRODUCT CATALOG (drives per-product voice commands) ---- */
   var PRODUCTS = [
     {
-      slug: 'water-softener', price: 3960, rating: 4.9,
+      slug: 'water-softener', price: 3729, rating: 4.9,
       title: { te: 'ఇంటి వాటర్ సాఫ్ట్‌నర్', hi: 'घर का वाटर सॉफ्टनर', en: 'home Water Softener' },
       kw: ['water softener', 'softener', 'whole house', 'independent house', 'house softener', 'soft water', 'hard water machine',
            'వాటర్ సాఫ్ట్‌నర్', 'సాఫ్ట్‌నర్', 'ఇంటి సాఫ్ట్‌నర్', 'మృదు నీరు',
            'वाटर सॉफ्टनर', 'सॉफ्टनर', 'घर सॉफ्टनर', 'नरम पानी']
     },
     {
-      slug: 'shower-filter', price: 2700, rating: 4.8,
+      slug: 'shower-filter', price: 1429, rating: 4.8,
       title: { te: 'షవర్ హెడ్ ఫిల్టర్', hi: 'शॉवर हेड फ़िल्टर', en: 'Shower Head Filter' },
       kw: ['shower head filter', 'shower filter', 'shower', 'bathing filter', 'bathroom filter', 'bath filter',
            'షవర్ ఫిల్టర్', 'షవర్', 'స్నానం ఫిల్టర్', 'తలస్నానం',
            'शॉवर फ़िल्टर', 'शॉवर', 'शावर', 'नहाने का फ़िल्टर']
     },
     {
-      slug: 'tap-filter', price: 2700, rating: 4.8,
+      slug: 'tap-filter', price: 1799, rating: 4.8,
       title: { te: 'ట్యాప్ ఫిల్టర్', hi: 'टैप फ़िल्टर', en: 'Tap Filter' },
       kw: ['tap filter', 'faucet filter', 'tap water filter', 'kitchen filter', 'nal filter', 'sink filter',
            'ట్యాప్ ఫిల్టర్', 'కుళాయి ఫిల్టర్', 'నల్లా ఫిల్టర్',
            'नल फ़िल्टर', 'टैप फ़िल्टर', 'किचन फ़िल्टर', 'नल का फ़िल्टर']
     },
     {
-      slug: 'washing-ball', price: 500, rating: 4.7,
+      slug: 'washing-ball', price: 599, rating: 4.7,
       title: { te: 'వాషింగ్ మెషిన్ బాల్', hi: 'वॉशिंग मशीन बॉल', en: 'Washing Machine Ball' },
       kw: ['washing ball', 'washing machine ball', 'laundry ball', 'machine ball', 'washing', 'laundry',
            'వాషింగ్ బాల్', 'వాషింగ్ మెషిన్', 'బట్టలు ఉతకడం', 'లాండ్రీ',
@@ -337,9 +337,9 @@
         en: ['price', 'cost', 'how much', 'rate', 'rates', 'prices']
       },
       reply: {
-        te: 'మా ధరలు: ఇంటి వాటర్ సాఫ్ట్‌నర్ ₹3960. షవర్ ఫిల్టర్ మరియు ట్యాప్ ఫిల్టర్ ఒక్కొక్కటి ₹2700. వాషింగ్ మెషిన్ బాల్ ₹500. ట్యాప్ అండ్ టైల్ క్లీనర్ ₹300. అన్నీ చూడటానికి పేజీ తెరుస్తున్నాను.',
-        hi: 'हमारे दाम: घर का वाटर सॉफ्टनर ₹3960। शॉवर फ़िल्टर और टैप फ़िल्टर हर एक ₹2700। वॉशिंग मशीन बॉल ₹500। टैप और टाइल क्लीनर ₹300। सब देखने के लिए पेज खोल रही हूँ।',
-        en: 'Our prices: the home Water Softener is ₹3960. The Shower Filter and Tap Filter are ₹2700 each. The Washing Machine Ball is ₹500. The Tap and Tile Cleaner is ₹300. I am opening the page so you can see all of them.'
+        te: 'మా ధరలు: ఇంటి వాటర్ సాఫ్ట్‌నర్ ₹3729. షవర్ ఫిల్టర్ ₹1429. ట్యాప్ ఫిల్టర్ ₹1799. వాషింగ్ మెషిన్ బాల్ ₹599. ట్యాప్ అండ్ టైల్ క్లీనర్ ₹300. అన్నీ చూడటానికి పేజీ తెరుస్తున్నాను.',
+        hi: 'हमारे दाम: घर का वाटर सॉफ्टनर ₹3729। शॉवर फ़िल्टर ₹1429। टैप फ़िल्टर ₹1799। वॉशिंग मशीन बॉल ₹599। टैप और टाइल क्लीनर ₹300। सब देखने के लिए पेज खोल रही हूँ।',
+        en: 'Our prices: the home Water Softener is ₹3729. The Shower Filter is ₹1429 and the Tap Filter ₹1799. The Washing Machine Ball is ₹599. The Tap and Tile Cleaner is ₹300. I am opening the page so you can see all of them.'
       },
       go: '/collection', delay: 6500
     },

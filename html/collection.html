@@ -499,7 +499,7 @@
         
           <div class="cat-grid" id="catGrid">
             
-              <article class="pc" data-cat="Water Softener" data-price="3960.00">
+              <article class="pc" data-cat="Water Softener" data-price="3729.00">
             <a href="/product" class="pc-link">
               <div class="pc-media">
                 <img src="../images/dcal-cartridge.jpg" width="600" height="600" loading="lazy" alt="D&#39;Cal Independent House Water Softener">
@@ -508,13 +508,13 @@
                 <div class="pc-cat">Water Softener</div>
                 <h3 class="pc-title">D'Cal Independent House Water Softener</h3>
                 <div class="pc-rating"><span class="stars">★★★★★</span> 4.9</div>
-                <div class="pc-price"><span class="pc-now">₹3,960.00</span> <span class="pc-was">₹4,500.00</span></div>
+                <div class="pc-price"><span class="pc-now">₹3,729.00</span> <span class="pc-was">₹4,500.00</span> <span class="pc-save">SAVE 17%</span></div>
               </div>
             </a>
             <a href="/product" class="pc-btn">View Product →</a>
           </article>
             
-              <article class="pc" data-cat="Shower Filter" data-price="2700.00">
+              <article class="pc" data-cat="Shower Filter" data-price="1429.00">
             <a href="/product" class="pc-link">
               <div class="pc-media">
                 <img src="../images/e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp" width="600" height="600" loading="lazy" alt="D&#39;Cal Shower Head Filter">
@@ -523,13 +523,13 @@
                 <div class="pc-cat">Shower Filter</div>
                 <h3 class="pc-title">D'Cal Shower Head Filter</h3>
                 <div class="pc-rating"><span class="stars">★★★★★</span> 4.8</div>
-                <div class="pc-price"><span class="pc-now">₹2,700.00</span></div>
+                <div class="pc-price"><span class="pc-now">₹1,429.00</span> <span class="pc-was">₹2,700.00</span> <span class="pc-save">SAVE 47%</span></div>
               </div>
             </a>
             <a href="/product" class="pc-btn">View Product →</a>
           </article>
             
-              <article class="pc" data-cat="Tap Filter" data-price="2700.00">
+              <article class="pc" data-cat="Tap Filter" data-price="1799.00">
             <a href="/product" class="pc-link">
               <div class="pc-media">
                 <img src="../images/tap-filter-card-2.jpg" width="600" height="600" loading="lazy" alt="D&#39;Cal Tap Filter">
@@ -538,13 +538,13 @@
                 <div class="pc-cat">Tap Filter</div>
                 <h3 class="pc-title">D'Cal Tap Filter</h3>
                 <div class="pc-rating"><span class="stars">★★★★★</span> 4.8</div>
-                <div class="pc-price"><span class="pc-now">₹2,700.00</span></div>
+                <div class="pc-price"><span class="pc-now">₹1,799.00</span> <span class="pc-was">₹4,500.00</span> <span class="pc-save">SAVE 60%</span></div>
               </div>
             </a>
             <a href="/product" class="pc-btn">View Product →</a>
           </article>
             
-              <article class="pc" data-cat="Laundry Care" data-price="500.00">
+              <article class="pc" data-cat="Laundry Care" data-price="599.00">
             <a href="/product" class="pc-link">
               <div class="pc-media">
                 <img src="../images/cdfe502b-7b69-4f95-809a-3a9b2b582b89-IntroducingtheDcalWashingBall.webp" width="600" height="600" loading="lazy" alt="D&#39;Cal Washing Machine Ball">
@@ -553,7 +553,7 @@
                 <div class="pc-cat">Laundry Care</div>
                 <h3 class="pc-title">D'Cal Washing Machine Ball</h3>
                 <div class="pc-rating"><span class="stars">★★★★★</span> 4.7</div>
-                <div class="pc-price"><span class="pc-now">₹500.00</span></div>
+                <div class="pc-price"><span class="pc-now">₹599.00</span> <span class="pc-was">₹899.00</span> <span class="pc-save">SAVE 33%</span></div>
               </div>
             </a>
             <a href="/product" class="pc-btn">View Product →</a>
@@ -628,9 +628,12 @@
   .pc-title{font-family:var(--font-heading-family);font-weight:700;font-size:17px;line-height:1.25;margin:0 0 8px;color:#0B1220}
   .pc-rating{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12.5px;color:#64748B}
   .pc-rating .stars{color:#F59E0B;letter-spacing:1px;font-size:13px}
-  .pc-price{display:flex;align-items:baseline;gap:8px;margin-bottom:16px}
+  .pc-price{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 8px;margin-bottom:16px}
   .pc-now{font-family:var(--font-heading-family);font-weight:800;font-size:19px;line-height:1;color:#0B1220}
   .pc-was{font-size:13px;color:#94A3B8;text-decoration:line-through}
+  /* the discount the same Amazon.in listing shows; in the price row, as the
+     image's top-right corner holds the wishlist/share icons */
+  .pc-save{padding:3px 8px;border-radius:99px;background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;line-height:1.3}
   .pc-btn{margin:0 18px 18px;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;font-family:var(--font-heading-family);font-weight:600;font-size:14px;text-decoration:none;transition:transform .2s,box-shadow .2s}
   .pc-btn:hover{transform:translateY(-2px);box-shadow:0 14px 26px -10px rgba(0,119,182,.55);color:#fff}
   @media(max-width:560px){.cat-grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px}.pc-title{font-size:15px}.pc-btn{padding:11px;font-size:13px}}
