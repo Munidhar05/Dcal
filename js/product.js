@@ -7,12 +7,13 @@
   'use strict';
 
   // price and was (the MRP) are those on the product's own Amazon.in listing
-  // (`amazon`, its ASIN), so both stores give the same discount. They must match
-  // data/catalog.json, which is what the server charges.
+  // (`amazon`, its ASIN), so both stores give the same discount. The softener is
+  // the exception: ₹3,960, set 24 Oct 2026, not the ₹3,729 festival deal Amazon
+  // had on 21 Oct. They must match data/catalog.json, which is what the server charges.
   var CATALOG = {
     'water-softener': {
       cat: 'Water Softener', title: "D'Cal Independent House Water Softener", rating: '4.9',
-      price: '₹3,729.00', was: '₹4,500.00', img: 'water-softener-card.jpg', amazon: 'B079BZF2W4',
+      price: '₹3,960.00', was: '₹4,500.00', img: 'water-softener-card.jpg', amazon: 'B079BZF2W4',
       desc: 'Drop-in tank softener for independent homes. Stops scaling, hair fall and skin irritation. Lasts 12 months per cartridge.'
     },
     'shower-filter': {
