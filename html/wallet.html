@@ -51,6 +51,7 @@
     .wa-msg .wa-btn{margin-top:14px}
     @media(max-width:640px){ .wa-card{padding:22px 20px} }
   </style>
+  <script src="/js/store-facts.js" defer data-inject-bar></script>
 </head>
 <body class="gradient color-scheme-1">
   <header class="ip-head">
@@ -294,6 +295,7 @@
           // option at checkout (js/auth.js walletNoteHTML), where the money is spent
           + '<p class="wa-rule">' + (bal > 0 ? rupees(bal) + ' off your next order — tick “Use wallet” in the order summary at checkout.'
                                            : 'Your balance comes off your next order at checkout.') + '</p>'
+          + (bal > 0 ? '<p class="wa-rule" data-wa-tip hidden></p>' : '')
           + '<a class="wa-btn" href="/collection">Shop products →</a>'
           + '</section>'
           + '<h2 class="wa-h2">History</h2>'
@@ -303,6 +305,25 @@
                 + '<span class="wa-row-amt wa-row-amt--' + (r.add ? 'in' : 'out') + '">' + (r.add ? '+' : '−') + money(r.amt) + '</span></div>';
             }).join('') : '<p class="wa-empty">Nothing here yet.</p>') + '</div>'
           + '<p class="wa-row-s" style="margin-top:12px">Cancel an order paid with your wallet and the amount goes back into it.</p>';
+        if (bal > 0) tip(w);
+      }
+      // the product the balance can go on all by itself today: the cheapest one
+      // that reaches the minimum on its own (the Water Softener at ₹3,960). The
+      // minimum itself still goes unsaid here.
+      function tip(w) {
+        var min = Number(w.minOrder) || 0;
+        fetch('/data/catalog.json', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (C) {
+          var pick = null;
+          Object.keys(C || {}).forEach(function (slug) {
+            var p = C[slug], price = Number(p && p.price) || 0;
+            if (!p || p.free || p.outOfStock || price <= 0 || price < min) return;
+            if (!pick || price < pick.price) pick = { slug: slug, price: price, name: String(p.title || '').replace(/^D['’]Cal\s+/i, '').replace(/^Independent House\s+/i, '') };
+          });
+          var el = root.querySelector('[data-wa-tip]');
+          if (!pick || !el) return;
+          el.innerHTML = '<a href="/product/' + encodeURIComponent(pick.slug) + '">Use it on the ' + esc(pick.name) + ' today ›</a>';
+          el.hidden = false;
+        }).catch(function () {});
       }
       load();
     });

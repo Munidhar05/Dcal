@@ -159,11 +159,17 @@
   function markPageKit() {
     document.querySelectorAll('[data-pp-rating-row], [data-pp-badges], [data-pp-faq], [data-pp-qty]').forEach(function (el) { el.style.display = 'none'; });
     var ben = document.querySelector('[data-pp-benefits]');
+    // Saathi's script loads after this one, so ask the page, not window.DcalVoice
+    var voice = !!document.querySelector('script[src*="voice-assistant.js"]');
     if (ben) ben.innerHTML =
+      '<p class="dcal-kit-lead">Dip, boil, compare. See your hard water for yourself.</p>' +
       '<p class="dcal-kit-wallet">Try the free Demo Kit and get <b>₹500 discount</b> on purchase</p>' +
       '<p class="dcal-kit-steps-h">Demo kit steps</p>' +
       '<ol class="dcal-kit-steps">' + KIT_STEPS.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>' +
-      '<p class="dcal-kit-one">One per customer</p>';
+      '<p class="dcal-kit-one">One free kit per customer. Claim yours.</p>' +
+      (voice ? '<p class="dcal-kit-ask">White deposit in your pot? <button type="button" data-kit-ask>Ask Saathi which filter fits your home ›</button></p>' : '');
+    var ask = document.querySelector('[data-kit-ask]');
+    if (ask) ask.addEventListener('click', function () { if (window.DcalVoice && window.DcalVoice.open) window.DcalVoice.open(); });
     // what the voice assistant scrolls to when she shows the kit (voice-assistant.js SHOWN)
     var top = document.querySelector('.pp-top'); if (top) top.setAttribute('data-kit-card', '');
   }

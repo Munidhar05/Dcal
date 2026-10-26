@@ -1119,6 +1119,18 @@ async function couponUsedBy(mobile, code) {
   return !!(await Order.exists({ mobile, coupon: code, status: { $ne: 'Cancelled' } }));
 }
 
+/* ---------- data/store.json: the delivery and offer numbers ----------
+   The top bar, product pages, cart and shipping page show these numbers
+   (js/store-facts.js reads the same file), so the charges below read them too:
+   what the site says and what it charges come from one place and can't drift.
+   A missing or broken file must not take the shop down, so each number falls
+   back to the value it had before the file existed. */
+const STORE = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'store.json'), 'utf8')); }
+  catch (e) { console.warn('data/store.json unreadable, using the built-in delivery and wallet numbers:', e.message); return {}; }
+})();
+function storeNumber(v, fallback) { const n = Number(v); return v !== '' && v !== null && Number.isFinite(n) && n >= 0 ? n : fallback; }
+
 /* ---------- the free Demo Kit: one per order, one per customer ----------
    It sits in the catalog at ₹0 so anyone can order it on its own. A free thing
    that can be ordered gets ordered again and again, and each one is a courier
@@ -1142,12 +1154,13 @@ async function kitProblem(lines, mobile) {
    pays for the courier trip and turns away the orders nobody meant. When it
    rides along with a paid product it goes in the same box, free like the
    rest. Paid online only (see /api/orders): cash on delivery would let the
-   very orders the fee is meant to stop through again. */
-const KIT_SHIPPING = 99;
+   very orders the fee is meant to stop through again. The fee itself is
+   delivery.demoKitAloneCharge in data/store.json. */
+const KIT_SHIPPING = storeNumber(STORE.delivery && STORE.delivery.demoKitAloneCharge, 99);
 function shippingFor(lines) {
   return (lines || []).length && lines.every((l) => l.slug === FREE_KIT) ? KIT_SHIPPING : 0;
 }
-const KIT_PREPAID = "The Demo Kit's ₹99 delivery is paid online. Please choose UPI, card or net banking.";
+const KIT_PREPAID = "The Demo Kit's ₹" + KIT_SHIPPING.toLocaleString('en-IN') + " delivery is paid online. Please choose UPI, card or net banking.";
 
 /* ---------- the D'Cal wallet ----------
    A store wallet, not a Demo Kit feature: for now its only money is the ₹500
@@ -1164,9 +1177,11 @@ const KIT_PREPAID = "The Demo Kit's ₹99 delivery is paid online. Please choose
    the wallet is read off the orders: each carries what it put in
    (walletCredit) and what it spent (walletUsed), and a cancelled order counts
    for neither. So cancelling an order that used the wallet puts the ₹500
-   back by itself, and cancelling the kit's order takes the credit away. */
-const WALLET_CREDIT = 500;
-const WALLET_MIN_ORDER = 3499;
+   back by itself, and cancelling the kit's order takes the credit away.
+   The ₹500 and the ₹3,499 are wallet.credit and wallet.minOrder in
+   data/store.json. */
+const WALLET_CREDIT = storeNumber(STORE.wallet && STORE.wallet.credit, 500);
+const WALLET_MIN_ORDER = storeNumber(STORE.wallet && STORE.wallet.minOrder, 3499);
 async function walletOf(mobile) {
   const out = { balance: 0, credited: 0, used: 0 };
   if (!mobile || !dbReady) return out;

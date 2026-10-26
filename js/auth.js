@@ -203,6 +203,7 @@
             '<label class="dcal-label">Mobile number</label>' +
             '<div class="dcal-phone"><span class="dcal-phone__cc">+91</span>' +
               '<input type="tel" id="dcal-phone-input" inputmode="numeric" maxlength="10" placeholder="98765 43210" autocomplete="tel"></div>' +
+            '<p class="dcal-phone-note">Used for your orders and delivery updates only. No spam.</p>' +
             '<div class="dcal-err" data-err="phone"></div>' +
             '<button class="dcal-btn" data-act="send-otp">Continue</button>' +
             '<p class="dcal-terms">By continuing you agree to D’Cal’s Terms of Use and Privacy Policy.</p>' +
@@ -1688,6 +1689,7 @@
         '<button type="button" data-coupon-remove>Remove</button></div></div>';
     }
     return '<div class="dcal-coupon">' +
+      '<p class="dcal-coupon-hint">Got a code from a friend? Apply it here.</p>' +
       '<div class="dcal-coupon-row"><input class="dcal-input" data-coupon-input placeholder="Coupon code" maxlength="20" style="margin-bottom:0"><button type="button" class="dcal-coupon-apply" data-coupon-apply>Apply</button></div>' +
       '<div class="dcal-coupon-msg" data-coupon-msg></div></div>';
   }
@@ -1695,7 +1697,9 @@
     var t = computeTotals(subtotal), n = cartCount();
     return walletNoteHTML(t) +
       '<div class="dcal-sum-row"><span>Subtotal (' + n + ' item' + (n > 1 ? 's' : '') + ')</span><b>' + money(t.subtotal) + '</b></div>' +
-      (t.shipping > 0 ? '<div class="dcal-sum-row"><span>Delivery (Demo Kit)</span><b>' + money(t.shipping) + '</b></div>'
+      // the fee is for the kit alone (server.js shippingFor): said only where the fee is
+      (t.shipping > 0 ? '<div class="dcal-sum-row"><span>Delivery (Demo Kit)</span><b>' + money(t.shipping) + '</b></div>' +
+                        '<p class="dcal-sum-hint">Add any D’Cal product and the kit’s delivery is free.</p>'
        : kitOnly() ? ''                                   // the kit's delivery is said after the address (shippingShown)
        : '<div class="dcal-sum-row"><span>Shipping</span><b style="color:#0B6E4F">Free</b></div>') +
       (t.subtotal > 0 ? couponBoxHTML(t) : '') +            // nothing to discount when only the kit is in it
@@ -2141,20 +2145,27 @@
             '</label>';
           }).join('') + '</div>' +
           '<div class="dcal-pay-fields" data-pay-fields></div>' +
-          '<p class="dcal-co-secure"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> 100% Secure · Razorpay Protected</p>' +
+          '<p class="dcal-co-secure"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg> <span data-co-secure-text>100% Secure · Razorpay Protected</span></p>' +
         '</div>' +
         '<aside class="dcal-cart-summary">' +
           '<h3>Order Summary</h3>' +
           summaryBodyHTML(subtotal) +
           '<button class="dcal-btn dcal-co-place">Place Order · ' + money(computeTotals(subtotal).total) + '</button>' +
+          // true only for COD: paying online still opens Razorpay after this tap
+          '<p class="dcal-co-hint" data-co-onetap hidden>One tap left to place your order.</p>' +
           '<button type="button" class="dcal-cart-continue dcal-co-back" style="background:none;border:none;cursor:pointer;width:100%">← Back to summary</button>' +
+          (window.DcalVoice && window.DcalVoice.open ? '<p class="dcal-co-hint">Stuck? <button type="button" data-co-ask>Saathi can walk you through payment ›</button></p>' : '') +
         '</aside>' +
       '</div>');
     if (!root) return;
     function syncPlaceLabel() {
       var b = root.querySelector('.dcal-co-place');
       if (b) b.textContent = (checkout.payment === 'cod' ? 'Place Order · ' : 'Pay Securely · ') + money(cartTotal());
+      var one = root.querySelector('[data-co-onetap]');
+      if (one) one.hidden = checkout.payment !== 'cod';
     }
+    var ask = root.querySelector('[data-co-ask]');
+    if (ask) ask.addEventListener('click', function () { window.DcalVoice.open(); });
     root.querySelectorAll('input[name="dcal-pay"]').forEach(function (r) {
       r.addEventListener('change', function () {
         checkout.payment = r.value;
@@ -2169,8 +2180,13 @@
     root.querySelector('.dcal-co-place').addEventListener('click', handlePlaceOrder);
     wireCoupon(root, coPayment);
     wireWallet(root, coPayment);
-    // load whether real Razorpay is on; if not, show the demo card/UPI/bank fields
-    loadPaymentConfig().then(refreshPayFields);
+    // load whether real Razorpay is on; if not, show the demo card/UPI/bank fields.
+    // With it on, the card is typed into Razorpay's own window, never this page.
+    loadPaymentConfig().then(function () {
+      refreshPayFields();
+      var s = root.querySelector('[data-co-secure-text]');
+      if (s && razorpayOn()) s.textContent = '100% secure payment through Razorpay. Your card details never reach us.';
+    });
   }
   // A ₹0 order (only the free Demo Kit): no method to choose. Razorpay can't take
   // a zero amount, and COD would ask them to "pay" nothing at the door.
@@ -2663,6 +2679,18 @@
       if (used > 0) return '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">' + rupees(used) + ' paid from your D’Cal wallet ✓</p>';
       return '';
     }
+    // what this order saved them: MRP over price on each paid line (the catalog's
+    // `was`, the struck price they saw), plus the coupon. The wallet is said on its own line.
+    var mrpSaved = 0;
+    if (CATALOG) cart.forEach(function (it) {
+      var p = CATALOG[catalogSlug(it)];
+      if (p && !p.free) mrpSaved += Math.max(0, (Number(p.was) || 0) - (Number(p.price) || 0)) * (Number(it.qty) || 1);
+    });
+    var savedAll = mrpSaved + t.discount;
+    var savedLine = savedAll > 0
+      ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(savedAll) + ' on this order' +
+        (t.discount > 0 ? ', ' + money(t.discount) + ' of it with ' + esc(t.code) : '') + ' 🎉</p>'
+      : '';
     function showConfirmation(orderId, saved) {
       if (root) root.innerHTML =
         '<div class="glass" style="max-width:560px;margin:0 auto;padding:48px;text-align:center;background:#fff">' +
@@ -2670,13 +2698,14 @@
           '<h2 style="font-size:24px;font-weight:700;margin:14px 0 8px">Order placed! 🎉</h2>' +
           '<p class="lead" style="margin:0 auto 8px">Thank you, ' + esc((addr.name || '').split(' ')[0] || 'friend') + '! Your order is confirmed.</p>' +
           '<div style="display:inline-block;background:#F4FCFE;border:1px solid #CAF0F8;border-radius:12px;padding:10px 20px;margin:6px auto 16px"><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0077B6">Order number</span><br><b style="font-size:18px;color:#0B1220;letter-spacing:.02em">#' + esc(orderId) + '</b></div>' +
-          (t.discount > 0 ? '<p style="color:#0B6E4F;font-weight:700;font-size:14px;margin:0 auto 8px">You saved ' + money(t.discount) + ' with ' + esc(t.code) + ' 🎉</p>' : '') +
+          savedLine +
           walletLine(saved) +
           '<p style="color:#64748B;font-size:14px;margin:0 auto 24px">' + payNote + ' · Save your order number to track it anytime.</p>' +
           '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
             '<a href="/track-order?order=' + encodeURIComponent(orderId) + '" class="dcal-btn" style="display:inline-flex;width:auto;text-decoration:none">Track order →</a>' +
             '<a href="/collection" class="dcal-btn dcal-btn--ghost" style="display:inline-flex;width:auto;text-decoration:none;background:#fff;color:#0077B6;border:1.5px solid #CAF0F8">Continue shopping</a>' +
-          '</div></div>';
+          '</div>' +
+          '<p class="dcal-co-partner">Sell soft water in your city: <a href="/partner/">become a D’Cal partner ›</a></p></div>';
       toast('Order placed! 🎉');
     }
 

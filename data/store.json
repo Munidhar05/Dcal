@@ -1,0 +1,92 @@
+{
+  "_help": [
+    "The delivery and offer facts the site shows, in one place. Prices and MRPs stay in catalog.json.",
+    "Change a number here and these follow: the blue top bar on every page, the delivery lines on product pages, the cart, the Shipping & Returns page, and what the server charges (Demo Kit delivery, wallet).",
+    "Days are business days. workingDays are the days the courier works; add courier holidays as \"YYYY-MM-DD\".",
+    "Top bar: lines rotate in this order, one every secondsPerLine. A line is skipped when it cannot be true today (see the line keys below).",
+    "Line keys: text (words; {tokens} are filled in), link (optional), needs (\"cod\" / \"no-cod\": shown only while cashOnDelivery is on / off; \"voice\": only where Saathi is on the page), before (\"YYYY-MM-DD\": shown only while an order placed today still arrives before that date), from / until (\"YYYY-MM-DD\": shown only from / up to and including that day, India time), show (false hides it).",
+    "Tokens: {dispatch} {delivery} {deliverBy} {orderBy} {walletCredit} {warrantyMonths} {reportHours} {bestSave} {bestName} {bestPrice} {bestLink}.",
+    "products: what each product page says about itself. hook is the one-line opener, points are the ticked lines (lead in bold, then the rest), cartridgeMonths adds a cost-per-month line (12 months and up) or a cost-per-day line, worked out from the catalog price. The Demo Kit's page is product.js markPageKit.",
+    "Saathi (the voice assistant) says these numbers in her own words in server/assistant.js and js/voice-assistant.js: change them there too."
+  ],
+  "delivery": {
+    "dispatchDays": [1, 2],
+    "deliveryDays": [3, 7],
+    "workingDays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "holidays": [],
+    "demoKitAloneCharge": 99
+  },
+  "cashOnDelivery": true,
+  "warrantyMonths": 6,
+  "damageReportHours": 48,
+  "wallet": {
+    "credit": 500,
+    "minOrder": 3499
+  },
+  "topBar": {
+    "secondsPerLine": 6,
+    "lines": [
+      { "text": "Free delivery all over India · Cash on Delivery available", "needs": "cod" },
+      { "text": "Free delivery all over India · No minimum order", "needs": "no-cod" },
+      { "text": "Order today, get it by {deliverBy}", "link": "/shipping-returns" },
+      { "text": "Want it before Diwali? Order by {orderBy}", "before": "2026-11-08" },
+      { "text": "{bestSave}% off the {bestName} · Now {bestPrice}", "link": "{bestLink}" },
+      { "text": "Try the free Demo Kit and get {walletCredit} discount on purchase", "link": "/product/demo-kit" },
+      { "text": "Scrubbed the taps for Diwali? Hard-water stains keep coming back. Stop them at the tank.", "link": "/product/water-softener", "until": "2026-11-08" },
+      { "text": "Every order dispatched within {dispatch} business days" },
+      { "text": "82% of Indian homes have hard water. Check yours free.", "link": "/product/demo-kit" },
+      { "text": "Arrived damaged? Free replacement if you tell us within {reportHours} hours", "link": "/shipping-returns" },
+      { "text": "Baal jhad rahe hain? Shayad paani hard hai.", "link": "/product/shower-filter" },
+      { "text": "No plumber needed. Install it yourself in minutes." },
+      { "text": "{warrantyMonths}-month replacement warranty" },
+      { "text": "5-star reviews from real Amazon.in buyers", "link": "/product/water-softener" },
+      { "text": "Pehle test karo, phir kharido. Free Demo Kit.", "link": "/product/demo-kit" },
+      { "text": "Secure payment through Razorpay: UPI, cards and net banking" },
+      { "text": "Talk to Saathi in Telugu, Hindi or English. Tap the mic.", "needs": "voice" }
+    ]
+  },
+  "products": {
+    "water-softener": {
+      "cartridgeMonths": 12,
+      "hook": "White crust on your taps? That's calcium. The Softener stops it at the tank.",
+      "points": [
+        { "lead": "12+ months protection", "text": "one cartridge softens 50,000+ litres" },
+        { "lead": "One Softener, the whole house", "text": "every tap, shower and washing machine" },
+        { "lead": "Protects your geyser", "text": "scale on the heater coil makes it work harder" },
+        { "lead": "Zero electricity", "text": "works during power cuts" },
+        { "lead": "NABL lab certified", "text": "99% scale minimization verified" },
+        { "lead": "15-minute install", "text": "DIY-friendly, fits any tank" }
+      ]
+    },
+    "shower-filter": {
+      "cartridgeMonths": 6,
+      "hook": "Hair fall since you moved cities? Your water changed, not your hair.",
+      "points": [
+        { "lead": "14-stage filtration", "text": "between your shower and your hair" },
+        { "lead": "Replaces your shower head", "text": "no plumber needed" },
+        { "lead": "Dry, itchy skin after a bath?", "text": "try filtered water for 30 days" },
+        { "lead": "Renting?", "text": "take it with you when you move" }
+      ]
+    },
+    "tap-filter": {
+      "hook": "No fitting. Just hang it on the tap.",
+      "points": [
+        { "lead": "Made for rented homes", "text": "no drilling, no landlord permission" },
+        { "lead": "Wash your face in filtered water", "text": "straight from the basin tap" }
+      ]
+    },
+    "washing-ball": {
+      "hook": "Use less detergent in every wash. Just drop the ball in.",
+      "points": [
+        { "lead": "Clothes keep looking new for longer", "text": "even in hard water" }
+      ]
+    },
+    "tap-tile-cleaner": {
+      "points": [
+        { "lead": "Restores the shine", "text": "of taps and tiles" },
+        { "lead": "Gentle", "text": "water-based formula" },
+        { "lead": "Easy to use", "text": "spray it, scrub it, wash it" }
+      ]
+    }
+  }
+}
