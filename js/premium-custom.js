@@ -139,7 +139,7 @@ document.querySelectorAll('[data-multi-form]').forEach(f=>{
       if(buynow)buynow.innerHTML='Buy it now '+PPICON.zap;
       if(stockWrap)stockWrap.style.background='#ECFDF5';
       if(stockDot){ stockDot.style.background='#22C55E'; stockDot.style.boxShadow='0 0 0 4px rgba(34,197,94,.2)'; }
-      if(stockText){ stockText.style.color='#065F46'; stockText.textContent='In stock · Ships in 24 hours'; }
+      if(stockText){ stockText.style.color='#065F46'; stockText.textContent=(window.DcalFacts&&window.DcalFacts.stockLine)||'In stock · Ships in 1–2 business days'; } // days: data/store.json via store-facts.js
     } else {
       disable(atc); disable(buynow);
       if(atc)atc.textContent='Sold out';

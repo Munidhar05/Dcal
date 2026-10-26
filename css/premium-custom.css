@@ -615,6 +615,10 @@ a.link,.link:not(.button){color:rgb(0,119,182)}
 .dcal-kit-steps li{counter-increment:kitstep;position:relative;padding-left:32px;font-size:15px;color:#1F2937;line-height:1.5;text-align:left}
 .dcal-kit-steps li::before{content:counter(kitstep);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:50%;background:#0077B6;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .dcal-kit-one{margin:0;font-size:13px;color:#64748B}
+.dcal-kit-lead{margin:0;font-size:16px;font-weight:600;line-height:1.45;color:#023E8A}
+.dcal-kit-ask{margin:0;font-size:14px;line-height:1.45;color:#475569}
+.dcal-kit-ask button{background:none;border:0;padding:0;font:inherit;font-weight:600;color:#0077B6;cursor:pointer;text-align:left}
+.dcal-kit-ask button:hover{text-decoration:underline;text-underline-offset:3px}
 
 /* ---------- Amazon photos, videos and reviews (js/amazon-media.js) ---------- */
 html.amz-locked,html.amz-locked body{overflow:hidden}
@@ -728,6 +732,16 @@ html.amz-locked,html.amz-locked body{overflow:hidden}
 .dcal-coupon-ok button{border:none;background:none;color:#DC2626;font-weight:700;font-size:13px;cursor:pointer}
 .dcal-coupon-msg{font-size:12.5px;margin-top:6px;min-height:0}
 .dcal-coupon-msg.err{color:#DC2626;font-weight:600}
+/* small helper lines in sign-in, the order summary, payment and the confirmation */
+.dcal-coupon-hint{margin:0 0 6px;font-size:12.5px;color:#64748B}
+.dcal-sum-hint{margin:-2px 0 8px;font-size:12.5px;line-height:1.45;color:#0B6E4F}
+.dcal-co-hint{margin:10px 0 0;font-size:13px;line-height:1.45;color:#64748B;text-align:center}
+.dcal-co-hint[hidden]{display:none}
+.dcal-co-hint button{background:none;border:0;padding:0;font:inherit;font-weight:600;color:#0077B6;cursor:pointer}
+.dcal-phone-note{margin:8px 0 0;font-size:12.5px;color:#64748B}
+.dcal-co-partner{margin:20px auto 0;font-size:13.5px;color:#64748B}
+.dcal-co-partner a{color:#0077B6;font-weight:600;text-decoration:none}
+.dcal-co-partner a:hover,.dcal-co-hint button:hover{text-decoration:underline;text-underline-offset:3px}
 .dcal-pay-fields:empty{display:none}
 .dcal-pay-form{margin-top:14px;padding:16px;border:1.5px solid #E2E8F0;border-radius:14px;background:#F8FCFE;animation:dcalPayIn .25s ease}
 @keyframes dcalPayIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}

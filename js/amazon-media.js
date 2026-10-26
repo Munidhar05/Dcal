@@ -317,7 +317,8 @@
       if (!data.reviewCount) { block.hidden = true; return; }   // nothing that meets the rule
       var eb = block.querySelector('.eyebrow'), lead = block.querySelector('.lead');
       if (eb) eb.textContent = '5-star reviews from Amazon';
-      if (lead) lead.textContent = 'Word for word from buyers on Amazon.in.';
+      // true because the import keeps Verified Purchase reviews only (all 535 on 26 Oct 2026)
+      if (lead) lead.textContent = 'Every review here is from a real Amazon.in buyer, word for word.';
       var box = el('div', 'amz-reviews');
       box.id = 'amazon-reviews';
       block.replaceChild(box, widget);
