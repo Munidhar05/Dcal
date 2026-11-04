@@ -9,7 +9,8 @@
   // price and was (the MRP) are those on the product's own Amazon.in listing
   // (`amazon`, its ASIN), so both stores give the same discount. The softener is
   // the exception: ₹3,960, set 24 Oct 2026, not the ₹3,729 festival deal Amazon
-  // had on 21 Oct. They must match data/catalog.json, which is what the server charges.
+  // had on 21 Oct. The shower filter is too: ₹1,699, set 4 Nov 2026, not Amazon's
+  // ₹1,429. They must match data/catalog.json, which is what the server charges.
   var CATALOG = {
     'water-softener': {
       cat: 'Water Softener', title: "D'Cal Independent House Water Softener", rating: '4.9',
@@ -18,7 +19,7 @@
     },
     'shower-filter': {
       cat: 'Shower Filter', title: "D'Cal Shower Head Filter", rating: '4.8',
-      price: '₹1,429.00', was: '₹2,700.00', img: 'e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp', amazon: 'B0DV5SFTDW',
+      price: '₹1,699.00', was: '₹2,700.00', img: 'e2e02608-3ad7-4e25-8001-85ea004cecaa-Because-your-skin-deserves-shower-head.webp', amazon: 'B0DV5SFTDW',
       desc: 'Easy install with 14-stage filtration. Reduces hair fall and dry skin. 6-month replaceable cartridge.'
     },
     'tap-filter': {
