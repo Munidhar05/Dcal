@@ -179,6 +179,70 @@ Remove the test post afterwards (Atlas → Browse Collections → `blog_posts`, 
 
 ---
 
+## PART 6 — Meta pixel + Conversions API (what Meta hears about a buyer)
+
+The pixel (`js/tracking.js`) fires these on top of `PageView`, and the server
+sends Meta the same event with the same `event_id`, so Meta counts it once:
+
+| Event | When | Sent with |
+|---|---|---|
+| `ViewContent` | a product page opens | `content_ids` (the slug), `value` (the Demo Kit is its ₹99 delivery), `INR` |
+| `CompleteRegistration` | a sign-in succeeds | — |
+| `AddToCart` | a product or the kit is added | as ViewContent, times the quantity |
+| `InitiateCheckout` | the address step opens | `value`, `num_items` |
+| `AddPaymentInfo` | Razorpay opens | `value` = the amount Razorpay was opened for |
+| `Purchase` | the order is saved: paid online, or Cash on Delivery placed | `value` = amount paid, `order_id` (also the `event_id`), `kit`, `wallet_used`, `payment` (`online` / `cod`) |
+
+A Razorpay order whose payment the server can't confirm sends no Purchase, from
+either side. Every order also keeps where its buyer came from: `utm_*`, `fbc`,
+`fbp` and the landing page (a 90-day first-party cookie, `dcal_attr`).
+
+- **Render → Environment:**
+
+  | Key | Value |
+  |-----|-------|
+  | `META_CAPI_TOKEN` | Events Manager → pixel `2994497707552848` → Settings → Conversions API → **Generate access token** |
+  | `META_TEST_EVENT_CODE` | only while testing: the code on Events Manager → **Test events** |
+
+  Without the token the pixel still fires; only the server's copy is skipped.
+  `META_GRAPH_VERSION` (default `v26.0`) only needs changing if Meta retires it.
+- **Check it:** open `https://dcal.co.in/api/health`. `meta.configured` should be
+  `true`, and after an order `meta.last_purchase.ok` should be `true`. If it is
+  `false`, `meta.last_purchase.error` says why (for example an expired token).
+
+**Test it** (acceptance tests 1–3): set `META_TEST_EVENT_CODE`, open
+`https://dcal.co.in/product/demo-kit?utm_campaign=dcal_demokit&fbclid=test123`,
+order the kit and pay the ₹99. In Events Manager → Test events you should see
+`ViewContent`, `AddToCart`, `InitiateCheckout`, `AddPaymentInfo` and one `Purchase`
+of 99 INR received from both browser and server. Then remove
+`META_TEST_EVENT_CODE`, or live events keep landing under Test events only.
+
+---
+
+## PART 7 — Orders export (read only, for reporting)
+
+Two tables, read with their own key. The key reads only these, and any write that
+carries it gets 403.
+
+- `GET /api/export/orders?from=2026-10-28&to=2026-11-14`: one row per order.
+  The dates are India dates and both days count; `to` defaults to today. You get
+  500 rows at a time (`&limit=` up to 1000): while `next_cursor` is not null, ask
+  again with `&cursor=<it>`. `total` is the number of orders in the range, to check
+  against the admin panel.
+- `GET /api/export/kit-wallets`: every Demo Kit buyer with the credit it gave,
+  each order that spent it, and the balance.
+
+- **Render → Environment:** `EXPORT_API_KEY` = 64 random hex characters. Make one with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and hand it
+  over privately. Never put it in chat, email or git.
+- **Use it:**
+  ```
+  curl -H "Authorization: Bearer $EXPORT_API_KEY" "https://dcal.co.in/api/export/orders?from=2026-10-28"
+  ```
+  A `POST` with the same header answers `403`.
+
+---
+
 ## Notes & limits
 
 - **Free Render** services "go to sleep" after 15 minutes of no visitors, so the

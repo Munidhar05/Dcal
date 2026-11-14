@@ -770,6 +770,7 @@
 
   function loginAs(mobile) {
     write(K_SESSION, mobile);
+    track('CompleteRegistration', {});   // every real sign-in comes through here; a page load's resume does not
     // track login activity for the admin dashboard
     var all = users();
     if (all[mobile]) { all[mobile].logins = (all[mobile].logins || 0) + 1; all[mobile].lastLogin = Date.now(); saveUsers(all); }
@@ -1341,6 +1342,7 @@
       return itemFor(FREE_KIT, 1).then(function (p) {
         if (!p) { toast('Sorry, the Demo Kit is not available right now.'); return { ok: false, reason: 'unavailable' }; }
         var cart = cartGet(); cart.push(p); cartSave(cart); updateCartBubbles();
+        trackItems('AddToCart', [p]);
         toast('Free Demo Kit added ✓');
         return { ok: true };
       });
@@ -1392,6 +1394,67 @@
     return walletWait;
   }
 
+  /* ---------- telling Meta about each step (js/tracking.js DcalTrack, server/meta.js) ----------
+     ViewContent (a product page), AddToCart, InitiateCheckout (the address
+     step), AddPaymentInfo (Razorpay opens), CompleteRegistration (signed in)
+     and Purchase (the order saved). Each goes to the pixel and, with the same
+     event_id, to the server, which sends Meta its own copy. Never in the way:
+     no tracking script, no event, and the shop carries on. */
+  function track(name, params, opts) { try { if (window.DcalTrack) window.DcalTrack.event(name, params, opts); } catch (e) {} }
+  // cart lines as the server prices them: slug, qty, today's catalog price
+  function metaLines(items) {
+    return (items || []).map(function (it) {
+      var slug = catalogSlug(it) || (it && (it.slug || it.id)) || '';
+      var p = CATALOG && CATALOG[slug];
+      return { slug: slug, qty: Math.max(1, Math.min(99, parseInt(it && it.qty, 10) || 1)),
+               price: p && typeof p.price === 'number' ? p.price : priceNum(it && it.price) };
+    }).filter(function (l) { return !!l.slug; });
+  }
+  // what it would cost before any coupon or wallet: the Demo Kit alone is its
+  // ₹99 delivery, the same figure the server sends (server.js /api/meta/event)
+  function metaValue(lines) {
+    var v = lines.reduce(function (s, l) { return s + l.price * l.qty; }, 0);
+    if (lines.length && lines.every(function (l) { return l.slug === FREE_KIT; })) v += walletState.kitShipping;
+    return v;
+  }
+  function metaParams(lines, value) {
+    var ids = [];
+    lines.forEach(function (l) { if (ids.indexOf(l.slug) < 0) ids.push(l.slug); });
+    return {
+      content_ids: ids, content_type: 'product',
+      contents: lines.map(function (l) { return { id: l.slug, quantity: l.qty, item_price: l.price }; }),
+      num_items: lines.reduce(function (n, l) { return n + l.qty; }, 0),
+      value: value, currency: 'INR'
+    };
+  }
+  // opts.value overrides the worked-out value; opts.razorpayOrderId rides along to the server
+  function trackItems(name, items, opts) {
+    opts = opts || {};
+    var lines = metaLines(items);
+    if (!lines.length) return;
+    track(name, metaParams(lines, opts.value != null ? opts.value : metaValue(lines)), {
+      items: lines.map(function (l) { return { slug: l.slug, qty: l.qty }; }),
+      razorpayOrderId: opts.razorpayOrderId
+    });
+  }
+  // The browser's Purchase, its event_id the order number. The server sends its
+  // own when it saves the order (server/meta.js purchase), on the same rule:
+  // paid online, or Cash on Delivery placed. A payment not confirmed is not a sale yet.
+  function trackPurchase(saved, items) {
+    if (!saved || !saved.orderId) return;
+    var kind = saved.paid ? 'online'
+      : /cash on delivery|\bcod\b/i.test(saved.payment || '') ? 'cod'
+      : !(Number(saved.totalNum) > 0) ? 'free' : '';
+    if (!kind) return;
+    var lines = metaLines(saved.items && saved.items.length ? saved.items : items);
+    var p = metaParams(lines, Number(saved.totalNum) || 0);
+    p.order_id = saved.orderId;
+    p.kit = lines.some(function (l) { return l.slug === FREE_KIT; });
+    p.wallet_used = Number(saved.walletUsed) || 0;
+    p.payment = kind;
+    track('Purchase', p, { id: saved.orderId, browserOnly: true });
+  }
+
   /* ====================================================
      CART + CHECKOUT (client-side, static demo)
      ==================================================== */
@@ -1437,6 +1500,7 @@
     if (found) found.qty = Math.min(99, (found.qty || 1) + addQty); else { p.qty = addQty; cart.push(p); }
     cartSave(cart);
     updateCartBubbles();
+    trackItems('AddToCart', [{ slug: p.slug, id: p.id, title: p.title, price: p.price, qty: addQty }]);
     toast('Added to cart ✓');
     // take the user to the cart page to review their order (absolute path works
     // from any URL depth, incl. /product/<slug>)
@@ -1458,6 +1522,7 @@
     for (var i = 0; i < cart.length; i++) { if (cart[i].id === p.id) { found = cart[i]; break; } }
     if (found) found.qty = Math.min(99, (found.qty || 1) + addQty); else { p.qty = addQty; cart.push(p); }
     cartSave(cart); updateCartBubbles();
+    trackItems('AddToCart', [{ slug: p.slug, id: p.id, title: p.title, price: p.price, qty: addQty }]);
     try { sessionStorage.setItem('dcal_buynow', '1'); } catch (e) {}
     location.href = '/cart';
   }
@@ -1999,6 +2064,7 @@
 
   function startCheckout() {
     if (!cartGet().length) return;
+    trackItems('InitiateCheckout', cartGet());   // the address step opens now
     coAddress();
   }
 
@@ -2624,6 +2690,8 @@
           });
           rzp.on('payment.failed', function () { toast('Payment failed. Please try again.'); resetPlaceBtn(); });
           rzp.open();
+          // for exactly what Razorpay was opened for (net of any coupon and wallet)
+          trackItems('AddPaymentInfo', cartGet(), { value: order.amount / 100, razorpayOrderId: order.orderId });
         });
       })
       .catch(function (e) {
@@ -2716,6 +2784,7 @@
         newOrder.id = saved.orderId;
         var l = orders(); if (l[0]) { l[0].id = saved.orderId; l[0].walletCredit = Number(saved.walletCredit) || 0; saveOrders(l); }
       }
+      trackPurchase(saved, cart);
       showConfirmation(newOrder.id, saved);
       loadWallet();                                       // the ₹500 in, or out, for the next cart
     }).catch(function () {
@@ -3017,6 +3086,7 @@
           var cart = cartGet(), k = findInCart(cart, slug);
           if (k > -1) cart[k].qty = Math.min(99, (cart[k].qty || 1) + qty); else cart.push(p);
           cartSave(cart); repaint();
+          trackItems('AddToCart', [{ slug: slug, id: p.id, title: p.title, price: p.price, qty: qty }]);
           toast('Added to cart ✓');
         });
       };
@@ -3075,6 +3145,9 @@
   function init() {
     updateHeader();
     updateCartBubbles();
+    // a product's own page: Meta's ViewContent, priced once the catalog is in
+    var viewed = slugOnThisPage();
+    if (viewed) loadCatalog().then(function (c) { if (c && c[viewed]) trackItems('ViewContent', [{ slug: viewed, qty: 1 }]); });
     renderCartPage();                    // (on /cart this also asks for the wallet)
     if (isLoggedIn() && !walletState.asked) loadWallet();   // the account menu shows its balance
     // "Buy Now" from a product page lands here -> open checkout straight away, skipping
