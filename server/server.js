@@ -27,6 +27,13 @@ try { partner = require('./partner'); } catch (e) { console.error('✗ partner A
 // bad install must cost the blog, not checkout
 let blog = null;
 try { blog = require('./blog'); } catch (e) { console.error('✗ blog unavailable:', e && e.message); }
+// the Demo Kit campaign's measuring (14 Nov 2026), each loaded the same way: Meta's
+// Conversions API (server/meta.js), where an order came from (server/attribution.js)
+// and the read-only orders export (server/export.js). None of them may stop an order.
+let meta = null, attribution = null, exportApi = null;
+try { meta = require('./meta'); } catch (e) { console.error('✗ Meta Conversions API unavailable:', e && e.message); }
+try { attribution = require('./attribution'); } catch (e) { console.error('✗ order attribution unavailable:', e && e.message); }
+try { exportApi = require('./export'); } catch (e) { console.error('✗ orders export unavailable:', e && e.message); }
 
 const app = express();
 app.set('trust proxy', 1);   // Render is a SINGLE proxy: req.protocol=https AND req.ip is the real client (not a spoofable X-Forwarded-For left value)
@@ -38,6 +45,8 @@ app.use(cors({
   origin: function (origin, cb) { if (!origin || CORS_ALLOW.indexOf(origin) > -1) return cb(null, true); return cb(null, false); },
   credentials: true
 }));
+// the export key is read only: any write that carries it is refused here, before any route
+if (exportApi) app.use(exportApi.blockWrites);
 // Befach Creatives → blog. Signed over the exact bytes sent, so it takes its own
 // raw parser and must stay ABOVE the global express.json: once that has parsed the
 // body, nothing re-serialised from it will match the signature. Not rate-limited —
@@ -533,7 +542,10 @@ if (RZP_KEY_ID && RZP_KEY_SECRET) {
 
 /* ---------- health ---------- */
 app.get('/api/health', (req, res) => res.json({ ok: true, db: dbReady, payments: !!razorpay,
-  partner: partner ? partner.keyStatus() : { configured: false, hint: 'server/partner.js failed to load' } }));
+  partner: partner ? partner.keyStatus() : { configured: false, hint: 'server/partner.js failed to load' },
+  export: exportApi ? exportApi.keyStatus() : { configured: false, hint: 'server/export.js failed to load' },
+  // whether Meta took the last event and the last Purchase (never the token)
+  meta: meta ? meta.status() : { configured: false, hint: 'server/meta.js failed to load' } }));
 
 /* ---------- payments (Razorpay) ---------- */
 app.get('/api/payment/config', (req, res) => res.json({ enabled: !!razorpay, keyId: RZP_KEY_ID, magic: !!razorpay && MAGIC_CHECKOUT }));
@@ -569,7 +581,10 @@ app.post('/api/payment/create-order', rateLimit({ windowMs: 10 * 60 * 1000, max:
       // reconciled from Razorpay after a server restart (in-memory pending is lost).
       // The wallet amount too: the charge was made net of it, so the order saved
       // from this payment must spend exactly that, whatever the wallet says by then.
-      notes: { mobile: payerMobile, total: String(q.total), wallet: String(q.wallet), shipping: String(q.shipping) }
+      // Where they came from rides along too (server/attribution.js), for an order
+      // the webhook has to recover without the browser that placed it.
+      notes: Object.assign({ mobile: payerMobile, total: String(q.total), wallet: String(q.wallet), shipping: String(q.shipping) },
+        attribution ? attribution.toNotes(attributionOf(req), { ua: req.get('user-agent'), ip: req.ip }) : {})
     };
     // Magic Checkout: hand Razorpay the cart contents so its modal can show the
     // items and collect the address itself. Built from the SERVER-priced lines so
@@ -690,6 +705,8 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
       line: [sa.line1, sa.line2].filter(Boolean).join(', ') || sa.line || '',
       city: sa.city || '', state: sa.state || '', pincode: sa.zipcode || sa.zip || sa.pincode || '' };
     const notes = (full && full.notes) || {};
+    // where they came from, and their browser for Meta, as create-order wrote them on the notes
+    const from = attribution ? attribution.fromNotes(notes) : { attr: {}, client: {} };
     const order = await Order.create({
       orderId: await genOrderId(items), mobile, customerName: address.name || '',
       title: items.length ? (items[0].title + (items.length > 1 ? ' + ' + (items.length - 1) + ' more' : '')) : 'Order',
@@ -697,10 +714,13 @@ app.post('/api/webhooks/razorpay', async (req, res) => {
       payment: isCod ? 'Cash on Delivery' : 'Prepaid (Razorpay)', coupon: '', discount: 0,
       // what create-order charged net of: the wallet it spent and the delivery it added
       walletUsed: Number(notes.wallet) || 0, shipping: Number(notes.shipping) || 0,
-      paid: !isCod, paymentId, razorpayOrderId: roid, status: 'Confirmed', date: Date.now(),
+      paid: !isCod, paymentId, razorpayOrderId: roid, attribution: from.attr, status: 'Confirmed', date: Date.now(),
       statusHistory: [{ status: 'Confirmed', at: Date.now() }]
     });
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});
+    // no browser came back, so the server's Purchase is the only one Meta gets
+    sendPurchase(order, q.ok ? q.lines : [], async () => ({ mobile, email: await emailForMobile(mobile), fbc: from.attr.fbc, fbp: from.attr.fbp,
+      ip: from.client.ip, ua: from.client.ua }), baseUrlFrom(req) + '/cart');
     console.log('razorpay webhook: recovered order', order.orderId, 'for', roid);
   } catch (e) { console.error('razorpay webhook error:', e.message); }
 });
@@ -1314,6 +1334,52 @@ function soldOutError(titles) {
 // razorpay order_id -> the server-computed quote, so /verify and /orders can trust it
 const pendingPayments = new Map();
 
+/* ---------- measuring the Demo Kit campaign (server/attribution.js, server/meta.js) ----------
+   An order is stamped with where its buyer came from, and Meta hears about
+   each step from the server as well as the pixel. Both are best effort: a
+   failure here is logged and the order goes ahead untouched. */
+function attributionOf(req) {
+  try { return attribution ? attribution.fromCookies(parseCookies(req)) : {}; } catch (e) { return {}; }
+}
+// who a server event is about: a verified number (never one the browser typed),
+// its account's email, the click and browser ids, and the browser itself
+async function metaUser(req, mobile, attr) {
+  attr = attr || attributionOf(req);
+  return { mobile, email: mobile && dbReady ? await emailForMobile(mobile) : '', fbc: attr.fbc, fbp: attr.fbp, ip: req.ip, ua: req.get('user-agent') };
+}
+// the server's Purchase for a saved order; js/auth.js fires the browser's, with the order number as event_id
+// (whoFn -> the user, asked only when there is a token to send with)
+function sendPurchase(order, lines, whoFn, url) {
+  if (!meta || !meta.enabled()) return;
+  Promise.resolve().then(whoFn).then((u) => meta.purchase(order, { lines, user: u, url })).catch(() => {});
+}
+
+// the browser's step (product seen, added, checkout, Razorpay opened, signed in),
+// sent on to Meta with the browser's event_id. Priced here from the catalog; the
+// browser only says which products. Answers at once and never says why.
+app.post('/api/meta/event', rateLimit({ windowMs: 60 * 1000, max: 120, tag: 'metaevent' }), (req, res) => {
+  res.status(204).end();
+  if (!meta || !meta.enabled()) return;
+  try {
+    const ev = meta.fromBrowser(req.body, req.get('host'));
+    if (!ev) return;
+    const mobile = (verifySession(parseCookies(req)[SESSION_COOKIE]) || {}).mobile || '';
+    const { subtotal, lines } = priceCart(ev.items);
+    let custom = {};
+    if (ev.name !== 'CompleteRegistration' && lines.length) {
+      // what it would cost before any coupon or wallet: the Demo Kit alone is its ₹99 delivery
+      let value = subtotal + shippingFor(lines);
+      // Razorpay opened: the amount it was opened for, when that payment is this customer's
+      const p = ev.razorpayOrderId ? pendingPayments.get(ev.razorpayOrderId) : null;
+      if (p && mobile && p.mobile === mobile) value = p.total;
+      custom = Object.assign(meta.contentData(lines), { value, currency: 'INR' });
+    }
+    metaUser(req, mobile)
+      .then((user) => meta.send([meta.event(ev.name, { id: ev.id, url: ev.url || req.get('referer') || '', user, custom })]))
+      .catch(() => {});
+  } catch (e) { try { console.error('meta event:', e && e.message); } catch (x) {} }
+});
+
 // validate a coupon for a given user+cart BEFORE they pay (the authoritative check)
 app.post('/api/coupon/validate', rateLimit({ windowMs: 10 * 60 * 1000, max: 60, tag: 'coupon' }), async (req, res) => {
   try {
@@ -1431,6 +1497,7 @@ async function saveOrder(req, res) {
     // ordering the kit puts ₹500 in the wallet — once: a paid order skipped the
     // one-per-customer check above, so it is asked here again
     const walletCredit = q.lines.some((l) => l.slug === FREE_KIT) && !(paid && await kitClaimedBy(mobile)) ? WALLET_CREDIT : 0;
+    const attr = attributionOf(req);                     // the ad click (or none) behind this order
 
     let order;
     try {
@@ -1442,7 +1509,7 @@ async function saveOrder(req, res) {
         image: o.image || '', items: o.items || [], address: o.address || {},
         payment: payLabel || o.payment || '', coupon: q.code, discount: q.discount,
         shipping: q.shipping, walletUsed: q.wallet, walletCredit,
-        paid, paymentId, razorpayOrderId: rzpId,
+        paid, paymentId, razorpayOrderId: rzpId, attribution: attr,
         status: 'Confirmed', date: Date.now(),
         statusHistory: [{ status: 'Confirmed', at: Date.now() }]
       });
@@ -1456,6 +1523,10 @@ async function saveOrder(req, res) {
       throw e;
     }
     notifyOrderPlaced(order, baseUrlFrom(req)).catch(() => {});   // fire-and-forget order confirmation
+    // Meta's Purchase, once: only a newly created order reaches here (a re-submit
+    // returned the existing one above). Sent only when paid online, or placed COD
+    // (meta.purchaseKind): a Razorpay order whose payment can't be confirmed is not a sale yet.
+    sendPurchase(order, q.lines, () => metaUser(req, mobile, attr), req.get('referer') || baseUrlFrom(req) + '/cart');
     res.json({ order });
   } catch (e) { serverErr(res, e); }
 }
@@ -1748,6 +1819,15 @@ if (partner) {
     User, Order, Dealer, voicelog, CATALOG, COUPONS, PRODUCT_CODE, slugOf, itemImage, toNum, serverErr,
     dbReady: () => dbReady,
     rateLimit: rateLimit({ windowMs: 60 * 1000, max: parseInt(process.env.PARTNER_RATE_PER_MIN, 10) || 120, tag: 'partner' })
+  });
+}
+
+/* ---------- orders export for the Demo Kit campaign: read only, its own key (server/export.js) ---------- */
+if (exportApi) {
+  exportApi.mount(app, {
+    Order, CATALOG, slugOf, toNum, serverErr,
+    dbReady: () => dbReady,
+    rateLimit: rateLimit({ windowMs: 60 * 1000, max: 60, tag: 'export' })
   });
 }
 

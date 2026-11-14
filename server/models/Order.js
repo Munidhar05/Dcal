@@ -18,6 +18,10 @@ const OrderSchema = new mongoose.Schema({
   // A cancelled order counts for neither, so there is no balance to keep in step.
   walletCredit: { type: Number, default: 0 },      // ₹ added by ordering the Demo Kit
   walletUsed: { type: Number, default: 0 },        // ₹ of this order paid from the wallet
+  // where the order came from (server/attribution.js), from the landing cookie:
+  // { utmSource, utmMedium, utmCampaign, utmContent, utmTerm, landingPage, landedAt, fbc, fbp },
+  // empty fields left out. Orders placed before 14 Nov 2026 have none.
+  attribution: { type: Object, default: {} },
   paid: { type: Boolean, default: false },         // true once Razorpay payment is verified
   paymentId: { type: String, default: '' },        // Razorpay payment id (pay_XXXX)
   razorpayOrderId: { type: String, default: '' },  // Razorpay order id (order_XXXX)
